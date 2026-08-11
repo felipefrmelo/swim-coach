@@ -14,7 +14,7 @@ Este diretório contém a especificação inicial de implementação do Swim Coa
 > **Checkpoint:** a P00 está `BLOCKED`. A fundação local, o MCP público
 > inofensivo e o plugin Skills-only estão executáveis; o gate permanece aberto
 > até as provas com um tenant OAuth real, uma conta Garmin real, transporte MCP
-> remoto seguro e uma execução remota da CI. Veja
+> remoto seguro. A primeira CI remota está verde no PR #1. Veja
 > [`IMPLEMENTATION_STATUS.md`](IMPLEMENTATION_STATUS.md).
 
 ```text

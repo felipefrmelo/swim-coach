@@ -28,6 +28,8 @@
 - corrigido o diagnóstico de GitHub após verificação fora do sandbox: `gh` está
   autenticado via keyring e o remote SSH está acessível; resta apenas autorização
   explícita para publicar as mudanças.
+- publicada a fundação no PR #1; GitHub Actions run `31515474864` concluiu o job
+  `quality` verde em clone limpo, fechando P00-T08.
 
 ## [1.0.0-plan] — 2026-08-11
 

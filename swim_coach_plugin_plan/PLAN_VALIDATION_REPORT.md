@@ -1,6 +1,6 @@
 # Relatório de validação do plano
 
-> Gerado em UTC: `2026-08-11T17:00:44.450832+00:00`
+> Gerado em UTC: `2026-08-11T17:04:17.653676+00:00`
 
 ## Resultado
 
@@ -13,8 +13,8 @@
 - `example_workout_distance_m`: 1600
 - `json_files`: 22
 - `markdown_files`: 92
-- `markdown_lines`: 9487
-- `markdown_words`: 45046
+- `markdown_lines`: 9495
+- `markdown_words`: 45062
 - `mcp_tools`: 21
 - `skills`: 7
 - `tasks`: 115

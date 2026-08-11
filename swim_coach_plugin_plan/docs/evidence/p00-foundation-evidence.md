@@ -16,7 +16,7 @@
 | P00-T05 | concluída no modo permitido pela fase | plugin Skills-only instalado e conexão de teste project-scoped exercitada; nenhuma `.app.json` foi inventada |
 | P00-T06 | parcial | probe e testes de contrato prontos; tenant Auth0 real não estava configurado no ambiente |
 | P00-T07 | parcial | biblioteca real e modelo local de natação de 20 m validados; login/read reais pendentes |
-| P00-T08 | parcial | todos os gates locais verdes e workflow criado; primeira execução remota/URL pendente |
+| P00-T08 | concluída | gates locais verdes e GitHub Actions run `31515474864` verde em clone limpo |
 | P00-T09 | parcial | versões, limitações e decisão no-go do gate geral registradas neste documento e no handoff |
 
 ## Ambiente validado
@@ -27,7 +27,7 @@
 - Docker 29.7.1 e Docker Compose 5.3.1;
 - Codex CLI 0.147.0;
 - PostgreSQL 16.10-alpine na imagem fixada pelo Compose;
-- `garminconnect[workout]` 0.3.10 no grupo opcional `spike`.
+- `garminconnect[workout]` 0.3.10 no grupo opcional `spikes`.
 
 ## Checks automatizados reais
 
@@ -234,11 +234,11 @@ canal local seguro; portanto o read real continua pendente. Execute o comando
 abaixo no terminal do proprietário — nunca envie credenciais no prompt:
 
 ```bash
-uv sync --group spike --frozen
+uv sync --group spikes --frozen
 uv run python backend/scripts/probe_garmin_read.py
 ```
 
-## GitHub/CI — workflow pronto, publicação pendente
+## GitHub/CI — integração remota real
 
 O remote configurado é `git@github.com:felipefrmelo/swim-coach.git`.
 `git ls-remote --heads origin` respondeu com `refs/heads/main`, comprovando que
@@ -246,10 +246,17 @@ o repositório é alcançável por SSH. Uma verificação fora do sandbox confir
 `gh` autenticado via keyring como `felipefrmelo`, protocolo Git SSH e scope
 `repo`; `gh api user --jq .login` também retornou `felipefrmelo`. A verificação
 anterior que reportou token inválido refletia o isolamento do sandbox, não o
-estado real da máquina. As alterações permanecem locais e não commitadas porque
-nenhuma autorização para commit/push/PR foi inferida. Portanto o workflow existe em
-`.github/workflows/ci.yml`, mas ainda não há run ou URL remota que satisfaça o
-gate.
+estado real da máquina.
+
+A publicação autorizada produziu:
+
+- commit [`2faaf62`](https://github.com/felipefrmelo/swim-coach/commit/2faaf62962501f464e2efb419127d6b4fd088512);
+- [PR #1](https://github.com/felipefrmelo/swim-coach/pull/1), branch
+  `p00-foundation-spikes` contra `main`;
+- [GitHub Actions run `31515474864`](https://github.com/felipefrmelo/swim-coach/actions/runs/31515474864);
+- job `quality` concluído com sucesso em 1m05s: checkout, toolchains,
+  dependências locked, checks/testes, dependency scan, secret scan e build dos
+  contêineres verdes.
 
 ## Fontes primárias consultadas
 
@@ -267,7 +274,7 @@ gate.
 
 **BLOCKED / NO-GO para marcar P00 como `DONE`.** A fundação e todas as partes independentes
 estão prontas, mas o critério da fase exige evidência externa real de OAuth,
-Garmin read, Secure MCP Tunnel/HTTPS remoto e CI remota. Fixtures, testes de
+Garmin read e Secure MCP Tunnel/HTTPS remoto. Fixtures, testes de
 contrato e compatibilidade documental não substituem essas provas. Três auditorias
 consecutivas encontraram os mesmos inputs externos ausentes; não há trabalho
 independente restante dentro da P00 que possa produzir essas evidências.
