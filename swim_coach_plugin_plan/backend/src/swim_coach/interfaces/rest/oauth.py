@@ -22,6 +22,10 @@ class ProtectedResourceMetadata(BaseModel):
     "/.well-known/oauth-protected-resource",
     response_model=ProtectedResourceMetadata,
 )
+@router.get(
+    "/.well-known/oauth-protected-resource/mcp",
+    response_model=ProtectedResourceMetadata,
+)
 async def protected_resource_metadata() -> ProtectedResourceMetadata:
     """Advertise the configured resource and authorization server without secrets."""
 

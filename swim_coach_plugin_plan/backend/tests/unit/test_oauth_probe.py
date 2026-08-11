@@ -51,3 +51,34 @@ def test_protected_resource_requires_exact_binding() -> None:
             "https://mcp.example.test",
             "https://auth.example.test",
         )
+
+
+def test_resource_url_accepts_explicit_loopback_http() -> None:
+    assert (
+        probe.require_resource_url(
+            "http://127.0.0.1:18000/mcp/",
+            "resource",
+            allow_loopback_http=True,
+        )
+        == "http://127.0.0.1:18000/mcp"
+    )
+
+
+@pytest.mark.parametrize(
+    ("value", "allow_loopback_http"),
+    [
+        ("http://127.0.0.1:18000/mcp", False),
+        ("http://192.0.2.1/mcp", True),
+        ("http://example.test/mcp", True),
+    ],
+)
+def test_resource_url_rejects_unsafe_http(
+    value: str,
+    allow_loopback_http: bool,
+) -> None:
+    with pytest.raises(probe.ProbeError, match="absolute HTTPS URL"):
+        probe.require_resource_url(
+            value,
+            "resource",
+            allow_loopback_http=allow_loopback_http,
+        )

@@ -22,6 +22,26 @@ def require_https(value: str, label: str) -> str:
     return value.rstrip("/")
 
 
+def require_resource_url(value: str, label: str, *, allow_loopback_http: bool) -> str:
+    """Require HTTPS, except explicit loopback HTTP used behind a dev tunnel."""
+
+    parsed = urlparse(value)
+    if parsed.scheme == "https" and parsed.netloc:
+        return value.rstrip("/")
+    loopback_hosts = {"127.0.0.1", "localhost", "::1"}
+    if (
+        allow_loopback_http
+        and parsed.scheme == "http"
+        and parsed.netloc
+        and parsed.hostname in loopback_hosts
+    ):
+        return value.rstrip("/")
+    raise ProbeError(
+        f"{label} must be an absolute HTTPS URL"
+        + (" or an HTTP loopback URL" if allow_loopback_http else "")
+    )
+
+
 def fetch_json(client: httpx.Client, url: str) -> dict[str, Any]:
     response = client.get(url)
     response.raise_for_status()
@@ -88,6 +108,11 @@ def parse_args() -> argparse.Namespace:
         "--resource-metadata-url",
         help="Public RFC 9728 protected resource metadata URL",
     )
+    parser.add_argument(
+        "--allow-loopback-http",
+        action="store_true",
+        help="Allow HTTP only on loopback for Secure MCP Tunnel development",
+    )
     return parser.parse_args()
 
 
@@ -106,9 +131,15 @@ def main() -> int:
                 "issuer_metadata": validate_authorization_server(auth_metadata)
             }
             if args.resource and args.resource_metadata_url:
-                resource = require_https(args.resource, "resource")
-                resource_metadata_url = require_https(
-                    args.resource_metadata_url, "resource_metadata_url"
+                resource = require_resource_url(
+                    args.resource,
+                    "resource",
+                    allow_loopback_http=args.allow_loopback_http,
+                )
+                resource_metadata_url = require_resource_url(
+                    args.resource_metadata_url,
+                    "resource_metadata_url",
+                    allow_loopback_http=args.allow_loopback_http,
                 )
                 resource_metadata = fetch_json(client, resource_metadata_url)
                 result["protected_resource_metadata"] = validate_protected_resource(

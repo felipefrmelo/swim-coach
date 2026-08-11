@@ -25,9 +25,16 @@
   authorization code/PKCE S256/DCR e Secure MCP Tunnel invocado pelo ChatGPT;
 - adicionado protected resource metadata configurável em
   `/.well-known/oauth-protected-resource`, fechado por padrão e restrito a um
-  par issuer/resource HTTPS completo;
+  par issuer/resource completo, com issuer HTTPS e exceção de resource HTTP
+  limitada a loopback fora de produção;
 - reduzido o bloqueio da P00 à revalidação do resource metadata/audience pelo
   tunnel após a nova rota;
+- alinhado o discovery à rota path-aware esperada para o MCP `/mcp`, mantendo a
+  rota raiz como compatibilidade e permitindo HTTP somente em loopback de
+  desenvolvimento;
+- concluída a revalidação OAuth contra Auth0 real: `tunnel-client doctor`
+  encontrou o metadata com HTTP 200 e o probe completo confirmou
+  `resource_binding=true`; P00 passou para `DONE` e P01 tornou-se elegível;
 - após três auditorias consecutivas sem os inputs externos necessários, alterado
   o checkpoint P00 de `IN_PROGRESS` para `BLOCKED`, sem liberar P01.
 - corrigido o diagnóstico de GitHub após verificação fora do sandbox: `gh` está

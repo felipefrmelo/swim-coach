@@ -1,8 +1,9 @@
 # P00 — evidências da fundação e dos spikes
 
 - Execução: 2026-08-11, `America/Sao_Paulo`
-- Estado da fase: `BLOCKED`
+- Estado da fase: `DONE`
 - Atualização externa: 2026-08-11T17:25:51-03:00
+- Conclusão: 2026-08-11T17:37:38-03:00
 - Regra: resultados reais são identificados como reais; caminhos preparados,
   fixtures e integrações pendentes não são promovidos a evidência de gate.
 
@@ -15,10 +16,10 @@
 | P00-T03 | concluída | limites arquiteturais, health endpoints e encerramento gracioso do worker testados |
 | P00-T04 | concluída | MCP validado localmente e por Secure MCP Tunnel em chamada real do ChatGPT web |
 | P00-T05 | concluída no modo permitido pela fase | plugin Skills-only instalado e conexão de teste project-scoped exercitada; nenhuma `.app.json` foi inventada |
-| P00-T06 | parcial | Auth0 real passou em authorization code, PKCE S256 e DCR; protected resource metadata implementado, mas ainda não revalidado pelo tunnel |
+| P00-T06 | concluída | Auth0 real passou em authorization code, PKCE S256, DCR e resource binding; tunnel encontrou metadata path-aware |
 | P00-T07 | concluída | login/read reais: atividades, nados e Forerunner 265 detectados; nenhuma escrita externa |
 | P00-T08 | concluída | gates locais verdes e GitHub Actions run `31515474864` verde em clone limpo |
-| P00-T09 | parcial | evidências externas registradas; decisão permanece bloqueada somente no resource metadata OAuth |
+| P00-T09 | concluída | evidências externas e decisão final GO/DONE registradas neste documento e no handoff |
 
 ## Ambiente validado
 
@@ -29,6 +30,7 @@
 - Codex CLI 0.147.0;
 - PostgreSQL 16.10-alpine na imagem fixada pelo Compose;
 - `garminconnect[workout]` 0.3.10 no grupo opcional `spikes`.
+- `tunnel-client` 0.0.11 (`8d55683`).
 
 ## Checks automatizados reais
 
@@ -37,9 +39,9 @@ Executados a partir da raiz deste pacote:
 ```text
 make check
   ruff format/check: passou
-  mypy strict: 16 arquivos passaram
+  mypy strict: 17 arquivos passaram
   pytest inicial: 9 passaram
-  pytest após protected resource metadata: 15 passaram
+  pytest após protected resource metadata final: 21 passaram
   eslint + TypeScript: passaram
   vitest: 1 passou
   repository validator: passou
@@ -226,7 +228,7 @@ Coach, informou que a conexão básica estava funcionando, declarou
 dados pessoais ou capacidades futuras. Isso fecha a prova de transporte remoto
 P00 sem persistir na evidência qualquer API key ou dado privado.
 
-## OAuth — Auth0 real e resource metadata pendente de revalidação
+## OAuth — Auth0 real e resource binding concluídos
 
 O probe `backend/scripts/probe_oauth_metadata.py` valida somente metadados
 públicos e exige:
@@ -262,26 +264,72 @@ Resultado sanitizado real:
 }
 ```
 
-Esse resultado fecha a compatibilidade do authorization server, mas não o gate
-OAuth inteiro: o comando não recebeu `--resource` nem
-`--resource-metadata-url`, e o primeiro `tunnel-client doctor` encontrou 404 nos
-candidatos de protected resource metadata.
+Esse primeiro resultado fechou a compatibilidade do authorization server. Como
+o comando inicial não recebeu `--resource` nem `--resource-metadata-url`, ele foi
+complementado pela validação abaixo antes da decisão final do gate.
 
-Para eliminar o gap, a API agora implementa
-`GET /.well-known/oauth-protected-resource`. A rota fica em 404 quando não
-configurada e só anuncia metadados quando
-`SWIM_COACH_OAUTH_ISSUER` e `SWIM_COACH_OAUTH_RESOURCE` formam um par HTTPS
-completo. Testes cobrem o estado fechado, o documento válido e configurações
-parciais/inseguras.
+Para eliminar o gap, a API implementa tanto
+`GET /.well-known/oauth-protected-resource` quanto a localização path-aware
+`GET /.well-known/oauth-protected-resource/mcp`, procurada pelo `tunnel-client`
+quando o MCP está em `/mcp`. A rota fica em 404 quando não configurada. O issuer
+é sempre HTTPS; o resource aceita HTTP somente em loopback fora de produção,
+pois o tunnel mantém o MCP local e transporta o discovery pela conexão segura.
+Testes cobrem o estado fechado, ambos os endereços, o documento válido e
+configurações parciais/inseguras.
 
-Reprodução final segura, depois de reconstruir a API com o par configurado:
+O Compose foi reconstruído com o issuer Auth0 real e
+`resource=http://127.0.0.1:18000/mcp`. Para isolar a revalidação de discovery,
+o `doctor` usou uma chave fictícia não secreta e control plane loopback; isso não
+substitui o doctor anterior com runtime key real nem a chamada ChatGPT já
+registrada. Resultado sanitizado da checagem OAuth:
+
+```text
+mcp_target             PASS http://127.0.0.1:18000/mcp/
+mcp_server_reachable   PASS HTTP 406
+oauth_metadata         PASS HTTP 200 from
+  http://127.0.0.1:18000/.well-known/oauth-protected-resource/mcp
+RESULT ok
+```
+
+O probe completo foi então executado em modo loopback explícito:
 
 ```bash
 uv run python backend/scripts/probe_oauth_metadata.py \
   --issuer 'https://TENANT/' \
-  --resource 'https://RESOURCE-HTTPS/mcp' \
-  --resource-metadata-url 'https://HOST-HTTPS/.well-known/oauth-protected-resource'
+  --resource 'http://127.0.0.1:18000/mcp' \
+  --resource-metadata-url \
+    'http://127.0.0.1:18000/.well-known/oauth-protected-resource/mcp' \
+  --allow-loopback-http
 ```
+
+Resultado real sanitizado:
+
+```json
+{
+  "issuer_metadata": {
+    "authorization_code": true,
+    "cimd": false,
+    "dcr": true,
+    "pkce_s256": true,
+    "token_endpoint_auth_methods": [
+      "client_secret_basic",
+      "client_secret_post",
+      "private_key_jwt",
+      "none"
+    ]
+  },
+  "oauth_probe": "passed",
+  "protected_resource_metadata": {
+    "resource_binding": true,
+    "scope_count": 0
+  }
+}
+```
+
+O modo loopback precisa ser solicitado explicitamente e rejeita hosts HTTP não
+loopback. Nenhum authorization code, access token, refresh token ou client
+secret foi obtido. O teste de tokens user-scoped permanece no gate P05, antes de
+qualquer acesso a dados privados.
 
 ## Garmin — leitura real concluída
 
@@ -350,9 +398,8 @@ A publicação autorizada produziu:
 
 ## Decisão de gate
 
-**BLOCKED / NO-GO para marcar P00 como `DONE`.** Garmin read real e Secure MCP
-Tunnel/ChatGPT estão concluídos. O Auth0 real também comprovou authorization
-code, PKCE S256 e DCR. Falta uma única evidência: reconstruir a API com o par
-issuer/resource HTTPS, repetir o `doctor` até o protected resource metadata ser
-descoberto e executar o probe completo com resource binding. Depois disso,
-P00-T06 e P00-T09 podem ser concluídas e a fase pode avançar para `DONE`.
+**GO / P00 `DONE`.** O repositório sobe do zero e possui CI verde; o MCP
+inofensivo funcionou localmente, no Codex e no ChatGPT via Secure MCP Tunnel; o
+Auth0 real comprovou authorization code, PKCE S256, DCR e resource binding; a
+conta Garmin real comprovou leitura e Forerunner 265 sem escrita externa; os
+scans não encontraram segredos. P01 é a próxima fase elegível.

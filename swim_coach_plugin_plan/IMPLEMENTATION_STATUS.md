@@ -1,13 +1,13 @@
 # Status de implementação
 
 > Atualizar este arquivo no mesmo commit de cada fase. `DONE` exige evidência. Uma fase pode ficar `BLOCKED` sem comprometer a honestidade do projeto.
-> Não existe código legado, banco anterior ou dado de aplicação. A P00 possui
-> entregas locais e integrações externas reais; resta validar o resource metadata
-> OAuth recém-implementado através do Secure MCP Tunnel.
+> Não existe código legado, banco anterior ou dado de aplicação. A P00 foi
+> concluída com evidências locais e integrações externas reais; P01 é a próxima
+> fase elegível.
 
 | Fase | Estado | Dependências | Evidência mínima | Commit/PR |
 |---:|---|---|---|---|
-| P00 | BLOCKED | — | Garmin read e tunnel reais; Auth0 real; resource metadata aguarda revalidação | [`2faaf62` / PR #1](https://github.com/felipefrmelo/swim-coach/pull/1) |
+| P00 | DONE | — | Garmin read, OAuth resource binding, tunnel/ChatGPT e CI reais | [PR #1](https://github.com/felipefrmelo/swim-coach/pull/1) |
 | P01 | NOT_STARTED | P00 | migrações + testes de domínio + PWA shell | — |
 | P02 | NOT_STARTED | P01 | import real Garmin sem duplicata | — |
 | P03 | NOT_STARTED | P02 | FIT normalizado e analytics reproduzíveis | — |
@@ -25,14 +25,14 @@
 
 ### P00
 
-- Estado: `BLOCKED`
+- Estado: `DONE`
 - Início: 2026-08-11T09:26:48-03:00
 - Bloqueio confirmado: 2026-08-11T10:32:43-03:00
 - Bloqueio reduzido ao resource metadata OAuth: 2026-08-11T17:25:51-03:00
-- Conclusão:
+- Conclusão: 2026-08-11T17:37:38-03:00
 - Commit/PR: [`2faaf62`](https://github.com/felipefrmelo/swim-coach/commit/2faaf62962501f464e2efb419127d6b4fd088512) / [PR #1](https://github.com/felipefrmelo/swim-coach/pull/1)
 - Comandos executados:
-  - `make check` → Ruff, mypy, 15 testes backend, ESLint, TypeScript, 1 teste frontend e validadores verdes.
+  - `make check` → Ruff, mypy, 21 testes backend, ESLint, TypeScript, 1 teste frontend e validadores verdes.
   - `make dependency-scan` → nenhuma vulnerabilidade conhecida após atualizar `pytest` para 9.1.1.
   - `make secret-scan` → histórico e árvore de trabalho sem vazamentos.
   - `docker compose build` e `docker compose up -d --wait` → API, worker, PostgreSQL e web saudáveis.
@@ -45,6 +45,9 @@
   - ChatGPT web via Secure MCP Tunnel → `@coach` chamou o plugin e descreveu corretamente a superfície P00 com somente `get_capabilities`.
   - `probe_oauth_metadata.py` contra tenant Auth0 real → authorization code, PKCE S256 e DCR anunciados; nenhum token solicitado.
   - rebuild do Compose com a nova rota → stack saudável; metadata sem configuração respondeu 404, confirmando fail-closed.
+  - rebuild com issuer Auth0 real e resource loopback → metadata path-aware retornou o vínculo esperado em `/mcp`.
+  - rerun OAuth-focused do `tunnel-client doctor` com chave fictícia e control plane loopback → `oauth_metadata PASS`, HTTP 200 no metadata path-aware; a prova real do control plane/tunnel permanece o doctor e a chamada ChatGPT anteriores.
+  - probe OAuth completo em modo loopback explícito → `oauth_probe=passed` e `resource_binding=true`, sem obter token.
   - `gh auth status`, `gh api user` e `git ls-remote` fora do sandbox → conta `felipefrmelo` autenticada via keyring e remote SSH acessível.
   - [GitHub Actions run `31515474864`](https://github.com/felipefrmelo/swim-coach/actions/runs/31515474864) → job `quality` verde em 1m05s.
 - Evidências de integração:
@@ -54,13 +57,10 @@
   - ADRs existentes preservados; nenhuma divergência arquitetural encontrada.
   - Plugin P00 permanece com apenas `get_capabilities`; nenhum dado privado nem efeito externo foi liberado.
   - Secure MCP Tunnel de desenvolvimento comprovou o transporte remoto, sem substituir a URL HTTPS estável de produção.
-- Pendências:
-  - configurar `SWIM_COACH_OAUTH_ISSUER` e `SWIM_COACH_OAUTH_RESOURCE` no Compose;
-  - repetir `tunnel-client doctor` e confirmar que `oauth_metadata` passa com protected resource metadata, em vez do 404 observado antes da implementação;
-  - executar o probe completo com `--resource` e `--resource-metadata-url` no endpoint HTTPS resultante;
-- Condições de retomada:
-  - resource/audience HTTPS canônico escolhido para o MCP;
-  - runtime key do tunnel disponível somente no terminal seguro do proprietário;
+- Pendências da P00: nenhuma.
+- Limite preservado: emissão e validação de access token user-scoped pertencem à
+  P05, antes de qualquer tool com dados privados.
+- Próxima ação: iniciar P01 pelo prompt `prompts/p01.md`.
 
 ### P01
 

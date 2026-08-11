@@ -2,7 +2,7 @@
 
 > **Versão do plano:** 1.0
 > **Data-base:** 11 de agosto de 2026
-> **Estado:** P00 bloqueada na validação final do resource metadata OAuth
+> **Estado:** P00 concluída; P01 é a próxima fase elegível
 > **Uso inicial:** pessoal
 > **Atleta inicial:** Felipe
 > **Dispositivo:** Garmin Forerunner 265
@@ -11,10 +11,9 @@
 
 Este diretório contém a especificação inicial de implementação do Swim Coach, organizada em documentos menores, contratos, fases e gates executáveis por LLMs. A arquitetura definida para o produto é **Plugin-first**.
 
-> **Checkpoint:** a P00 está `BLOCKED`. A conta Garmin real, o Auth0 real e o
-> Secure MCP Tunnel em ChatGPT já foram exercitados. Falta republicar e validar
-> pelo tunnel o protected resource metadata OAuth recém-implementado. A primeira
-> CI remota está verde no PR #1. Veja
+> **Checkpoint:** a P00 está `DONE`. Garmin read, Auth0 com PKCE/DCR/resource
+> binding e Secure MCP Tunnel no ChatGPT foram validados com evidência real e
+> sanitizada. A CI remota está verde no PR #1; P01 permanece `NOT_STARTED`. Veja
 > [`IMPLEMENTATION_STATUS.md`](IMPLEMENTATION_STATUS.md).
 
 ```text

@@ -34,12 +34,19 @@ class Settings(BaseSettings):
 
         if (self.oauth_issuer is None) != (self.oauth_resource is None):
             raise ValueError("oauth_issuer and oauth_resource must be configured together")
-        for name, value in (
-            ("oauth_issuer", self.oauth_issuer),
-            ("oauth_resource", self.oauth_resource),
-        ):
-            if value is not None and value.scheme != "https":
-                raise ValueError(f"{name} must use HTTPS")
+        if self.oauth_issuer is not None and self.oauth_issuer.scheme != "https":
+            raise ValueError("oauth_issuer must use HTTPS")
+        if self.oauth_resource is not None and self.oauth_resource.scheme != "https":
+            loopback_hosts = {"127.0.0.1", "localhost", "[::1]"}
+            is_development_loopback = (
+                self.environment != "production"
+                and self.oauth_resource.scheme == "http"
+                and self.oauth_resource.host in loopback_hosts
+            )
+            if not is_development_loopback:
+                raise ValueError(
+                    "oauth_resource must use HTTPS except for HTTP loopback outside production"
+                )
         return self
 
 

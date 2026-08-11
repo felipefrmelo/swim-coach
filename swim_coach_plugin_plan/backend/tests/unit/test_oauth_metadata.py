@@ -40,14 +40,29 @@ async def test_protected_resource_metadata_uses_configured_https_urls(
 
     async with app.router.lifespan_context(app):
         async with httpx.AsyncClient(transport=transport, base_url="http://localhost") as client:
-            response = await client.get("/.well-known/oauth-protected-resource")
+            root_response = await client.get("/.well-known/oauth-protected-resource")
+            path_response = await client.get("/.well-known/oauth-protected-resource/mcp")
 
-    assert response.status_code == 200
-    assert response.json() == {
+    expected = {
         "resource": "https://swim.example.com/mcp",
         "authorization_servers": ["https://tenant.example.com"],
         "scopes_supported": [],
     }
+    assert root_response.status_code == 200
+    assert root_response.json() == expected
+    assert path_response.status_code == 200
+    assert path_response.json() == expected
+
+
+def test_oauth_resource_allows_development_loopback_http() -> None:
+    settings = Settings(
+        _env_file=None,
+        environment="development",
+        oauth_issuer="https://tenant.example.com",
+        oauth_resource="http://127.0.0.1:18000/mcp/",
+    )
+
+    assert str(settings.oauth_resource).rstrip("/") == "http://127.0.0.1:18000/mcp"
 
 
 @pytest.mark.parametrize(
@@ -56,7 +71,7 @@ async def test_protected_resource_metadata_uses_configured_https_urls(
         ("https://tenant.example.com", None),
         (None, "https://swim.example.com/mcp"),
         ("http://tenant.example.com", "https://swim.example.com/mcp"),
-        ("https://tenant.example.com", "http://swim.example.com/mcp"),
+        ("https://tenant.example.com", "http://192.0.2.1/mcp"),
     ],
 )
 def test_oauth_metadata_settings_require_complete_https_pair(
@@ -65,3 +80,13 @@ def test_oauth_metadata_settings_require_complete_https_pair(
 ) -> None:
     with pytest.raises(ValidationError):
         Settings(_env_file=None, oauth_issuer=issuer, oauth_resource=resource)
+
+
+def test_oauth_resource_rejects_loopback_http_in_production() -> None:
+    with pytest.raises(ValidationError):
+        Settings(
+            _env_file=None,
+            environment="production",
+            oauth_issuer="https://tenant.example.com",
+            oauth_resource="http://127.0.0.1:18000/mcp/",
+        )
