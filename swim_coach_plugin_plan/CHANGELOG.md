@@ -28,7 +28,9 @@
 - registrados screenshot sanitizado, schema estrutural, scans de dependências e
   segredos e handoff completo da fase;
 - corrigidos índices/checksums para ignorarem caches do Hypothesis e artefatos
-  temporários do Playwright.
+  temporários do Playwright;
+- publicado o delta P01 no PR #2, empilhado sobre o PR #1 enquanto a P00 aguarda
+  merge, com o GitHub Actions run `31546007309` verde em clone limpo.
 
 ### P00 — fundação executável
 

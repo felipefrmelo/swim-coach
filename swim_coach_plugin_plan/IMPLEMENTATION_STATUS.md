@@ -8,7 +8,7 @@
 | Fase | Estado | Dependências | Evidência mínima | Commit/PR |
 |---:|---|---|---|---|
 | P00 | DONE | — | Garmin read, OAuth resource binding, tunnel/ChatGPT e CI reais | [PR #1](https://github.com/felipefrmelo/swim-coach/pull/1) |
-| P01 | DONE | P00 | migrações + testes de domínio + PWA shell | branch `p01-domain-persistence-identity` |
+| P01 | DONE | P00 | migrações + testes de domínio + PWA shell | [PR #2](https://github.com/felipefrmelo/swim-coach/pull/2) |
 | P02 | NOT_STARTED | P01 | import real Garmin sem duplicata | — |
 | P03 | NOT_STARTED | P02 | FIT normalizado e analytics reproduzíveis | — |
 | P04 | NOT_STARTED | P01 | treino válido de 20 m criado na PWA | — |
@@ -67,8 +67,7 @@
 - Estado: `DONE`
 - Início: 2026-08-11T19:35:41-03:00
 - Conclusão local: 2026-08-11T20:10:22-03:00
-- Commit/PR: branch `p01-domain-persistence-identity`; publicação registrada no
-  mesmo handoff após o push.
+- Commit/PR: [`2e1e722`](https://github.com/felipefrmelo/swim-coach/commit/2e1e72274fe08137911959208e7b6c4ed22523ea) / [PR #2](https://github.com/felipefrmelo/swim-coach/pull/2)
 - Comandos executados:
   - `make check` → Ruff, mypy (50 arquivos), 39 testes Python, ESLint,
     TypeScript, 2 testes Vitest e validadores verdes (`checks=8 warnings=0 errors=0`).
@@ -84,6 +83,8 @@
     disponibilidade, meta e dashboard passaram em 2,3 s.
   - smokes loopback → live `ok`, ready com banco `ready`, auth config
     explicitamente `oidc_enabled=false/dev_auth_enabled=true` no ambiente local.
+  - [GitHub Actions run `31546007309`](https://github.com/felipefrmelo/swim-coach/actions/runs/31546007309)
+    → job `quality` verde em 1m34s no commit `2e1e722`.
 - Evidências:
   - [`docs/evidence/p01-domain-persistence-identity.md`](docs/evidence/p01-domain-persistence-identity.md)
   - [`docs/evidence/p01-pwa-dashboard.png`](docs/evidence/p01-pwa-dashboard.png)
@@ -96,7 +97,9 @@
   coberto por contrato criptográfico, não promovido como login Auth0 real. Garmin,
   FIT, workout editor e MCP privado continuam fora do escopo.
 - Pendências da P01: nenhuma bloqueadora.
-- Próxima ação: iniciar P02 pelo prompt `prompts/p02.md`.
+- Dependência de merge: PR #2 está corretamente baseado na branch do PR #1 e
+  mostra somente o commit P01; fazer merge do PR #1 antes do PR #2.
+- Próxima ação: após os merges, iniciar P02 pelo prompt `prompts/p02.md`.
 
 ### P02
 

@@ -13,7 +13,8 @@ Este diretório contém a especificação inicial de implementação do Swim Coa
 
 > **Checkpoint:** P00 e P01 estão `DONE`. A fundação transacional, identidade,
 > isolamento por usuário e PWA operacional foram validados em PostgreSQL real
-> local, Testcontainers e Chrome mobile. P02 é a próxima fase elegível. Veja
+> local, Testcontainers e Chrome mobile; a CI do PR #2 está verde. P02 é a
+> próxima fase elegível. Veja
 > [`IMPLEMENTATION_STATUS.md`](IMPLEMENTATION_STATUS.md).
 
 ```text

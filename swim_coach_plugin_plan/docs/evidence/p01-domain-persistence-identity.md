@@ -3,6 +3,7 @@
 - Execução: 2026-08-11, `America/Sao_Paulo`
 - Estado da fase: `DONE`
 - Conclusão local: 2026-08-11T20:10:22-03:00
+- Publicação/CI: 2026-08-11T20:21:01-03:00
 - Regra: resultados reais locais, fixtures e contratos criptográficos são
   distinguidos; nenhuma integração futura é promovida como pronta.
 
@@ -39,6 +40,10 @@ make dependency-scan
 make secret-scan
   gitleaks git: 5 commits, nenhum vazamento
   gitleaks dir: nenhum vazamento
+
+GitHub Actions run 31546007309
+  commit: 2e1e72274fe08137911959208e7b6c4ed22523ea
+  job quality: passou em 1m34s
 ```
 
 Os testes Python incluem propriedades dos value objects, contratos OIDC,
@@ -134,3 +139,12 @@ editor/calendário permanecem explicitamente reservados para P04.
   pronta para receber issuer/client/secret por canal seguro;
 - P02 pode iniciar a importação Garmin real e idempotente sem alterar a base de
   identidade/contexto entregue aqui.
+
+## Publicação
+
+- Implementação: commit [`2e1e722`](https://github.com/felipefrmelo/swim-coach/commit/2e1e72274fe08137911959208e7b6c4ed22523ea).
+- Revisão: [PR #2](https://github.com/felipefrmelo/swim-coach/pull/2).
+- CI: [run `31546007309`](https://github.com/felipefrmelo/swim-coach/actions/runs/31546007309),
+  `quality=success` em clone limpo.
+- O PR #2 está empilhado sobre `p00-foundation-spikes` para que seu diff contenha
+  somente P01. O PR #1 deve ser integrado antes do PR #2.
