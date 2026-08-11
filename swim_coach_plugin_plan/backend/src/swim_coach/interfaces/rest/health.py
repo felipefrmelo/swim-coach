@@ -2,8 +2,10 @@
 
 from typing import Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict
+
+from swim_coach.domain.shared.errors import DomainError
 
 router = APIRouter(prefix="/health", tags=["operations"])
 
@@ -19,6 +21,7 @@ class ReadyChecks(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     application: Literal["ready"] = "ready"
+    database: Literal["ready"] = "ready"
 
 
 class ReadyResponse(BaseModel):
@@ -36,7 +39,12 @@ async def live() -> LiveResponse:
 
 
 @router.get("/ready", response_model=ReadyResponse)
-async def ready() -> ReadyResponse:
-    """Report readiness for the P00 stateless surface."""
+async def ready(request: Request) -> ReadyResponse:
+    """Report readiness only after PostgreSQL responds."""
 
+    database = request.app.state.services.database
+    try:
+        await database.ping()
+    except Exception as exc:
+        raise DomainError("DATABASE_UNAVAILABLE", "The database is not ready.") from exc
     return ReadyResponse()

@@ -29,9 +29,17 @@ services:
       SWIM_COACH_PUBLIC_BASE_URL: ${SWIM_COACH_PUBLIC_BASE_URL:-}
       SWIM_COACH_OAUTH_ISSUER: ${SWIM_COACH_OAUTH_ISSUER:-}
       SWIM_COACH_OAUTH_RESOURCE: ${SWIM_COACH_OAUTH_RESOURCE:-}
+      SWIM_COACH_PWA_BASE_URL: ${SWIM_COACH_PWA_BASE_URL:-http://127.0.0.1:14173}
+      SWIM_COACH_OIDC_ISSUER: ${SWIM_COACH_OIDC_ISSUER:-}
+      SWIM_COACH_OIDC_CLIENT_ID: ${SWIM_COACH_OIDC_CLIENT_ID:-}
+      SWIM_COACH_OIDC_CLIENT_SECRET: ${SWIM_COACH_OIDC_CLIENT_SECRET:-}
+      SWIM_COACH_AUTH_ALLOWED_EMAILS: ${SWIM_COACH_AUTH_ALLOWED_EMAILS:-local-swimmer@example.test}
+      SWIM_COACH_AUTH_ALLOWED_SUBJECTS: ${SWIM_COACH_AUTH_ALLOWED_SUBJECTS:-}
+      SWIM_COACH_DEV_AUTH_ENABLED: ${SWIM_COACH_DEV_AUTH_ENABLED:-true}
+      SWIM_COACH_DEV_AUTH_EMAIL: ${SWIM_COACH_DEV_AUTH_EMAIL:-local-swimmer@example.test}
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test:
         [
@@ -47,6 +55,19 @@ services:
       - "127.0.0.1:${SWIM_COACH_API_HOST_PORT:-18000}:8000"
     restart: unless-stopped
 
+  migrate:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["alembic", "-c", "backend/alembic.ini", "upgrade", "head"]
+    environment:
+      SWIM_COACH_ENVIRONMENT: development
+      SWIM_COACH_DATABASE_URL: postgresql://swim_coach:local_only@postgres:5432/swim_coach
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   worker:
     build:
       context: .
@@ -56,8 +77,8 @@ services:
       SWIM_COACH_ENVIRONMENT: development
       SWIM_COACH_DATABASE_URL: postgresql://swim_coach:local_only@postgres:5432/swim_coach
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     init: true
     restart: unless-stopped
 

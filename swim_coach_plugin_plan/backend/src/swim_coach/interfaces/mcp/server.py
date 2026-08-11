@@ -1,6 +1,7 @@
 """Harmless P00 MCP server."""
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp.server import Settings as FastMCPSettings
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 
@@ -16,6 +17,10 @@ def create_mcp_server(
     *, allowed_hosts: list[str] | None = None, allowed_origins: list[str] | None = None
 ) -> FastMCP:
     """Create a server whose session manager has an independent lifecycle."""
+
+    # MCP 1.29 declares Settings before FastMCP, leaving its lifespan forward
+    # reference unresolved until the concrete class is available.
+    FastMCPSettings.model_rebuild(_types_namespace={"FastMCP": FastMCP})
 
     server = FastMCP(
         name="swim-coach",

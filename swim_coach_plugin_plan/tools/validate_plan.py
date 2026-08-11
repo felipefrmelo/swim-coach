@@ -32,15 +32,19 @@ except ImportError:  # pragma: no cover
 ROOT = Path(__file__).resolve().parents[1]
 IGNORED_DIRS = {
     ".git",
+    ".hypothesis",
     ".local",
     ".mypy_cache",
     ".pytest_cache",
     ".ruff_cache",
     ".venv",
+    ".vite",
     "__pycache__",
     "dist",
     "htmlcov",
     "node_modules",
+    "playwright-report",
+    "test-results",
 }
 
 

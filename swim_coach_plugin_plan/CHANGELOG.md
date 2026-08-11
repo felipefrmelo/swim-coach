@@ -2,6 +2,34 @@
 
 ## [Unreleased]
 
+### P01 — domínio, persistência e identidade
+
+- implementados value objects tipados, entidades e serviços transacionais para
+  identidade, atleta, piscina, disponibilidade, metas, jobs, outbox, auditoria
+  e idempotência;
+- adicionados SQLAlchemy assíncrono, PostgreSQL e migration Alembic `000001`,
+  com teste automático `up/down/up`, repositories em Testcontainers e seed
+  idempotente do contexto 20 m / 2.000 m / 45 min;
+- adotado BFF OIDC com Authorization Code + PKCE, nonce, allowlist, sessão e
+  CSRF opacos armazenados somente como hash; `dev-auth` permanece restrito ao
+  ambiente não produtivo;
+- adicionados REST `/me`, pools, availability e goals com Problem Details,
+  correlation ID, optimistic locking, ownership e respostas 404 seguras contra
+  IDOR;
+- criado shell PWA mobile-first com TanStack Query/Router, estados honestos,
+  perfil, piscinas, disponibilidade e meta, sem chat e sem antecipar o editor
+  de treinos do P04;
+- adicionados property, contract, integration e Playwright E2E tests; o gate
+  final passou com 39 testes Python, 2 web e 1 fluxo mobile em Chrome;
+- adicionada ADR-0010 para a sessão BFF e atualizados os contratos OpenAPI e de
+  eventos de domínio;
+- resolvida a referência futura incompleta do `Settings` interno do MCP SDK no
+  factory, eliminando o warning do Pydantic sem alterar a superfície P00;
+- registrados screenshot sanitizado, schema estrutural, scans de dependências e
+  segredos e handoff completo da fase;
+- corrigidos índices/checksums para ignorarem caches do Hypothesis e artefatos
+  temporários do Playwright.
+
 ### P00 — fundação executável
 
 - criado workspace Python/TypeScript com lockfiles, comandos reproduzíveis e

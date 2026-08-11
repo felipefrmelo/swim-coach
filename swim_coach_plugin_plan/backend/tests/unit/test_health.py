@@ -1,3 +1,5 @@
+from unittest.mock import AsyncMock
+
 import httpx
 import pytest
 
@@ -19,6 +21,7 @@ async def test_liveness() -> None:
 @pytest.mark.asyncio
 async def test_readiness() -> None:
     app = create_app()
+    app.state.services.database.ping = AsyncMock(return_value=True)
     transport = httpx.ASGITransport(app=app)
     async with app.router.lifespan_context(app):
         async with httpx.AsyncClient(transport=transport, base_url="http://localhost") as client:
@@ -27,5 +30,5 @@ async def test_readiness() -> None:
     assert response.status_code == 200
     assert response.json() == {
         "status": "ready",
-        "checks": {"application": "ready"},
+        "checks": {"application": "ready", "database": "ready"},
     }

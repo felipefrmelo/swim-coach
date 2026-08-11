@@ -27,10 +27,19 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`apps/web/index.html`](apps/web/index.html) | arquivo estruturado/auxiliar |
 | [`apps/web/nginx.conf`](apps/web/nginx.conf) | arquivo estruturado/auxiliar |
 | [`apps/web/package.json`](apps/web/package.json) | arquivo estruturado/auxiliar |
+| [`apps/web/playwright.config.ts`](apps/web/playwright.config.ts) | arquivo estruturado/auxiliar |
+| [`apps/web/public/manifest.webmanifest`](apps/web/public/manifest.webmanifest) | arquivo estruturado/auxiliar |
+| [`apps/web/public/swim-coach-icon.svg`](apps/web/public/swim-coach-icon.svg) | arquivo estruturado/auxiliar |
+| [`apps/web/src/api/client.ts`](apps/web/src/api/client.ts) | arquivo estruturado/auxiliar |
+| [`apps/web/src/api/types.ts`](apps/web/src/api/types.ts) | arquivo estruturado/auxiliar |
 | [`apps/web/src/app/App.test.tsx`](apps/web/src/app/App.test.tsx) | arquivo estruturado/auxiliar |
 | [`apps/web/src/app/App.tsx`](apps/web/src/app/App.tsx) | arquivo estruturado/auxiliar |
 | [`apps/web/src/app.css`](apps/web/src/app.css) | arquivo estruturado/auxiliar |
+| [`apps/web/src/components/AppShell.tsx`](apps/web/src/components/AppShell.tsx) | arquivo estruturado/auxiliar |
+| [`apps/web/src/components/AsyncState.tsx`](apps/web/src/components/AsyncState.tsx) | arquivo estruturado/auxiliar |
 | [`apps/web/src/main.tsx`](apps/web/src/main.tsx) | arquivo estruturado/auxiliar |
+| [`apps/web/src/routes/pages.tsx`](apps/web/src/routes/pages.tsx) | arquivo estruturado/auxiliar |
+| [`apps/web/src/routes/router.tsx`](apps/web/src/routes/router.tsx) | arquivo estruturado/auxiliar |
 | [`apps/web/src/test/setup.ts`](apps/web/src/test/setup.ts) | arquivo estruturado/auxiliar |
 | [`apps/web/src/vite-env.d.ts`](apps/web/src/vite-env.d.ts) | arquivo estruturado/auxiliar |
 | [`apps/web/tsconfig.app.json`](apps/web/tsconfig.app.json) | arquivo estruturado/auxiliar |
@@ -38,28 +47,77 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`apps/web/tsconfig.node.json`](apps/web/tsconfig.node.json) | arquivo estruturado/auxiliar |
 | [`apps/web/vite.config.ts`](apps/web/vite.config.ts) | arquivo estruturado/auxiliar |
 | [`backend/Dockerfile`](backend/Dockerfile) | arquivo estruturado/auxiliar |
+| [`backend/alembic/env.py`](backend/alembic/env.py) | arquivo estruturado/auxiliar |
+| [`backend/alembic/script.py.mako`](backend/alembic/script.py.mako) | arquivo estruturado/auxiliar |
+| [`backend/alembic/versions/000001_p01_foundation.py`](backend/alembic/versions/000001_p01_foundation.py) | arquivo estruturado/auxiliar |
+| [`backend/alembic.ini`](backend/alembic.ini) | arquivo estruturado/auxiliar |
 | [`backend/scripts/probe_garmin_read.py`](backend/scripts/probe_garmin_read.py) | arquivo estruturado/auxiliar |
 | [`backend/scripts/probe_oauth_metadata.py`](backend/scripts/probe_oauth_metadata.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/__init__.py`](backend/src/swim_coach/__init__.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/application/__init__.py`](backend/src/swim_coach/application/__init__.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/application/ports/__init__.py`](backend/src/swim_coach/application/ports/__init__.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/application/ports/repositories.py`](backend/src/swim_coach/application/ports/repositories.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/application/queries/__init__.py`](backend/src/swim_coach/application/queries/__init__.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/application/queries/get_capabilities.py`](backend/src/swim_coach/application/queries/get_capabilities.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/application/services/__init__.py`](backend/src/swim_coach/application/services/__init__.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/application/services/context.py`](backend/src/swim_coach/application/services/context.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/application/services/identity.py`](backend/src/swim_coach/application/services/identity.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/application/services/oidc_login.py`](backend/src/swim_coach/application/services/oidc_login.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/application/services/sessions.py`](backend/src/swim_coach/application/services/sessions.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/bootstrap/__init__.py`](backend/src/swim_coach/bootstrap/__init__.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/bootstrap/api.py`](backend/src/swim_coach/bootstrap/api.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/bootstrap/container.py`](backend/src/swim_coach/bootstrap/container.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/domain/__init__.py`](backend/src/swim_coach/domain/__init__.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/domain/athlete/__init__.py`](backend/src/swim_coach/domain/athlete/__init__.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/domain/athlete/entities.py`](backend/src/swim_coach/domain/athlete/entities.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/domain/goals/__init__.py`](backend/src/swim_coach/domain/goals/__init__.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/domain/goals/entities.py`](backend/src/swim_coach/domain/goals/entities.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/domain/identity/__init__.py`](backend/src/swim_coach/domain/identity/__init__.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/domain/identity/entities.py`](backend/src/swim_coach/domain/identity/entities.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/domain/operations/__init__.py`](backend/src/swim_coach/domain/operations/__init__.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/domain/operations/entities.py`](backend/src/swim_coach/domain/operations/entities.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/domain/shared/__init__.py`](backend/src/swim_coach/domain/shared/__init__.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/domain/shared/errors.py`](backend/src/swim_coach/domain/shared/errors.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/domain/shared/types.py`](backend/src/swim_coach/domain/shared/types.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/domain/shared/value_objects.py`](backend/src/swim_coach/domain/shared/value_objects.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/infrastructure/__init__.py`](backend/src/swim_coach/infrastructure/__init__.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/infrastructure/auth/__init__.py`](backend/src/swim_coach/infrastructure/auth/__init__.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/infrastructure/auth/oidc.py`](backend/src/swim_coach/infrastructure/auth/oidc.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/infrastructure/db/__init__.py`](backend/src/swim_coach/infrastructure/db/__init__.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/infrastructure/db/database.py`](backend/src/swim_coach/infrastructure/db/database.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/infrastructure/db/models.py`](backend/src/swim_coach/infrastructure/db/models.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/infrastructure/db/uow.py`](backend/src/swim_coach/infrastructure/db/uow.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/interfaces/__init__.py`](backend/src/swim_coach/interfaces/__init__.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/interfaces/cli/__init__.py`](backend/src/swim_coach/interfaces/cli/__init__.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/interfaces/cli/seed_initial_context.py`](backend/src/swim_coach/interfaces/cli/seed_initial_context.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/interfaces/mcp/__init__.py`](backend/src/swim_coach/interfaces/mcp/__init__.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/interfaces/mcp/server.py`](backend/src/swim_coach/interfaces/mcp/server.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/interfaces/rest/__init__.py`](backend/src/swim_coach/interfaces/rest/__init__.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/interfaces/rest/auth.py`](backend/src/swim_coach/interfaces/rest/auth.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/interfaces/rest/context.py`](backend/src/swim_coach/interfaces/rest/context.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/interfaces/rest/dependencies.py`](backend/src/swim_coach/interfaces/rest/dependencies.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/interfaces/rest/health.py`](backend/src/swim_coach/interfaces/rest/health.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/interfaces/rest/oauth.py`](backend/src/swim_coach/interfaces/rest/oauth.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/interfaces/rest/problem.py`](backend/src/swim_coach/interfaces/rest/problem.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/interfaces/rest/schemas.py`](backend/src/swim_coach/interfaces/rest/schemas.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/interfaces/worker/__init__.py`](backend/src/swim_coach/interfaces/worker/__init__.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/interfaces/worker/main.py`](backend/src/swim_coach/interfaces/worker/main.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/settings.py`](backend/src/swim_coach/settings.py) | arquivo estruturado/auxiliar |
+| [`backend/tests/contract/test_oidc_client.py`](backend/tests/contract/test_oidc_client.py) | arquivo estruturado/auxiliar |
+| [`backend/tests/integration/__init__.py`](backend/tests/integration/__init__.py) | arquivo estruturado/auxiliar |
+| [`backend/tests/integration/conftest.py`](backend/tests/integration/conftest.py) | arquivo estruturado/auxiliar |
+| [`backend/tests/integration/test_identity_repositories.py`](backend/tests/integration/test_identity_repositories.py) | arquivo estruturado/auxiliar |
+| [`backend/tests/integration/test_job_lease.py`](backend/tests/integration/test_job_lease.py) | arquivo estruturado/auxiliar |
 | [`backend/tests/integration/test_mcp.py`](backend/tests/integration/test_mcp.py) | arquivo estruturado/auxiliar |
+| [`backend/tests/integration/test_migrations.py`](backend/tests/integration/test_migrations.py) | arquivo estruturado/auxiliar |
+| [`backend/tests/integration/test_rest_auth_isolation.py`](backend/tests/integration/test_rest_auth_isolation.py) | arquivo estruturado/auxiliar |
+| [`backend/tests/property/test_value_objects.py`](backend/tests/property/test_value_objects.py) | arquivo estruturado/auxiliar |
+| [`backend/tests/unit/test_auth_settings.py`](backend/tests/unit/test_auth_settings.py) | arquivo estruturado/auxiliar |
 | [`backend/tests/unit/test_capabilities.py`](backend/tests/unit/test_capabilities.py) | arquivo estruturado/auxiliar |
+| [`backend/tests/unit/test_domain_entities.py`](backend/tests/unit/test_domain_entities.py) | arquivo estruturado/auxiliar |
 | [`backend/tests/unit/test_garmin_probe.py`](backend/tests/unit/test_garmin_probe.py) | arquivo estruturado/auxiliar |
 | [`backend/tests/unit/test_health.py`](backend/tests/unit/test_health.py) | arquivo estruturado/auxiliar |
+| [`backend/tests/unit/test_oauth_metadata.py`](backend/tests/unit/test_oauth_metadata.py) | arquivo estruturado/auxiliar |
 | [`backend/tests/unit/test_oauth_probe.py`](backend/tests/unit/test_oauth_probe.py) | arquivo estruturado/auxiliar |
 | [`backend/tests/unit/test_worker.py`](backend/tests/unit/test_worker.py) | arquivo estruturado/auxiliar |
 | [`docker-compose.yml`](docker-compose.yml) | arquivo estruturado/auxiliar |
@@ -72,6 +130,7 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`pnpm-lock.yaml`](pnpm-lock.yaml) | arquivo estruturado/auxiliar |
 | [`pnpm-workspace.yaml`](pnpm-workspace.yaml) | arquivo estruturado/auxiliar |
 | [`pyproject.toml`](pyproject.toml) | arquivo estruturado/auxiliar |
+| [`tests/e2e/p01-auth-context.spec.ts`](tests/e2e/p01-auth-context.spec.ts) | arquivo estruturado/auxiliar |
 | [`uv.lock`](uv.lock) | arquivo estruturado/auxiliar |
 
 ## Documentos duráveis
@@ -104,7 +163,10 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`docs/23-naming-and-versioning.md`](docs/23-naming-and-versioning.md) | Convenções de nomes e versionamento |
 | [`docs/24-capability-release-matrix.md`](docs/24-capability-release-matrix.md) | Matriz de liberação de capacidades |
 | [`docs/evidence/p00-foundation-evidence.md`](docs/evidence/p00-foundation-evidence.md) | P00 — evidências da fundação e dos spikes |
+| [`docs/evidence/p01-domain-persistence-identity.md`](docs/evidence/p01-domain-persistence-identity.md) | P01 — evidências de domínio, persistência e identidade |
+| [`docs/evidence/p01-pwa-dashboard.png`](docs/evidence/p01-pwa-dashboard.png) | arquivo estruturado/auxiliar |
 | [`docs/handoffs/p00.md`](docs/handoffs/p00.md) | Handoff — P00 Fundação e spikes de risco |
+| [`docs/handoffs/p01.md`](docs/handoffs/p01.md) | Handoff — P01 Domínio, persistência e identidade |
 
 ## Fases
 
@@ -174,6 +236,7 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`adrs/ADR-0007-oauth21-mcp.md`](adrs/ADR-0007-oauth21-mcp.md) | ADR-0007 — OAuth 2.1 para MCP remoto |
 | [`adrs/ADR-0008-versioned-domain-memory.md`](adrs/ADR-0008-versioned-domain-memory.md) | ADR-0008 — Memória do treinador em dados estruturados |
 | [`adrs/ADR-0009-mcp-ui-optional.md`](adrs/ADR-0009-mcp-ui-optional.md) | ADR-0009 — UI MCP é opcional e standards-first |
+| [`adrs/ADR-0010-pwa-bff-session.md`](adrs/ADR-0010-pwa-bff-session.md) | ADR-0010 — BFF OIDC e sessão opaca para a PWA |
 
 ## Blueprint do plugin
 
@@ -235,4 +298,4 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`tools/validate_plan.py`](tools/validate_plan.py) | arquivo estruturado/auxiliar |
 | [`tools/validate_repository.py`](tools/validate_repository.py) | arquivo estruturado/auxiliar |
 
-**Total indexado:** 183 arquivos (sem contar este índice e o arquivo de checksums).
+**Total indexado:** 246 arquivos (sem contar este índice e o arquivo de checksums).

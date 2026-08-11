@@ -5,13 +5,94 @@ info:
 servers:
   - url: /api/v1
 security:
-  - bearerAuth: []
+  - cookieSession: []
 paths:
+  /auth/config:
+    get:
+      operationId: getAuthConfig
+      security: []
+      responses:
+        "200": {description: Enabled PWA login methods}
+  /auth/login:
+    get:
+      operationId: startOidcLogin
+      security: []
+      responses:
+        "303": {description: Redirect to the configured OIDC authorization endpoint}
+  /auth/callback:
+    get:
+      operationId: completeOidcLogin
+      security: []
+      responses:
+        "303": {description: Validated identity mapped to an opaque BFF session}
+        "403": {$ref: "#/components/responses/Problem"}
+  /auth/logout:
+    post:
+      operationId: logout
+      parameters: [{$ref: "#/components/parameters/CsrfToken"}]
+      responses:
+        "204": {description: Session revoked and cookies cleared}
   /me:
     get:
       operationId: getMe
       responses:
         "200": {description: Current user profile}
+        "401": {$ref: "#/components/responses/Problem"}
+  /me/profile:
+    patch:
+      operationId: updateProfile
+      parameters: [{$ref: "#/components/parameters/CsrfToken"}]
+      responses:
+        "200": {description: Profile updated with optimistic version control}
+        "409": {$ref: "#/components/responses/Problem"}
+  /pools:
+    get:
+      operationId: listPools
+      responses: {"200": {description: User-owned pools}}
+    post:
+      operationId: createPool
+      parameters:
+        - {$ref: "#/components/parameters/CsrfToken"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "201": {description: User-owned pool created}
+        "409": {$ref: "#/components/responses/Problem"}
+  /pools/{pool_id}:
+    patch:
+      operationId: updatePool
+      parameters:
+        - {in: path, name: pool_id, required: true, schema: {type: string, format: uuid}}
+        - {$ref: "#/components/parameters/CsrfToken"}
+      responses:
+        "200": {description: User-owned pool updated}
+        "404": {$ref: "#/components/responses/Problem"}
+  /availability:
+    get:
+      operationId: listAvailability
+      responses: {"200": {description: User availability rules}}
+    put:
+      operationId: replaceAvailability
+      parameters: [{$ref: "#/components/parameters/CsrfToken"}]
+      responses: {"200": {description: Availability replaced atomically}}
+  /goals:
+    get:
+      operationId: listGoals
+      responses: {"200": {description: User-owned goals}}
+    post:
+      operationId: createGoal
+      parameters:
+        - {$ref: "#/components/parameters/CsrfToken"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses: {"201": {description: Goal created with derived pace}}
+  /goals/{goal_id}:
+    patch:
+      operationId: updateGoal
+      parameters:
+        - {in: path, name: goal_id, required: true, schema: {type: string, format: uuid}}
+        - {$ref: "#/components/parameters/CsrfToken"}
+      responses:
+        "200": {description: Goal updated and pace recalculated}
+        "404": {$ref: "#/components/responses/Problem"}
   /activities:
     get:
       operationId: listActivities
@@ -78,8 +159,14 @@ paths:
       responses: {"200": {description: Job status}}
 components:
   securitySchemes:
+    cookieSession: {type: apiKey, in: cookie, name: swim_coach_session}
     bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
   parameters:
+    CsrfToken:
+      in: header
+      name: X-CSRF-Token
+      required: true
+      schema: {type: string, minLength: 32, maxLength: 200}
     IdempotencyKey:
       in: header
       name: Idempotency-Key

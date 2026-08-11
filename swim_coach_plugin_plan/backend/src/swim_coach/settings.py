@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, HttpUrl, PostgresDsn, model_validator
+from pydantic import Field, HttpUrl, PostgresDsn, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,6 +27,15 @@ class Settings(BaseSettings):
     public_base_url: HttpUrl | None = None
     oauth_issuer: HttpUrl | None = None
     oauth_resource: HttpUrl | None = None
+    pwa_base_url: HttpUrl = HttpUrl("http://127.0.0.1:14173")
+    oidc_issuer: HttpUrl | None = None
+    oidc_client_id: str | None = None
+    oidc_client_secret: SecretStr | None = None
+    auth_allowed_emails: str = ""
+    auth_allowed_subjects: str = ""
+    dev_auth_enabled: bool = False
+    dev_auth_email: str = "local-swimmer@example.test"
+    session_lifetime_hours: int = Field(default=8, ge=1, le=24)
 
     @model_validator(mode="after")
     def validate_oauth_metadata(self) -> "Settings":
@@ -47,7 +56,40 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "oauth_resource must use HTTPS except for HTTP loopback outside production"
                 )
+        if (self.oidc_issuer is None) != (self.oidc_client_id is None):
+            raise ValueError("oidc_issuer and oidc_client_id must be configured together")
+        if self.oidc_issuer is not None and self.oidc_issuer.scheme != "https":
+            raise ValueError("oidc_issuer must use HTTPS")
+        if self.environment == "production":
+            if self.dev_auth_enabled:
+                raise ValueError("dev_auth_enabled is forbidden in production")
+            if self.pwa_base_url.scheme != "https":
+                raise ValueError("pwa_base_url must use HTTPS in production")
+        if self.dev_auth_enabled and self.dev_auth_email.casefold() not in self.allowed_emails:
+            raise ValueError("dev_auth_email must be explicitly allowlisted")
+        if (self.dev_auth_enabled or self.oidc_issuer is not None) and not (
+            self.allowed_emails or self.allowed_subjects
+        ):
+            raise ValueError(
+                "an email or subject allowlist is required when authentication is enabled"
+            )
         return self
+
+    @property
+    def allowed_emails(self) -> frozenset[str]:
+        return frozenset(
+            item.strip().casefold() for item in self.auth_allowed_emails.split(",") if item.strip()
+        )
+
+    @property
+    def allowed_subjects(self) -> frozenset[str]:
+        return frozenset(
+            item.strip() for item in self.auth_allowed_subjects.split(",") if item.strip()
+        )
+
+    @property
+    def oidc_redirect_uri(self) -> str:
+        return f"{str(self.pwa_base_url).rstrip('/')}/api/v1/auth/callback"
 
 
 @lru_cache

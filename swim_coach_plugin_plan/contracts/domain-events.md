@@ -23,6 +23,7 @@ Catálogo inicial:
 |---|---|---|
 | `athlete.profile_updated.v1` | athlete | planning cache/audit |
 | `goals.goal_activated.v1` | goals | planning/progress |
+| `goals.goal_updated.v1` | goals | planning/progress/audit |
 | `workouts.draft_created.v1` | workouts | audit |
 | `workouts.revision_created.v1` | workouts | validation/audit |
 | `workouts.revision_approved.v1` | workouts | publish eligibility |

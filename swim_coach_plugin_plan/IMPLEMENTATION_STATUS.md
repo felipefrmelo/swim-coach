@@ -2,13 +2,13 @@
 
 > Atualizar este arquivo no mesmo commit de cada fase. `DONE` exige evidência. Uma fase pode ficar `BLOCKED` sem comprometer a honestidade do projeto.
 > Não existe código legado, banco anterior ou dado de aplicação. A P00 foi
-> concluída com evidências locais e integrações externas reais; P01 é a próxima
-> fase elegível.
+> concluída com evidências locais e integrações externas reais. A P01 concluiu a
+> fundação transacional e a PWA autenticada; P02 é a próxima fase elegível.
 
 | Fase | Estado | Dependências | Evidência mínima | Commit/PR |
 |---:|---|---|---|---|
 | P00 | DONE | — | Garmin read, OAuth resource binding, tunnel/ChatGPT e CI reais | [PR #1](https://github.com/felipefrmelo/swim-coach/pull/1) |
-| P01 | NOT_STARTED | P00 | migrações + testes de domínio + PWA shell | — |
+| P01 | DONE | P00 | migrações + testes de domínio + PWA shell | branch `p01-domain-persistence-identity` |
 | P02 | NOT_STARTED | P01 | import real Garmin sem duplicata | — |
 | P03 | NOT_STARTED | P02 | FIT normalizado e analytics reproduzíveis | — |
 | P04 | NOT_STARTED | P01 | treino válido de 20 m criado na PWA | — |
@@ -64,8 +64,39 @@
 
 ### P01
 
-- Estado: `NOT_STARTED`
+- Estado: `DONE`
+- Início: 2026-08-11T19:35:41-03:00
+- Conclusão local: 2026-08-11T20:10:22-03:00
+- Commit/PR: branch `p01-domain-persistence-identity`; publicação registrada no
+  mesmo handoff após o push.
+- Comandos executados:
+  - `make check` → Ruff, mypy (50 arquivos), 39 testes Python, ESLint,
+    TypeScript, 2 testes Vitest e validadores verdes (`checks=8 warnings=0 errors=0`).
+  - `make dependency-scan` → nenhuma vulnerabilidade conhecida em Python ou pnpm.
+  - `make secret-scan` → nenhum vazamento nos 5 commits ou na árvore de trabalho.
+  - `docker compose up --build -d` → migration one-shot aplicada; PostgreSQL,
+    API e PWA saudáveis; worker em execução.
+  - migration `000001 (head)` → 16 tabelas e 55 constraints no schema local;
+    Testcontainers comprovou `up/down/up`.
+  - seed sanitizado executado duas vezes → 20 m, 2.000 m, 2.700 s e
+    135 s/100 m nas duas execuções.
+  - Playwright em Chrome, viewport 375×812 → login local, perfil, piscina,
+    disponibilidade, meta e dashboard passaram em 2,3 s.
+  - smokes loopback → live `ok`, ready com banco `ready`, auth config
+    explicitamente `oidc_enabled=false/dev_auth_enabled=true` no ambiente local.
 - Evidências:
+  - [`docs/evidence/p01-domain-persistence-identity.md`](docs/evidence/p01-domain-persistence-identity.md)
+  - [`docs/evidence/p01-pwa-dashboard.png`](docs/evidence/p01-pwa-dashboard.png)
+  - [`docs/handoffs/p01.md`](docs/handoffs/p01.md)
+- Decisões/ADRs:
+  - [`ADR-0010`](adrs/ADR-0010-pwa-bff-session.md): BFF OIDC e sessão opaca.
+  - Email usa índice funcional único em `lower(email)` para preservar unicidade
+    case-insensitive sem exigir extensão global `citext`.
+- Limites preservados: o E2E usa principal local sanitizado; o fluxo OIDC é
+  coberto por contrato criptográfico, não promovido como login Auth0 real. Garmin,
+  FIT, workout editor e MCP privado continuam fora do escopo.
+- Pendências da P01: nenhuma bloqueadora.
+- Próxima ação: iniciar P02 pelo prompt `prompts/p02.md`.
 
 ### P02
 

@@ -2,7 +2,7 @@
 
 > **Versão do plano:** 1.0
 > **Data-base:** 11 de agosto de 2026
-> **Estado:** P00 concluída; P01 é a próxima fase elegível
+> **Estado:** P00 e P01 concluídas; P02 é a próxima fase elegível
 > **Uso inicial:** pessoal
 > **Atleta inicial:** Felipe
 > **Dispositivo:** Garmin Forerunner 265
@@ -11,9 +11,9 @@
 
 Este diretório contém a especificação inicial de implementação do Swim Coach, organizada em documentos menores, contratos, fases e gates executáveis por LLMs. A arquitetura definida para o produto é **Plugin-first**.
 
-> **Checkpoint:** a P00 está `DONE`. Garmin read, Auth0 com PKCE/DCR/resource
-> binding e Secure MCP Tunnel no ChatGPT foram validados com evidência real e
-> sanitizada. A CI remota está verde no PR #1; P01 permanece `NOT_STARTED`. Veja
+> **Checkpoint:** P00 e P01 estão `DONE`. A fundação transacional, identidade,
+> isolamento por usuário e PWA operacional foram validados em PostgreSQL real
+> local, Testcontainers e Chrome mobile. P02 é a próxima fase elegível. Veja
 > [`IMPLEMENTATION_STATUS.md`](IMPLEMENTATION_STATUS.md).
 
 ```text
@@ -83,7 +83,7 @@ O MVP **não terá um chat próprio nem chamará a OpenAI Responses API**. A con
 
 A primeira prova de conceito do plugin acontece já na **P00**, com ferramentas sem dados pessoais. A primeira fatia útil com dados reais chega na **P05/P06**. Escritas no Garmin via plugin só entram depois do fluxo de proposta, aprovação, escopos e idempotência.
 
-## Executar a fundação P00
+## Executar a fundação P00/P01
 
 Requer Python 3.12, Node 24 com Corepack, `uv`, Docker e Docker Compose.
 
@@ -93,13 +93,15 @@ make check
 make dependency-scan
 make secret-scan
 docker compose up --build --wait
+PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/google-chrome make e2e
 ```
 
 A API fica em `http://127.0.0.1:18000`, a PWA em
 `http://127.0.0.1:14173` e o PostgreSQL em `127.0.0.1:55432`. As portas
 podem ser sobrescritas pelas variáveis documentadas em [`.env.example`](.env.example).
-O único tool MCP liberado é `get_capabilities`; ele não acessa dados pessoais e
-não produz efeitos externos.
+O único tool MCP liberado continua sendo `get_capabilities`; ele não acessa
+dados pessoais nem produz efeitos externos. A PWA P01 usa BFF/cookie opaco,
+allowlist e ownership em todos os endpoints de contexto.
 
 O Git root contém `../.codex/config.toml`, uma configuração
 project-scoped que conecta clientes Codex locais ao MCP e aplica allowlist apenas
@@ -126,7 +128,8 @@ codex mcp get swim_coach_p00
 - [Matriz de liberação de capacidades](docs/24-capability-release-matrix.md)
 - [Relatório de validação do pacote](PLAN_VALIDATION_REPORT.md)
 - [Evidências da P00](docs/evidence/p00-foundation-evidence.md)
-- [Handoff atual da P00](docs/handoffs/p00.md)
+- [Evidências da P01](docs/evidence/p01-domain-persistence-identity.md)
+- [Handoff atual da P01](docs/handoffs/p01.md)
 
 ## Entregáveis para execução
 

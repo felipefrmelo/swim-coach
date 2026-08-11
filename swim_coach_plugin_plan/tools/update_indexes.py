@@ -9,15 +9,19 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 IGNORED_DIRS = {
     ".git",
+    ".hypothesis",
     ".local",
     ".mypy_cache",
     ".pytest_cache",
     ".ruff_cache",
     ".venv",
+    ".vite",
     "__pycache__",
     "dist",
     "htmlcov",
     "node_modules",
+    "playwright-report",
+    "test-results",
 }
 TASK_RE = re.compile(r"^###\s+(P\d{2}-T\d{2})\s+—\s+(.+)$", re.MULTILINE)
 
