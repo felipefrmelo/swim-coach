@@ -2,7 +2,7 @@
 
 > **Versão do plano:** 1.0
 > **Data-base:** 11 de agosto de 2026
-> **Estado:** P00 bloqueada em gates externos; fundação local executável
+> **Estado:** P00 bloqueada na validação final do resource metadata OAuth
 > **Uso inicial:** pessoal
 > **Atleta inicial:** Felipe
 > **Dispositivo:** Garmin Forerunner 265
@@ -11,10 +11,10 @@
 
 Este diretório contém a especificação inicial de implementação do Swim Coach, organizada em documentos menores, contratos, fases e gates executáveis por LLMs. A arquitetura definida para o produto é **Plugin-first**.
 
-> **Checkpoint:** a P00 está `BLOCKED`. A fundação local, o MCP público
-> inofensivo e o plugin Skills-only estão executáveis; o gate permanece aberto
-> até as provas com um tenant OAuth real, uma conta Garmin real, transporte MCP
-> remoto seguro. A primeira CI remota está verde no PR #1. Veja
+> **Checkpoint:** a P00 está `BLOCKED`. A conta Garmin real, o Auth0 real e o
+> Secure MCP Tunnel em ChatGPT já foram exercitados. Falta republicar e validar
+> pelo tunnel o protected resource metadata OAuth recém-implementado. A primeira
+> CI remota está verde no PR #1. Veja
 > [`IMPLEMENTATION_STATUS.md`](IMPLEMENTATION_STATUS.md).
 
 ```text

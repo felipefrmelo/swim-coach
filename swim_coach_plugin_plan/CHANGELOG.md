@@ -21,8 +21,13 @@
 - corrigidos os geradores/validadores do plano para ignorarem `.venv`,
   `node_modules`, builds e caches, evitando que dependências instaladas fossem
   interpretadas como documentos do plano;
-- registrado handoff honesto: Auth0 real, Garmin real, conexão MCP HTTPS e CI
-  remota ainda são necessários antes de concluir a P00.
+- registradas as provas externas reais: leitura Garmin sem escrita, Auth0 com
+  authorization code/PKCE S256/DCR e Secure MCP Tunnel invocado pelo ChatGPT;
+- adicionado protected resource metadata configurável em
+  `/.well-known/oauth-protected-resource`, fechado por padrão e restrito a um
+  par issuer/resource HTTPS completo;
+- reduzido o bloqueio da P00 à revalidação do resource metadata/audience pelo
+  tunnel após a nova rota;
 - após três auditorias consecutivas sem os inputs externos necessários, alterado
   o checkpoint P00 de `IN_PROGRESS` para `BLOCKED`, sem liberar P01.
 - corrigido o diagnóstico de GitHub após verificação fora do sandbox: `gh` está

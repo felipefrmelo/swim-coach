@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from swim_coach import __version__
 from swim_coach.interfaces.mcp.server import create_mcp_server
 from swim_coach.interfaces.rest.health import router as health_router
+from swim_coach.interfaces.rest.oauth import router as oauth_router
 from swim_coach.settings import get_settings
 
 
@@ -43,6 +44,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     app.include_router(health_router)
+    app.include_router(oauth_router)
     app.mount("/mcp", mcp_app)
     return app
 

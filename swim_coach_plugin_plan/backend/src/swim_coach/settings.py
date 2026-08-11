@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, HttpUrl, PostgresDsn
+from pydantic import Field, HttpUrl, PostgresDsn, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_prefix="SWIM_COACH_",
+        env_ignore_empty=True,
         extra="ignore",
     )
 
@@ -24,6 +25,22 @@ class Settings(BaseSettings):
         "postgresql://swim_coach:local_only@localhost:5432/swim_coach"
     )
     public_base_url: HttpUrl | None = None
+    oauth_issuer: HttpUrl | None = None
+    oauth_resource: HttpUrl | None = None
+
+    @model_validator(mode="after")
+    def validate_oauth_metadata(self) -> "Settings":
+        """Require a complete HTTPS resource/issuer pair when OAuth is advertised."""
+
+        if (self.oauth_issuer is None) != (self.oauth_resource is None):
+            raise ValueError("oauth_issuer and oauth_resource must be configured together")
+        for name, value in (
+            ("oauth_issuer", self.oauth_issuer),
+            ("oauth_resource", self.oauth_resource),
+        ):
+            if value is not None and value.scheme != "https":
+                raise ValueError(f"{name} must use HTTPS")
+        return self
 
 
 @lru_cache

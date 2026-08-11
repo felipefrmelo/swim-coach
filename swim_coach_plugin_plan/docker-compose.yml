@@ -26,6 +26,9 @@ services:
       SWIM_COACH_HOST: 0.0.0.0
       SWIM_COACH_PORT: 8000
       SWIM_COACH_DATABASE_URL: postgresql://swim_coach:local_only@postgres:5432/swim_coach
+      SWIM_COACH_PUBLIC_BASE_URL: ${SWIM_COACH_PUBLIC_BASE_URL:-}
+      SWIM_COACH_OAUTH_ISSUER: ${SWIM_COACH_OAUTH_ISSUER:-}
+      SWIM_COACH_OAUTH_RESOURCE: ${SWIM_COACH_OAUTH_RESOURCE:-}
     depends_on:
       postgres:
         condition: service_healthy

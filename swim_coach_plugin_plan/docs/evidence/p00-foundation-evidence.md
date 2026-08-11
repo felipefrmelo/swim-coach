@@ -2,6 +2,7 @@
 
 - Execução: 2026-08-11, `America/Sao_Paulo`
 - Estado da fase: `BLOCKED`
+- Atualização externa: 2026-08-11T17:25:51-03:00
 - Regra: resultados reais são identificados como reais; caminhos preparados,
   fixtures e integrações pendentes não são promovidos a evidência de gate.
 
@@ -12,12 +13,12 @@
 | P00-T01 | concluída | workspace Python/TypeScript, versões, lockfiles e comandos reproduzíveis |
 | P00-T02 | concluída localmente | Compose subiu PostgreSQL, API, worker e web; healthchecks verdes |
 | P00-T03 | concluída | limites arquiteturais, health endpoints e encerramento gracioso do worker testados |
-| P00-T04 | parcial | MCP real validado pelo Inspector e por sessão Codex local; Secure MCP Tunnel/HTTPS remoto pendente |
+| P00-T04 | concluída | MCP validado localmente e por Secure MCP Tunnel em chamada real do ChatGPT web |
 | P00-T05 | concluída no modo permitido pela fase | plugin Skills-only instalado e conexão de teste project-scoped exercitada; nenhuma `.app.json` foi inventada |
-| P00-T06 | parcial | probe e testes de contrato prontos; tenant Auth0 real não estava configurado no ambiente |
-| P00-T07 | parcial | biblioteca real e modelo local de natação de 20 m validados; login/read reais pendentes |
+| P00-T06 | parcial | Auth0 real passou em authorization code, PKCE S256 e DCR; protected resource metadata implementado, mas ainda não revalidado pelo tunnel |
+| P00-T07 | concluída | login/read reais: atividades, nados e Forerunner 265 detectados; nenhuma escrita externa |
 | P00-T08 | concluída | gates locais verdes e GitHub Actions run `31515474864` verde em clone limpo |
-| P00-T09 | parcial | versões, limitações e decisão no-go do gate geral registradas neste documento e no handoff |
+| P00-T09 | parcial | evidências externas registradas; decisão permanece bloqueada somente no resource metadata OAuth |
 
 ## Ambiente validado
 
@@ -37,7 +38,8 @@ Executados a partir da raiz deste pacote:
 make check
   ruff format/check: passou
   mypy strict: 16 arquivos passaram
-  pytest: 9 passaram
+  pytest inicial: 9 passaram
+  pytest após protected resource metadata: 15 passaram
   eslint + TypeScript: passaram
   vitest: 1 passou
   repository validator: passou
@@ -59,6 +61,11 @@ docker compose up -d --wait
   api: healthy
   worker: running
   web: healthy
+
+rebuild após protected resource metadata
+  api, worker e web: imagens construídas
+  postgres, api, worker e web: saudáveis
+  metadata sem configuração: HTTP 404 (fail-closed)
 
 docker compose down -v
   contêineres e rede P00 removidos
@@ -186,12 +193,40 @@ final carregou a configuração normal e chamou exatamente um tool. O modo
 `--strict-config` não pôde ser usado devido a um campo preexistente de outro
 plugin na configuração global, sem relação com o Swim Coach.
 
-Esta evidência fecha a chamada em uma superfície Codex local suportada, mas não
-prova ChatGPT web nem transporte remoto. O Secure MCP Tunnel atual exigiria um
-`tunnel_id`, API key de runtime e permissões de Platform; nenhum desses inputs
-estava presente no ambiente.
+## Secure MCP Tunnel — integração remota real
 
-## OAuth — compatibilidade e prova pendente
+O proprietário criou um tunnel de desenvolvimento na OpenAI Platform, manteve a
+runtime API key somente em variável de ambiente local e apontou o perfil
+`swim-coach-p00` para `http://127.0.0.1:18000/mcp/`. O identificador do tunnel
+foi mascarado nesta evidência.
+
+Resultado sanitizado de `tunnel-client doctor --profile swim-coach-p00 --explain`:
+
+```text
+config_source          PASS profile: swim-coach-p00
+profile_load           PASS
+tunnel_id              PASS tunnel_…8500
+control_plane_api_key  PASS env:CONTROL_PLANE_API_KEY
+mcp_target             PASS http://127.0.0.1:18000/mcp/
+mcp_server_reachable   PASS HTTP 406
+oauth_metadata         PASS metadata não anunciado; candidatos retornaram 404
+health_listener        PASS http://127.0.0.1:8080
+RESULT ok
+```
+
+O HTTP 406 é a resposta esperada de uma requisição HTTP genérica sem o contrato
+MCP; o próprio `doctor` confirmou que o alvo estava alcançável. O estado OAuth
+registrou corretamente a ausência de protected resource metadata antes da nova
+rota documentada abaixo.
+
+Com `tunnel-client run` ativo, uma captura apresentada pelo proprietário mostrou
+uma chamada real no ChatGPT web usando `@coach`. A resposta identificou o Swim
+Coach, informou que a conexão básica estava funcionando, declarou
+`get_capabilities` como única função disponível e não alegou acesso Garmin,
+dados pessoais ou capacidades futuras. Isso fecha a prova de transporte remoto
+P00 sem persistir na evidência qualquer API key ou dado privado.
+
+## OAuth — Auth0 real e resource metadata pendente de revalidação
 
 O probe `backend/scripts/probe_oauth_metadata.py` valida somente metadados
 públicos e exige:
@@ -203,21 +238,52 @@ públicos e exige:
 - quando informado, protected resource metadata RFC 9728 com `resource` e issuer
   esperados.
 
-Ele não solicita nem imprime tokens. Não havia variável/configuração de Auth0,
-OAuth ou Swim Coach no ambiente; portanto nenhum tenant real foi testado e a
-task não está concluída. A documentação atual do Auth0 também informa que DCR
-precisa ser explicitamente habilitado no tenant.
+O proprietário habilitou DCR em um tenant Auth0 de desenvolvimento e executou o
+probe contra o issuer real. O hostname do tenant foi omitido desta evidência;
+nenhum client secret, access token ou refresh token foi solicitado ou impresso.
 
-Reprodução segura, depois de publicar os metadados:
+Resultado sanitizado real:
+
+```json
+{
+  "oauth_probe": "passed",
+  "issuer_metadata": {
+    "authorization_code": true,
+    "cimd": false,
+    "dcr": true,
+    "pkce_s256": true,
+    "token_endpoint_auth_methods": [
+      "client_secret_basic",
+      "client_secret_post",
+      "private_key_jwt",
+      "none"
+    ]
+  }
+}
+```
+
+Esse resultado fecha a compatibilidade do authorization server, mas não o gate
+OAuth inteiro: o comando não recebeu `--resource` nem
+`--resource-metadata-url`, e o primeiro `tunnel-client doctor` encontrou 404 nos
+candidatos de protected resource metadata.
+
+Para eliminar o gap, a API agora implementa
+`GET /.well-known/oauth-protected-resource`. A rota fica em 404 quando não
+configurada e só anuncia metadados quando
+`SWIM_COACH_OAUTH_ISSUER` e `SWIM_COACH_OAUTH_RESOURCE` formam um par HTTPS
+completo. Testes cobrem o estado fechado, o documento válido e configurações
+parciais/inseguras.
+
+Reprodução final segura, depois de reconstruir a API com o par configurado:
 
 ```bash
 uv run python backend/scripts/probe_oauth_metadata.py \
   --issuer 'https://TENANT/' \
-  --resource 'https://HOST/mcp' \
-  --resource-metadata-url 'https://HOST/.well-known/oauth-protected-resource'
+  --resource 'https://RESOURCE-HTTPS/mcp' \
+  --resource-metadata-url 'https://HOST-HTTPS/.well-known/oauth-protected-resource'
 ```
 
-## Garmin — compatibilidade e prova pendente
+## Garmin — leitura real concluída
 
 O probe `backend/scripts/probe_garmin_read.py`:
 
@@ -228,15 +294,27 @@ O probe `backend/scripts/probe_garmin_read.py`:
 - constrói localmente um treino de natação de 20 m;
 - nunca chama upload/create/update/delete remoto.
 
-O teste automatizado comprovou somente a construção local do modelo. A conta
-Garmin real não foi acessada porque credenciais não estavam disponíveis por um
-canal local seguro; portanto o read real continua pendente. Execute o comando
-abaixo no terminal do proprietário — nunca envie credenciais no prompt:
+O proprietário executou o probe no próprio terminal, fornecendo email, senha e
+MFA apenas por input oculto. Os dois primeiros caminhos mobile receberam 429 por
+rate limit do IP; o fallback da biblioteca concluiu login e leituras reais. A
+saída não contém credencial, token, ID externo, FIT nem detalhe de atividade:
 
-```bash
-uv sync --group spikes --frozen
-uv run python backend/scripts/probe_garmin_read.py
+```json
+{
+  "device_count": 2,
+  "external_write_performed": false,
+  "garmin_read_probe": "passed",
+  "local_swimming_model_sha256": "63980fde38b42d3d8a6857ff6e13b0aafba5ea42a19e8339104f0f1d47a938ba",
+  "local_swimming_model_valid": true,
+  "recent_activity_count": 20,
+  "recent_pool_swim_count": 6,
+  "target_device_family_detected": true
+}
 ```
+
+O diretório temporário de tokens foi apagado pelo `finally` padrão do probe. O
+modelo de natação de 20 m foi apenas construído localmente; nenhuma chamada de
+upload/create/update/delete foi feita.
 
 ## GitHub/CI — integração remota real
 
@@ -272,9 +350,9 @@ A publicação autorizada produziu:
 
 ## Decisão de gate
 
-**BLOCKED / NO-GO para marcar P00 como `DONE`.** A fundação e todas as partes independentes
-estão prontas, mas o critério da fase exige evidência externa real de OAuth,
-Garmin read e Secure MCP Tunnel/HTTPS remoto. Fixtures, testes de
-contrato e compatibilidade documental não substituem essas provas. Três auditorias
-consecutivas encontraram os mesmos inputs externos ausentes; não há trabalho
-independente restante dentro da P00 que possa produzir essas evidências.
+**BLOCKED / NO-GO para marcar P00 como `DONE`.** Garmin read real e Secure MCP
+Tunnel/ChatGPT estão concluídos. O Auth0 real também comprovou authorization
+code, PKCE S256 e DCR. Falta uma única evidência: reconstruir a API com o par
+issuer/resource HTTPS, repetir o `doctor` até o protected resource metadata ser
+descoberto e executar o probe completo com resource binding. Depois disso,
+P00-T06 e P00-T09 podem ser concluídas e a fase pode avançar para `DONE`.
