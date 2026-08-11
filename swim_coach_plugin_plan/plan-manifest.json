@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0",
+  "project": "swim-coach",
+  "plan_version": "1.0.0-plugin-first",
+  "generated_at": "2026-08-11T00:00:00-03:00",
+  "language": "pt-BR",
+  "architecture": "plugin-first",
+  "primary_interfaces": [
+    "ChatGPT/Codex plugin",
+    "Garmin Forerunner 265",
+    "PWA operational"
+  ],
+  "constraints": {
+    "pool_length_m": 20,
+    "goal_distance_m": 2000,
+    "goal_duration_seconds": 2700,
+    "goal_pace_seconds_per_100m": 135,
+    "personal_use_initially": true,
+    "pwa_internal_chat_mvp": false,
+    "mcp_ui_optional": true,
+    "external_write_requires_exact_approval": true
+  },
+  "phase_order": [
+    "P00",
+    "P01",
+    "P02",
+    "P03",
+    "P04",
+    "P05",
+    "P06",
+    "P07",
+    "P08",
+    "P09",
+    "P10",
+    "P11",
+    "P12"
+  ],
+  "authoritative_entrypoints": [
+    "LLM_START_HERE.md",
+    "AGENTS.md",
+    "MASTER_PLAN.md",
+    "implementation-status.json"
+  ],
+  "contracts": [
+    "contracts/canonical-workout.schema.json",
+    "contracts/mcp-tools.yaml",
+    "contracts/capability-release-matrix.yaml",
+    "contracts/oauth-scopes.md",
+    "contracts/error-catalog.md",
+    "contracts/state-machines.md"
+  ]
+}

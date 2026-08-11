@@ -1,0 +1,78 @@
+name: swim-coach
+
+services:
+  postgres:
+    image: postgres:16.10-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-swim_coach}
+      POSTGRES_USER: ${POSTGRES_USER:-swim_coach}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_only}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    ports:
+      - "127.0.0.1:${SWIM_COACH_POSTGRES_HOST_PORT:-55432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      SWIM_COACH_ENVIRONMENT: development
+      SWIM_COACH_HOST: 0.0.0.0
+      SWIM_COACH_PORT: 8000
+      SWIM_COACH_DATABASE_URL: postgresql://swim_coach:local_only@postgres:5432/swim_coach
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2)",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    ports:
+      - "127.0.0.1:${SWIM_COACH_API_HOST_PORT:-18000}:8000"
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["python", "-m", "swim_coach.interfaces.worker.main"]
+    environment:
+      SWIM_COACH_ENVIRONMENT: development
+      SWIM_COACH_DATABASE_URL: postgresql://swim_coach:local_only@postgres:5432/swim_coach
+    depends_on:
+      postgres:
+        condition: service_healthy
+    init: true
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    ports:
+      - "127.0.0.1:${SWIM_COACH_WEB_HOST_PORT:-14173}:8080"
+    restart: unless-stopped
+
+volumes:
+  postgres-data:

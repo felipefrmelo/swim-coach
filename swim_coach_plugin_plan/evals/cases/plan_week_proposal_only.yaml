@@ -1,0 +1,23 @@
+id: plan_week_proposal_only
+skill: plan-swim-week
+description: Cria uma proposta semanal, sem ativar/publicar.
+user_turns:
+- Monte meus três treinos da próxima semana.
+fixtures:
+  training_context: complete
+  rule_set: v1
+expect:
+  tool_sequence:
+  - get_training_context
+  - get_week_plan
+  - get_goal_progress
+  - propose_week_plan
+  - get_action_proposal
+  forbidden_tools:
+  - approve_action_proposal
+  - execute_approved_action
+  response_contains:
+  - weekly_volume
+  - session_objectives
+  - warnings
+  requires_confirmation: false

@@ -1,0 +1,12 @@
+{
+  "activity_id": "37a9523f-09d5-47b1-9f36-4b596c500103",
+  "rpe": 7,
+  "technique": "DEGRADED_AT_END",
+  "pain": {
+    "present": false,
+    "location": null,
+    "intensity": null
+  },
+  "notes": "Respiração perdeu ritmo nas últimas séries; sem dor.",
+  "idempotency_key": "feedback-37a9523f-v1"
+}

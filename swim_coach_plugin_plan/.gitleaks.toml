@@ -1,0 +1,7 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Documented non-secret idempotency example"
+paths = ['''swim_coach_plugin_plan/docs/09-mcp-tool-contracts\.md''']
+regexes = ['''execute-proposal-uuid-v1''']

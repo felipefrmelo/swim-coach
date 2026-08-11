@@ -1,0 +1,102 @@
+openapi: 3.1.0
+info:
+  title: Swim Coach API
+  version: 1.0.0
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+paths:
+  /me:
+    get:
+      operationId: getMe
+      responses:
+        "200": {description: Current user profile}
+  /activities:
+    get:
+      operationId: listActivities
+      parameters:
+        - {in: query, name: cursor, schema: {type: string}}
+        - {in: query, name: limit, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+      responses:
+        "200": {description: Activity page}
+  /activities/{activity_id}:
+    get:
+      operationId: getActivity
+      parameters:
+        - {in: path, name: activity_id, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200": {description: Activity detail}
+        "404": {$ref: "#/components/responses/Problem"}
+  /activities/{activity_id}/feedback:
+    put:
+      operationId: putActivityFeedback
+      parameters:
+        - {in: path, name: activity_id, required: true, schema: {type: string, format: uuid}}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "200": {description: Feedback stored}
+  /workouts:
+    get: {operationId: listWorkouts, responses: {"200": {description: Workout page}}}
+    post:
+      operationId: createWorkout
+      parameters: [{$ref: "#/components/parameters/IdempotencyKey"}]
+      responses: {"201": {description: Workout created}, "422": {$ref: "#/components/responses/Problem"}}
+  /workouts/{workout_id}:
+    get:
+      operationId: getWorkout
+      parameters: [{in: path, name: workout_id, required: true, schema: {type: string, format: uuid}}]
+      responses: {"200": {description: Workout detail}, "404": {$ref: "#/components/responses/Problem"}}
+  /proposals/{proposal_id}:
+    get:
+      operationId: getProposal
+      parameters: [{in: path, name: proposal_id, required: true, schema: {type: string, format: uuid}}]
+      responses: {"200": {description: Proposal}}
+  /proposals/{proposal_id}/approve:
+    post:
+      operationId: approveProposal
+      parameters:
+        - {in: path, name: proposal_id, required: true, schema: {type: string, format: uuid}}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses: {"200": {description: Approved}, "409": {$ref: "#/components/responses/Problem"}}
+  /proposals/{proposal_id}/execute:
+    post:
+      operationId: executeProposal
+      parameters:
+        - {in: path, name: proposal_id, required: true, schema: {type: string, format: uuid}}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses: {"202": {description: Job queued}, "409": {$ref: "#/components/responses/Problem"}}
+  /sync/garmin/activities:
+    post:
+      operationId: syncGarminActivities
+      parameters: [{$ref: "#/components/parameters/IdempotencyKey"}]
+      responses: {"202": {description: Sync job queued}}
+  /jobs/{job_id}:
+    get:
+      operationId: getJob
+      parameters: [{in: path, name: job_id, required: true, schema: {type: string, format: uuid}}]
+      responses: {"200": {description: Job status}}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
+  parameters:
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema: {type: string, minLength: 8, maxLength: 200}
+  responses:
+    Problem:
+      description: Problem Details
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            required: [type, title, status, code, correlation_id]
+            properties:
+              type: {type: string}
+              title: {type: string}
+              status: {type: integer}
+              detail: {type: string}
+              code: {type: string}
+              correlation_id: {type: string}

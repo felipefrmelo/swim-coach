@@ -1,0 +1,215 @@
+{
+  "schema_version": "1.0",
+  "title": "Técnica e ritmo — 1.600 m",
+  "description": "Sessão exemplo para piscina de 20 m. Todas as distâncias terminam na parede.",
+  "sport": "POOL_SWIMMING",
+  "pool_length_m": 20,
+  "purpose": "TECHNIQUE",
+  "tags": [
+    "example",
+    "20m",
+    "technique"
+  ],
+  "nodes": [
+    {
+      "type": "step",
+      "id": "warmup",
+      "label": "Aquecimento",
+      "step_role": "WARMUP",
+      "end_condition": {
+        "type": "distance",
+        "meters": 200
+      },
+      "target": {
+        "type": "none"
+      },
+      "stroke": {
+        "type": "freestyle"
+      },
+      "intensity": "EASY",
+      "equipment": [
+        "NONE"
+      ],
+      "instructions": "Nado solto, expiração contínua."
+    },
+    {
+      "type": "repeat",
+      "id": "technique",
+      "label": "Técnica",
+      "repetitions": 4,
+      "children": [
+        {
+          "type": "step",
+          "id": "drill-40",
+          "label": "Educativo",
+          "step_role": "DRILL",
+          "end_condition": {
+            "type": "distance",
+            "meters": 40
+          },
+          "target": {
+            "type": "rpe",
+            "min": 3,
+            "max": 4
+          },
+          "stroke": {
+            "type": "drill",
+            "drill": "catch-up",
+            "side": "ALTERNATE"
+          },
+          "intensity": "EASY",
+          "equipment": [
+            "NONE"
+          ],
+          "instructions": "Priorizar alinhamento e entrada da mão."
+        },
+        {
+          "type": "step",
+          "id": "easy-20",
+          "label": "Crawl leve",
+          "step_role": "RECOVERY",
+          "end_condition": {
+            "type": "distance",
+            "meters": 20
+          },
+          "target": {
+            "type": "none"
+          },
+          "stroke": {
+            "type": "freestyle"
+          },
+          "intensity": "EASY",
+          "equipment": [
+            "NONE"
+          ],
+          "instructions": "Transferir a técnica para o nado completo."
+        }
+      ]
+    },
+    {
+      "type": "repeat",
+      "id": "main-pace",
+      "label": "Ritmo sustentável",
+      "repetitions": 6,
+      "children": [
+        {
+          "type": "step",
+          "id": "work-100",
+          "label": "100 m controlado",
+          "step_role": "WORK",
+          "end_condition": {
+            "type": "distance",
+            "meters": 100
+          },
+          "target": {
+            "type": "pace_range",
+            "min_seconds_per_100m": 135,
+            "max_seconds_per_100m": 150
+          },
+          "stroke": {
+            "type": "freestyle"
+          },
+          "intensity": "MODERATE",
+          "equipment": [
+            "NONE"
+          ],
+          "instructions": "Manter as repetições regulares; não sprintar a primeira."
+        },
+        {
+          "type": "step",
+          "id": "rest-20s",
+          "label": "Descanso",
+          "step_role": "REST",
+          "end_condition": {
+            "type": "time",
+            "seconds": 20
+          },
+          "target": {
+            "type": "none"
+          },
+          "stroke": {
+            "type": "choice"
+          },
+          "intensity": null,
+          "equipment": [
+            "NONE"
+          ],
+          "instructions": "Respirar e preparar a próxima saída."
+        }
+      ]
+    },
+    {
+      "type": "repeat",
+      "id": "finish",
+      "label": "Fechamento técnico",
+      "repetitions": 4,
+      "children": [
+        {
+          "type": "step",
+          "id": "steady-80",
+          "label": "80 m progressivo",
+          "step_role": "WORK",
+          "end_condition": {
+            "type": "distance",
+            "meters": 80
+          },
+          "target": {
+            "type": "rpe",
+            "min": 5,
+            "max": 7
+          },
+          "stroke": {
+            "type": "freestyle"
+          },
+          "intensity": "TEMPO",
+          "equipment": [
+            "NONE"
+          ],
+          "instructions": "Aumentar levemente sem perder a forma."
+        },
+        {
+          "type": "step",
+          "id": "reset-20",
+          "label": "20 m muito leve",
+          "step_role": "RECOVERY",
+          "end_condition": {
+            "type": "distance",
+            "meters": 20
+          },
+          "target": {
+            "type": "none"
+          },
+          "stroke": {
+            "type": "choice"
+          },
+          "intensity": "EASY",
+          "equipment": [
+            "NONE"
+          ],
+          "instructions": "Soltar antes da próxima repetição."
+        }
+      ]
+    },
+    {
+      "type": "step",
+      "id": "cooldown",
+      "label": "Soltura",
+      "step_role": "COOLDOWN",
+      "end_condition": {
+        "type": "distance",
+        "meters": 160
+      },
+      "target": {
+        "type": "none"
+      },
+      "stroke": {
+        "type": "choice"
+      },
+      "intensity": "EASY",
+      "equipment": [
+        "NONE"
+      ],
+      "instructions": "Finalizar leve."
+    }
+  ]
+}

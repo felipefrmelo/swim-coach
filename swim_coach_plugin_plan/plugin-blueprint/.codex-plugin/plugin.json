@@ -1,0 +1,28 @@
+{
+  "name": "swim-coach",
+  "version": "0.0.0-spike",
+  "description": "Harmless platform-feasibility workflow for the personal Swim Coach plugin.",
+  "author": {
+    "name": "Felipe"
+  },
+  "keywords": [
+    "swimming",
+    "garmin",
+    "training",
+    "coach"
+  ],
+  "skills": "./release-skills/p00/",
+  "interface": {
+    "displayName": "Swim Coach",
+    "shortDescription": "Verify the Swim Coach integration",
+    "longDescription": "Run the harmless P00 capability check before private data or write actions are enabled.",
+    "developerName": "Felipe",
+    "category": "Health & Fitness",
+    "capabilities": [
+      "Read"
+    ],
+    "defaultPrompt": [
+      "Use Swim Coach to verify which capabilities are connected."
+    ]
+  }
+}

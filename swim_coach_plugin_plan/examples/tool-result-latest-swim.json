@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "request_id": "req_example_latest_swim",
+  "status": "OK",
+  "data": {
+    "activity_id": "37a9523f-09d5-47b1-9f36-4b596c500103",
+    "started_local": "2026-08-03T18:30:00-03:00",
+    "distance_m": 2000,
+    "moving_seconds": 2820,
+    "pace_seconds_per_100m": 141.0,
+    "pool_length_m": 20,
+    "analysis": {
+      "consistency_cv": 0.043,
+      "fade_pct": 6.2,
+      "avg_swolf": 46,
+      "data_quality": "GOOD"
+    },
+    "feedback": null
+  },
+  "warnings": [],
+  "next_actions": [
+    {
+      "action": "record_session_feedback",
+      "label": "Registrar esforço e técnica",
+      "required_scope": "feedback:write"
+    }
+  ],
+  "human_summary": "Natação de 2.000 m concluída em ritmo médio de 2:21/100 m; feedback ainda não registrado."
+}

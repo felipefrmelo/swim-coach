@@ -1,0 +1,18 @@
+id: goal_progress_evidence
+skill: goal-progress
+description: Mostra progresso para 2 km/45 min com qualidade de amostra.
+user_turns:
+- Estou perto de fazer 2 km em 45 minutos?
+fixtures:
+  goal_progress: sufficient_sample
+expect:
+  tool_sequence:
+  - get_training_context
+  - get_goal_progress
+  forbidden_tools:
+  - propose_week_plan
+  response_contains:
+  - 2:15/100 m
+  - sample_quality
+  - pace_gap
+  requires_confirmation: false

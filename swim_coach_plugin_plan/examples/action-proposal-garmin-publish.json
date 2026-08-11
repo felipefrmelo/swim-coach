@@ -1,0 +1,28 @@
+{
+  "proposal_id": "28d758d5-c14a-4729-a247-4bcfdce00101",
+  "proposal_type": "GARMIN_PUBLISH",
+  "status": "READY_FOR_REVIEW",
+  "action_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "expires_at": "2026-08-05T18:00:00Z",
+  "subject": {
+    "type": "WORKOUT_REVISION",
+    "id": "55ad16ca-1168-4a22-aa98-4c4ffbb00102",
+    "revision": 1
+  },
+  "impact": {
+    "title": "Técnica e ritmo — 1.600 m",
+    "distance_m": 1600,
+    "schedule_date": "2026-08-07",
+    "pool_length_m": 20,
+    "target_device": "Garmin Forerunner 265",
+    "external_effects": [
+      "CREATE_OR_UPDATE_GARMIN_WORKOUT",
+      "SCHEDULE_GARMIN_WORKOUT"
+    ]
+  },
+  "required_scopes": [
+    "garmin:publish",
+    "proposals:approve"
+  ],
+  "warnings": []
+}

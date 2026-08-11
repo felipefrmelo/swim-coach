@@ -1,0 +1,35 @@
+{
+  "name": "@swim-coach/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b && vite build",
+    "check": "tsc -b --pretty false",
+    "dev": "vite --host 0.0.0.0",
+    "lint": "eslint . --max-warnings 0",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": ">=5 <6",
+    "vite": ">=8 <9",
+    "react": ">=19 <20",
+    "react-dom": ">=19 <20"
+  },
+  "devDependencies": {
+    "@eslint/js": ">=9 <10",
+    "@testing-library/jest-dom": ">=6 <7",
+    "@testing-library/react": ">=16 <17",
+    "@types/node": ">=24 <25",
+    "@types/react": ">=19 <20",
+    "@types/react-dom": ">=19 <20",
+    "eslint": ">=9 <10",
+    "eslint-plugin-react-hooks": ">=7 <8",
+    "eslint-plugin-react-refresh": ">=0.4 <1",
+    "globals": ">=17 <18",
+    "jsdom": ">=28 <29",
+    "typescript": ">=6 <7",
+    "typescript-eslint": ">=8 <9",
+    "vitest": ">=4 <5"
+  }
+}

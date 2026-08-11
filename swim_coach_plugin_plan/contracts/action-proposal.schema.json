@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://swim-coach.local/schemas/action-proposal/1.0.json",
+  "title": "Action Proposal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "proposal_id",
+    "proposal_type",
+    "status",
+    "action_hash",
+    "expires_at",
+    "subject",
+    "impact",
+    "required_scopes"
+  ],
+  "properties": {
+    "proposal_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "proposal_type": {
+      "type": "string",
+      "enum": [
+        "WORKOUT_CHANGE",
+        "WORKOUT_RESCHEDULE",
+        "WEEK_PLAN",
+        "GARMIN_PUBLISH",
+        "GARMIN_DELETE",
+        "DATA_DELETE"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "DRAFT",
+        "READY_FOR_REVIEW",
+        "APPROVED",
+        "REJECTED",
+        "EXPIRED",
+        "QUEUED",
+        "EXECUTING",
+        "SUCCEEDED",
+        "FAILED",
+        "CANCELLED",
+        "NEEDS_RECONCILIATION"
+      ]
+    },
+    "action_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "type",
+        "id"
+      ],
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      }
+    },
+    "impact": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "required_scopes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    }
+  }
+}
