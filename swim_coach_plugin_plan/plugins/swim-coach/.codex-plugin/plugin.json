@@ -1,6 +1,6 @@
 {
   "name": "swim-coach",
-  "version": "0.4.0",
+  "version": "1.0.0",
   "description": "Review pool swims and propose reproducible, explainable weekly training plans safely.",
   "author": {
     "name": "Felipe"

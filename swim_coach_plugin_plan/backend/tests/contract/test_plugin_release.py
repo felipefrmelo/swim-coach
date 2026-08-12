@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from collections import Counter
@@ -82,14 +83,14 @@ def load_eval_cases() -> list[dict[str, Any]]:
     return cases
 
 
-def test_p10_manifest_app_marketplace_and_release_matrix_add_planning() -> None:
+def test_p12_manifest_app_marketplace_and_release_matrix_are_personal_1_0() -> None:
     manifest = load_json(PLUGIN_ROOT / ".codex-plugin/plugin.json")
     app_mapping = load_json(PLUGIN_ROOT / ".app.json")
     marketplace = load_json(ROOT / ".agents/plugins/marketplace.json")
     release_matrix = load_yaml(ROOT / "contracts/capability-release-matrix.yaml")
 
     assert manifest["name"] == "swim-coach"
-    assert manifest["version"] == "0.4.0"
+    assert manifest["version"] == "1.0.0"
     assert manifest["skills"] == "./skills/"
     assert manifest["apps"] == "./.app.json"
     assert manifest["interface"]["capabilities"] == ["Read", "Write"]
@@ -121,6 +122,9 @@ def test_p10_manifest_app_marketplace_and_release_matrix_add_planning() -> None:
     p10_release = next(item for item in release_matrix["plugin_releases"] if item["phase"] == "P10")
     assert p10_release["version"] == "0.4.0"
     assert p10_release["mode"] == "adaptive-planning"
+    p12_release = next(item for item in release_matrix["plugin_releases"] if item["phase"] == "P12")
+    assert p12_release["version"] == "1.0.0"
+    assert p12_release["mode"] == "hardened-personal-release"
     released_skills = {
         item["name"]
         for item in release_matrix["skills"]
@@ -212,3 +216,15 @@ def test_p10_eval_dataset_validates_selection_order_and_confirmation_boundaries(
             if f"_{category}_" in case["id"]
         )
         assert counts == Counter(CATEGORY_COUNTS), skill_name
+
+
+def test_p12_release_manifest_hashes_are_current() -> None:
+    release = load_json(ROOT / "releases/plugin-1.0.0.json")
+
+    assert release["version"] == "1.0.0"
+    assert release["mode"] == "hardened-personal-release"
+    assert release["status"] == "release_candidate"
+    assert release["verification"]["image_high_critical_vulnerabilities"] == 0
+    for relative, expected in release["hashes"].items():
+        actual = hashlib.sha256((ROOT / relative).read_bytes()).hexdigest()
+        assert actual == expected, relative

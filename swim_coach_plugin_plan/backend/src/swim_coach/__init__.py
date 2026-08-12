@@ -1,3 +1,3 @@
 """Swim Coach backend package."""
 
-__version__ = "0.0.0-spike"
+__version__ = "1.0.0"

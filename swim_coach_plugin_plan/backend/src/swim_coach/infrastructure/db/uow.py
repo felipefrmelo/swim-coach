@@ -64,6 +64,10 @@ from swim_coach.domain.identity import (
 from swim_coach.domain.operations import (
     ApiIdempotencyRecord,
     AuditEvent,
+    DataExport,
+    DataExportStatus,
+    DeletionRequest,
+    DeletionRequestStatus,
     Job,
     JobStatus,
     McpToolInvocation,
@@ -115,6 +119,8 @@ from swim_coach.infrastructure.db.models import (
     AuditEventModel,
     AuthIdentityModel,
     AvailabilityRuleModel,
+    DataExportModel,
+    DeletionRequestModel,
     DeviceModel,
     ExternalWorkoutBindingModel,
     FileArtifactModel,
@@ -368,6 +374,47 @@ def _job(model: JobModel) -> Job:
         updated_at=model.updated_at,
         finished_at=model.finished_at,
         version=model.version,
+    )
+
+
+def _file_artifact(model: FileArtifactModel) -> FileArtifact:
+    return FileArtifact(
+        id=EntityId(model.id),
+        user_id=UserId(model.user_id),
+        activity_id=EntityId(model.activity_id),
+        provider=model.provider,
+        artifact_type=model.artifact_type,
+        storage_key=model.storage_key,
+        content_type=model.content_type,
+        size_bytes=model.size_bytes,
+        checksum=model.checksum,
+        source_external_id_hash=model.source_external_id_hash,
+        created_at=model.created_at,
+    )
+
+
+def _data_export(model: DataExportModel) -> DataExport:
+    return DataExport(
+        id=EntityId(model.id),
+        user_id=UserId(model.user_id),
+        status=DataExportStatus(model.status),
+        storage_key=model.storage_key,
+        checksum=model.checksum,
+        size_bytes=model.size_bytes,
+        created_at=model.created_at,
+        completed_at=model.completed_at,
+        expires_at=model.expires_at,
+    )
+
+
+def _deletion_request(model: DeletionRequestModel) -> DeletionRequest:
+    return DeletionRequest(
+        id=EntityId(model.id),
+        user_id=UserId(model.user_id) if model.user_id else None,
+        status=DeletionRequestStatus(model.status),
+        execute_after=model.execute_after,
+        created_at=model.created_at,
+        executed_at=model.executed_at,
     )
 
 
@@ -1267,6 +1314,14 @@ class SqlAlchemyActivitiesRepository:
         statement = statement.order_by(ActivityModel.start_time_utc.desc()).limit(limit)
         return [_activity(model) for model in await self._session.scalars(statement)]
 
+    async def list_all(self, user_id: UserId) -> Sequence[Activity]:
+        statement = (
+            select(ActivityModel)
+            .where(ActivityModel.user_id == user_id.value)
+            .order_by(ActivityModel.start_time_utc)
+        )
+        return [_activity(model) for model in await self._session.scalars(statement)]
+
 
 class SqlAlchemyActivityDataRepository:
     def __init__(self, session: AsyncSession) -> None:
@@ -1284,19 +1339,15 @@ class SqlAlchemyActivityDataRepository:
         model = (await self._session.scalars(statement)).one_or_none()
         if model is None:
             return None
-        return FileArtifact(
-            id=EntityId(model.id),
-            user_id=UserId(model.user_id),
-            activity_id=EntityId(model.activity_id),
-            provider=model.provider,
-            artifact_type=model.artifact_type,
-            storage_key=model.storage_key,
-            content_type=model.content_type,
-            size_bytes=model.size_bytes,
-            checksum=model.checksum,
-            source_external_id_hash=model.source_external_id_hash,
-            created_at=model.created_at,
+        return _file_artifact(model)
+
+    async def list_artifacts(self, user_id: UserId) -> Sequence[FileArtifact]:
+        statement = (
+            select(FileArtifactModel)
+            .where(FileArtifactModel.user_id == user_id.value)
+            .order_by(FileArtifactModel.created_at)
         )
+        return [_file_artifact(model) for model in await self._session.scalars(statement)]
 
     async def add_artifact(self, artifact: FileArtifact) -> None:
         self._session.add(
@@ -2799,6 +2850,171 @@ class SqlAlchemyNotificationsRepository:
         return _notification(model) if model is not None else None
 
 
+class SqlAlchemyPrivacyRequestsRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add_export(self, data_export: DataExport) -> None:
+        self._session.add(
+            DataExportModel(
+                id=data_export.id.value,
+                user_id=data_export.user_id.value,
+                status=data_export.status.value,
+                storage_key=data_export.storage_key,
+                checksum=data_export.checksum,
+                size_bytes=data_export.size_bytes,
+                created_at=data_export.created_at,
+                completed_at=data_export.completed_at,
+                expires_at=data_export.expires_at,
+            )
+        )
+
+    async def get_export(self, user_id: UserId, export_id: EntityId) -> DataExport | None:
+        statement = select(DataExportModel).where(
+            DataExportModel.id == export_id.value,
+            DataExportModel.user_id == user_id.value,
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _data_export(model) if model else None
+
+    async def update_export(self, data_export: DataExport) -> None:
+        statement = (
+            update(DataExportModel)
+            .where(
+                DataExportModel.id == data_export.id.value,
+                DataExportModel.user_id == data_export.user_id.value,
+            )
+            .values(
+                status=data_export.status.value,
+                storage_key=data_export.storage_key,
+                checksum=data_export.checksum,
+                size_bytes=data_export.size_bytes,
+                completed_at=data_export.completed_at,
+                expires_at=data_export.expires_at,
+            )
+            .returning(DataExportModel.id)
+        )
+        if await self._session.scalar(statement) is None:
+            raise RevisionConflictError(1)
+
+    async def list_export_keys(self, user_id: UserId) -> Sequence[str]:
+        statement = select(DataExportModel.storage_key).where(
+            DataExportModel.user_id == user_id.value,
+            DataExportModel.storage_key.is_not(None),
+        )
+        return [item for item in await self._session.scalars(statement) if item is not None]
+
+    async def add_deletion(self, request: DeletionRequest) -> None:
+        self._session.add(
+            DeletionRequestModel(
+                id=request.id.value,
+                user_id=request.user_id.value if request.user_id else None,
+                status=request.status.value,
+                execute_after=request.execute_after,
+                created_at=request.created_at,
+                executed_at=request.executed_at,
+            )
+        )
+
+    async def get_deletion(self, user_id: UserId, request_id: EntityId) -> DeletionRequest | None:
+        statement = select(DeletionRequestModel).where(
+            DeletionRequestModel.id == request_id.value,
+            DeletionRequestModel.user_id == user_id.value,
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _deletion_request(model) if model else None
+
+    async def update_deletion(self, request: DeletionRequest) -> None:
+        statement = (
+            update(DeletionRequestModel)
+            .where(DeletionRequestModel.id == request.id.value)
+            .values(
+                user_id=request.user_id.value if request.user_id else None,
+                status=request.status.value,
+                executed_at=request.executed_at,
+            )
+            .returning(DeletionRequestModel.id)
+        )
+        if await self._session.scalar(statement) is None:
+            raise RevisionConflictError(1)
+
+    async def stage_user_deletion(self, user_id: UserId, at: datetime) -> None:
+        await self._session.execute(
+            update(AppUserModel)
+            .where(AppUserModel.id == user_id.value)
+            .values(
+                status=UserStatus.DISABLED.value, updated_at=at, version=AppUserModel.version + 1
+            )
+        )
+        await self._session.execute(
+            update(WebSessionModel)
+            .where(WebSessionModel.user_id == user_id.value, WebSessionModel.revoked_at.is_(None))
+            .values(revoked_at=at)
+        )
+        await self._session.execute(
+            update(GarminConnectionModel)
+            .where(GarminConnectionModel.user_id == user_id.value)
+            .values(
+                status=GarminConnectionStatus.DISABLED.value,
+                encrypted_token_bundle=None,
+                token_nonce=None,
+                token_key_version=None,
+                updated_at=at,
+                version=GarminConnectionModel.version + 1,
+            )
+        )
+        await self._session.execute(
+            update(JobModel)
+            .where(
+                JobModel.user_id == user_id.value,
+                JobModel.status.in_(
+                    [
+                        JobStatus.QUEUED.value,
+                        JobStatus.RETRY_SCHEDULED.value,
+                        JobStatus.LEASED.value,
+                        JobStatus.RUNNING.value,
+                    ]
+                ),
+            )
+            .values(
+                status=JobStatus.FAILED_TERMINAL.value,
+                finished_at=at,
+                updated_at=at,
+                locked_by=None,
+                locked_at=None,
+                heartbeat_at=None,
+                lease_expires_at=None,
+                last_error_json_redacted={"code": "DELETION_REQUESTED", "retryable": False},
+                version=JobModel.version + 1,
+            )
+        )
+        await self._session.execute(
+            update(ActionProposalModel)
+            .where(
+                ActionProposalModel.user_id == user_id.value,
+                ActionProposalModel.status.in_(
+                    [
+                        ActionProposalStatus.DRAFT.value,
+                        ActionProposalStatus.READY_FOR_REVIEW.value,
+                        ActionProposalStatus.APPROVED.value,
+                        ActionProposalStatus.QUEUED.value,
+                    ]
+                ),
+            )
+            .values(
+                status=ActionProposalStatus.CANCELLED.value,
+                updated_at=at,
+                version=ActionProposalModel.version + 1,
+            )
+        )
+
+    async def delete_user(self, user_id: UserId) -> bool:
+        statement = (
+            delete(AppUserModel).where(AppUserModel.id == user_id.value).returning(AppUserModel.id)
+        )
+        return (await self._session.scalar(statement)) is not None
+
+
 class SqlAlchemyOutboxRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -3035,6 +3251,7 @@ class SqlAlchemyUnitOfWork:
         self.external_workout_bindings = SqlAlchemyExternalWorkoutBindingsRepository(self._session)
         self.jobs = SqlAlchemyJobsRepository(self._session)
         self.notifications = SqlAlchemyNotificationsRepository(self._session)
+        self.privacy_requests = SqlAlchemyPrivacyRequestsRepository(self._session)
         self.outbox = SqlAlchemyOutboxRepository(self._session)
         self.audit = SqlAlchemyAuditRepository(self._session)
         self.mcp_tool_invocations = SqlAlchemyMcpToolInvocationsRepository(self._session)

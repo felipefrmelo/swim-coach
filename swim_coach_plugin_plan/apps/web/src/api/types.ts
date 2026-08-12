@@ -187,6 +187,22 @@ export interface AppNotification {
   created_at: string;
 }
 
+export interface DataExport {
+  id: string;
+  status: "PENDING" | "READY" | "EXPIRED" | "FAILED";
+  checksum: string | null;
+  size_bytes: number | null;
+  expires_at: string | null;
+  download_url: string | null;
+}
+
+export interface DeletionRequest {
+  id: string;
+  status: "REQUESTED" | "CONFIRMED" | "EXECUTED" | "CANCELLED";
+  execute_after: string;
+  confirmation_phrase: string | null;
+}
+
 export type WorkoutPurpose = "TECHNIQUE" | "BASE" | "ENDURANCE" | "THRESHOLD" | "SPEED" | "RECOVERY" | "TEST" | "MIXED";
 export type WorkoutRole = "WARMUP" | "WORK" | "RECOVERY" | "REST" | "COOLDOWN" | "DRILL" | "OTHER";
 

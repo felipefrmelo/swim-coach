@@ -145,6 +145,41 @@ paths:
       responses:
         "200": {description: Notification marked as read}
         "404": {$ref: "#/components/responses/Problem"}
+  /privacy/exports:
+    post:
+      operationId: createDataExport
+      parameters:
+        - {$ref: "#/components/parameters/CsrfToken"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "201": {description: User-owned structured JSON and verified FIT export created}
+        "409": {$ref: "#/components/responses/Problem"}
+  /privacy/exports/{export_id}/download:
+    get:
+      operationId: downloadDataExport
+      parameters:
+        - {in: path, name: export_id, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200": {description: Integrity-checked private ZIP download with no-store policy}
+        "404": {$ref: "#/components/responses/Problem"}
+        "410": {$ref: "#/components/responses/Problem"}
+  /privacy/deletion-requests:
+    post:
+      operationId: requestAccountDeletion
+      parameters:
+        - {$ref: "#/components/parameters/CsrfToken"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "201": {description: Staged user-owned deletion request with cooling-off period}
+  /privacy/deletion-requests/{request_id}/confirm:
+    post:
+      operationId: confirmAccountDeletion
+      parameters:
+        - {in: path, name: request_id, required: true, schema: {type: string, format: uuid}}
+        - {$ref: "#/components/parameters/CsrfToken"}
+      responses:
+        "200": {description: Sessions and Garmin access revoked; due deletion queued}
+        "409": {$ref: "#/components/responses/Problem"}
   /workouts:
     get: {operationId: listWorkouts, responses: {"200": {description: Workout page}}}
     post:

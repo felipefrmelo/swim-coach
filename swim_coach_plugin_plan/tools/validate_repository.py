@@ -73,11 +73,11 @@ def validate_plugin(errors: list[str]) -> None:
 
     if manifest.get("name") != "swim-coach":
         errors.append("plugin name must be swim-coach")
-    if manifest.get("version") != "0.4.0":
-        errors.append("P10 plugin version must be 0.4.0")
+    if manifest.get("version") != "1.0.0":
+        errors.append("P12 plugin version must be 1.0.0")
     capabilities = manifest.get("interface", {}).get("capabilities", [])
     if capabilities != ["Read", "Write"]:
-        errors.append("P10 plugin must advertise Read and Write")
+        errors.append("P12 plugin must advertise Read and Write")
     if manifest.get("apps") != "./.app.json":
         errors.append("P06 manifest must reference the registered MCP app mapping")
     if "mcpServers" in manifest:
@@ -95,7 +95,7 @@ def validate_plugin(errors: list[str]) -> None:
         "post-swim-checkin",
         "plan-swim-week",
     }:
-        errors.append("P10 must contain exactly the seven release 0.4.0 skills")
+        errors.append("P12 must contain exactly the seven personal 1.0.0 skills")
     app_mapping = load_json(plugin_root / ".app.json")
     expected_app_mapping = {
         "apps": {

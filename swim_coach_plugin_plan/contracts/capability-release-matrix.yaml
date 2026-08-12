@@ -21,7 +21,7 @@ plugin_releases:
   mode: adaptive-planning
   purpose: versioned weekly planning workflow
 - phase: P12
-  version: 1.0.0-personal
+  version: 1.0.0
   mode: hardened-personal-release
   purpose: operational personal product
 tools:

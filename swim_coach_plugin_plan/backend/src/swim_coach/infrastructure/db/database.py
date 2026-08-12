@@ -44,6 +44,11 @@ class Database:
             value: int = result.scalar_one()
             return value == 1
 
+    async def revision(self) -> str:
+        async with self.engine.connect() as connection:
+            result = await connection.execute(text("SELECT version_num FROM alembic_version"))
+            return str(result.scalar_one())
+
     @asynccontextmanager
     async def user_advisory_lock(self, user_scope: str) -> AsyncIterator[None]:
         """Serialize provider work for one user across all worker processes."""

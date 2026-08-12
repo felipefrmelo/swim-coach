@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     automation_planning_weekday: int = Field(default=6, ge=0, le=6)
     automation_planning_hour: int = Field(default=18, ge=0, le=23)
     job_retention_days: int = Field(default=30, ge=7, le=365)
+    api_read_rate_limit_per_minute: int = Field(default=120, ge=1, le=10_000)
+    api_write_rate_limit_per_minute: int = Field(default=30, ge=1, le=1_000)
+    api_max_body_bytes: int = Field(default=1_048_576, ge=1_024, le=10_485_760)
     pwa_base_url: HttpUrl = HttpUrl("http://127.0.0.1:14173")
     oidc_issuer: HttpUrl | None = None
     oidc_client_id: str | None = None

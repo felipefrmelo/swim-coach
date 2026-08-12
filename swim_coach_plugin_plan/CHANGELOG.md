@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### P12 — hardening, privacidade e release pessoal `1.0.0` (candidate)
+
+- entregues imagens non-root, overlay de produção read-only/cap-drop, readiness
+  de banco/schema/storage, headers, rate/body limits e operação atrás de HTTPS;
+- criado backup PostgreSQL+artefatos com AES-GCM, manifest/checksums, retenção e
+  restore fail-closed; drill real isolado preservou login, atividade e treino;
+- adicionadas exportação ZIP user-scoped e exclusão staged com confirmação,
+  cooling-off, revogação/cancelamento e tombstone sem identificador;
+- definidos alertas/runbooks, threat model, incident response, load smoke e
+  assessment separado que proíbe publicação pública automática;
+- backend/PWA/plugin elevados a `1.0.0`; manifesto verificável, SBOM e quatro
+  imagens Trivy zero HIGH/CRITICAL acompanham 126 testes Python e 4 web;
+- plugin pessoal validado e atualizado para `1.0.0+codex.20260812170215`;
+- fase permanece `IN_PROGRESS` até o smoke em conversa nova e os gates reais P11
+  e anteriores fecharem; `1.0.0` continua release candidate pessoal.
+
 ### P11 — automações recuperáveis e PWA offline segura (provas pessoais pendentes)
 
 - adicionado scheduler por fuso com dedupe para sync, proposta semanal somente

@@ -22,7 +22,7 @@
 | P09 | IN_PROGRESS | P08 | UI MCP opcional e fallback headless | [draft PR #10](https://github.com/felipefrmelo/swim-coach/pull/10) |
 | P10 | IN_PROGRESS | P03,P04,P08 | semana adaptativa explicável | [draft PR #11](https://github.com/felipefrmelo/swim-coach/pull/11) |
 | P11 | IN_PROGRESS | P10 | automações recuperáveis e PWA offline | [draft PR #12](https://github.com/felipefrmelo/swim-coach/pull/12) |
-| P12 | NOT_STARTED | P11 | restore testado e release pessoal | — |
+| P12 | IN_PROGRESS | P11 | restore testado e release pessoal | branch `p12-production-hardening` |
 
 ## Evidências por fase
 
@@ -351,5 +351,18 @@
 
 ### P12
 
-- Estado: `NOT_STARTED`
+- Estado: `IN_PROGRESS`
+- Implementação: P12-T01..T10 concluídas; gate automatizado/integrado aprovado.
 - Evidências:
+  - [`docs/evidence/p12-production-hardening-release.md`](docs/evidence/p12-production-hardening-release.md)
+  - [`docs/handoffs/p12.md`](docs/handoffs/p12.md)
+  - restore real PostgreSQL isolado → login, 1 atividade, 1 treino, migration
+    `000010` e artefato verificados em 5,02 s;
+  - load smoke descartável → 120 requests/concurrency 12/p95 82,35 ms;
+  - 126 Python, 4 Vitest, lint/tipos e build das quatro imagens passaram;
+  - dependency/secret scans limpos, SBOM 744 componentes e Trivy com zero
+    HIGH/CRITICAL nas quatro imagens non-root;
+  - release manifest [`releases/plugin-1.0.0.json`](releases/plugin-1.0.0.json);
+  - plugin pessoal instalado/enabled em `1.0.0+codex.20260812170215`.
+- Gate pendente: conversa nova com as sete Skills e fechamento dos gates reais
+  P11/anteriores. O release permanece candidate e não está pronto para público.

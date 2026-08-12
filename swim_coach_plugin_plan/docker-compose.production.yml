@@ -1,0 +1,63 @@
+name: swim-coach-production
+
+# Production hardening overlay. TLS is terminated by the managed HTTPS tunnel;
+# only loopback ports are published. Inject all secrets at runtime.
+services:
+  postgres:
+    ports: []
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+
+  api:
+    environment:
+      SWIM_COACH_ENVIRONMENT: production
+      SWIM_COACH_DEV_AUTH_ENABLED: "false"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  migrate:
+    environment:
+      SWIM_COACH_ENVIRONMENT: production
+      SWIM_COACH_DEV_AUTH_ENABLED: "false"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+
+  worker:
+    environment:
+      SWIM_COACH_ENVIRONMENT: production
+      SWIM_COACH_DEV_AUTH_ENABLED: "false"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  web:
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+      - /var/cache/nginx:rw,noexec,nosuid,size=16m
+      - /var/run:rw,noexec,nosuid,size=1m
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M

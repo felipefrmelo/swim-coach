@@ -37,4 +37,11 @@ Todos os erros públicos têm `code`, `message`, `correlation_id`, `retryable`, 
 | `DATA_INCOMPLETE` | data | partial | campos ausentes |
 | `STORAGE_UNAVAILABLE` | infra | sim | genérico |
 | `DATABASE_UNAVAILABLE` | infra | sim | genérico |
+| `SCHEMA_MISMATCH` | infra/release | após migration | revisão esperada sem SQL interno |
+| `RATE_LIMITED` | abuse | após janela | retry-after limitado |
+| `PAYLOAD_TOO_LARGE` | input | não | limite público configurado |
+| `EXPORT_EXPIRED` | privacy | novo export | não revelar storage key |
+| `DELETION_CONFIRMATION_MISMATCH` | privacy | frase exata | sem revelar ownership |
+| `DELETION_STATE_CONFLICT` | privacy | refetch | estado sanitizado |
+| `DELETION_NOT_DUE` | privacy | após cooling-off | instante devido |
 | `INTERNAL_ERROR` | internal | talvez | somente correlation id |

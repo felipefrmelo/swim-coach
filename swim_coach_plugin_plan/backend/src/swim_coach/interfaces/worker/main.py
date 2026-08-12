@@ -17,6 +17,7 @@ from swim_coach.application.services import (
     AutomationService,
     GarminSyncService,
     PlanningService,
+    PrivacyService,
 )
 from swim_coach.bootstrap.container import build_services
 from swim_coach.domain.actions import (
@@ -49,6 +50,7 @@ class Worker:
     GARMIN_SCHEDULE_JOB_TYPE = "workout.schedule_garmin"
     ACTIVITY_FETCH_FILE_JOB_TYPE = "activity.fetch_file"
     PLANNING_JOB_TYPE = "planning.generate_week"
+    PRIVACY_DELETE_JOB_TYPE = "privacy.delete_user"
 
     def __init__(
         self,
@@ -60,6 +62,7 @@ class Worker:
         activity_data: ActivityDataService | None = None,
         automation: AutomationService | None = None,
         planning: PlanningService | None = None,
+        privacy: PrivacyService | None = None,
         worker_id: str = "worker-p01",
         poll_interval: float = 1.0,
     ) -> None:
@@ -70,6 +73,7 @@ class Worker:
         self._activity_data = activity_data
         self._automation = automation
         self._planning = planning
+        self._privacy = privacy
         self._worker_id = worker_id
         self._poll_interval = poll_interval
 
@@ -87,6 +91,8 @@ class Worker:
             job_types.add(self.ACTIVITY_FETCH_FILE_JOB_TYPE)
         if self._planning is not None:
             job_types.add(self.PLANNING_JOB_TYPE)
+        if self._privacy is not None:
+            job_types.add(self.PRIVACY_DELETE_JOB_TYPE)
         async with self._uow_factory() as uow:
             job = await uow.jobs.lease_next(
                 self._worker_id,
@@ -106,12 +112,32 @@ class Worker:
             return await self._run_activity_fetch_file(job)
         if job.job_type == self.PLANNING_JOB_TYPE:
             return await self._run_planning(job)
+        if job.job_type == self.PRIVACY_DELETE_JOB_TYPE:
+            return await self._run_privacy_delete(job)
         async with self._uow_factory() as uow:
             succeeded = await uow.jobs.mark_succeeded(job.id, self._worker_id, datetime.now(UTC))
             await uow.commit()
         if not succeeded:
             logger.warning("job_lease_lost", extra={"job_id": str(job.id)})
         return succeeded
+
+    async def _run_privacy_delete(self, job: Job) -> bool:
+        if self._uow_factory is None or self._privacy is None:
+            return await self._finish_failure(job, "PRIVACY_JOB_INVALID", retryable=False)
+        raw_user_id = job.payload.get("user_id")
+        raw_request_id = job.payload.get("request_id")
+        if not isinstance(raw_user_id, str) or not isinstance(raw_request_id, str):
+            return await self._finish_failure(job, "PRIVACY_JOB_INVALID", retryable=False)
+        try:
+            await self._privacy.execute_deletion(
+                UserId.parse(raw_user_id), EntityId.parse(raw_request_id)
+            )
+        except DomainError as exc:
+            return await self._finish_failure(job, exc.code, retryable=False)
+        async with self._uow_factory() as uow:
+            finished = await uow.jobs.mark_succeeded(job.id, self._worker_id, datetime.now(UTC))
+            await uow.commit()
+        return finished
 
     async def _run_planning(self, job: Job) -> bool:
         if self._uow_factory is None or self._planning is None or job.user_id is None:
@@ -649,6 +675,7 @@ async def run_worker() -> None:
             activity_data=services.activity_data,
             automation=services.automation,
             planning=services.planning,
+            privacy=services.privacy,
         ).run(stop_event)
     finally:
         await database.dispose()

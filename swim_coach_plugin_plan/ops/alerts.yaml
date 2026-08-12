@@ -1,0 +1,33 @@
+schema_version: "1.0"
+personal_release: "1.0.0"
+alerts:
+  - id: api_not_ready
+    source: GET /health/ready
+    condition: status != 200 for 3 consecutive checks
+    severity: critical
+    runbook: docs/runbooks/p12-operations.md#api-ou-banco-indisponível
+  - id: queue_stalled
+    source: GET /api/v1/operations (authenticated owner)
+    condition: metrics.oldest_active_age_seconds > 300
+    severity: warning
+    runbook: docs/runbooks/p12-operations.md#fila-parada
+  - id: terminal_job
+    source: GET /api/v1/operations (authenticated owner)
+    condition: metrics.dead_count > 0
+    severity: warning
+    runbook: docs/runbooks/p12-operations.md#fila-parada
+  - id: backup_stale
+    source: encrypted backup manifest inventory
+    condition: latest_verified_backup_age_hours > 26
+    severity: critical
+    runbook: docs/runbooks/p12-operations.md#backup-e-restore
+  - id: disk_pressure
+    source: host volume monitor
+    condition: postgres_or_artifact_volume_percent > 80
+    severity: warning
+    runbook: docs/runbooks/p12-operations.md#pressão-de-disco
+  - id: oauth_or_provider_failure
+    source: sanitized job error codes and login health
+    condition: same_error_code_count_15m >= 3
+    severity: warning
+    runbook: docs/runbooks/p12-operations.md#oauth-garmin-ou-plugin

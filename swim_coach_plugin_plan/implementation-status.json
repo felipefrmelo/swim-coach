@@ -2,8 +2,8 @@
   "schema_version": "1.0",
   "project": "swim-coach",
   "plan_version": "1.0",
-  "updated_at": "2026-08-12T12:44:37-03:00",
-  "active_phase": "P11",
+  "updated_at": "2026-08-12T17:04:00-03:00",
+  "active_phase": "P12",
   "phases": [
     {
       "id": "P00",
@@ -264,8 +264,21 @@
     },
     {
       "id": "P12",
-      "status": "NOT_STARTED",
-      "evidence": [],
+      "status": "IN_PROGRESS",
+      "evidence": [
+        "docs/evidence/p12-production-hardening-release.md",
+        "docs/handoffs/p12.md",
+        "local:migration-000010:testcontainers-up-down-up",
+        "local:backup:aes-gcm-manifest-checksum-retention",
+        "local:restore-drill:postgresql-login-activity-workout-artifact:5.02s",
+        "local:privacy:owned-export-staged-delete-cascade-tombstone",
+        "local:load-smoke:120:concurrency-12:p95-82.35ms",
+        "local:security:dependency-secret-image-scans-zero",
+        "local:sbom:744-components",
+        "local:release-candidate:releases/plugin-1.0.0.json",
+        "local:plugin-personal:1.0.0+codex.20260812170215:enabled",
+        "pending:new-thread-plugin-smoke-and-earlier-real-gates"
+      ],
       "commit": null
     }
   ]

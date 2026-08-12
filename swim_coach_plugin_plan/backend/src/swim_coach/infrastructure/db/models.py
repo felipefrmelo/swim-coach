@@ -332,6 +332,51 @@ class NotificationModel(Base):
     )
 
 
+class DataExportModel(Base):
+    __tablename__ = "data_export"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    storage_key: Mapped[str | None] = mapped_column(String(1024))
+    checksum: Mapped[str | None] = mapped_column(String(64))
+    size_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('PENDING','READY','EXPIRED','FAILED')", name="ck_data_export_status"
+        ),
+        Index("ix_data_export_user_created", "user_id", "created_at"),
+    )
+
+
+class DeletionRequestModel(Base):
+    __tablename__ = "deletion_request"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    user_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="SET NULL")
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    execute_after: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('REQUESTED','CONFIRMED','EXECUTED','CANCELLED')",
+            name="ck_deletion_request_status",
+        ),
+        CheckConstraint("execute_after > created_at", name="ck_deletion_request_cooling_off"),
+        Index("ix_deletion_request_user_created", "user_id", "created_at"),
+    )
+
+
 class OutboxEventModel(Base):
     __tablename__ = "outbox_event"
 

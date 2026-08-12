@@ -85,3 +85,27 @@ class FilesystemObjectStorage:
             return True
         data = path.read_bytes()
         return hashlib.sha256(data).hexdigest() == checksum
+
+    async def readiness(self) -> bool:
+        """Prove the private artifact volume is writable without retaining data."""
+
+        return self._readiness()
+
+    def _readiness(self) -> bool:
+        """Run the small synchronous probe behind the asynchronous port."""
+
+        probe_name: str | None = None
+        try:
+            with tempfile.NamedTemporaryFile(dir=self._root, delete=False) as probe:
+                probe_name = probe.name
+                os.chmod(probe_name, 0o600)
+                probe.write(b"ready")
+                probe.flush()
+                os.fsync(probe.fileno())
+            return Path(probe_name).read_bytes() == b"ready"
+        finally:
+            if probe_name is not None:
+                Path(probe_name).unlink(missing_ok=True)
+
+    async def delete(self, key: str) -> None:
+        self._path(key).unlink(missing_ok=True)

@@ -48,7 +48,15 @@ export function ProfilePage() {
   const queryClient = useQueryClient();
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: api.me });
   if (!me) return <LoadingState label="Carregando perfil…" />;
-  return <ProfileForm me={me} onSaved={async () => queryClient.invalidateQueries({ queryKey: ["me"] })} />;
+  return <div className="page-stack"><ProfileForm me={me} onSaved={async () => queryClient.invalidateQueries({ queryKey: ["me"] })} /><PrivacyCard /></div>;
+}
+
+function PrivacyCard() {
+  const [deletion, setDeletion] = useState<Awaited<ReturnType<typeof api.requestDeletion>> | null>(null);
+  const exportData = useMutation({ mutationFn: api.createDataExport });
+  const requestDeletion = useMutation({ mutationFn: api.requestDeletion, onSuccess: setDeletion });
+  const confirmDeletion = useMutation({ mutationFn: () => api.confirmDeletion(deletion?.id ?? "", deletion?.confirmation_phrase ?? ""), onSuccess: () => window.location.assign("/") });
+  return <section className="surface-card form-stack"><div><p className="eyebrow">Privacidade e portabilidade</p><h2 className="section-title mt-2">Seus dados continuam seus</h2><p className="mt-2 text-sm leading-6 text-slate-600">O export inclui dados estruturados e FITs verificados. Credenciais, cookies e tokens nunca entram no arquivo.</p></div><button className="secondary-button" disabled={exportData.isPending} onClick={() => exportData.mutate()} type="button">{exportData.isPending ? "Preparando export…" : "Criar export dos meus dados"}</button>{exportData.data?.download_url && <a className="primary-button" download href={exportData.data.download_url}>Baixar export ({Math.ceil((exportData.data.size_bytes ?? 0) / 1024)} KB)</a>}<div className="border-t border-slate-200 pt-6"><h3 className="font-semibold text-red-900">Excluir conta e dados</h3><p className="mt-2 text-sm leading-6 text-slate-600">São duas etapas e 24 horas de espera. Ao confirmar, sessões e Garmin são revogadas imediatamente; a exclusão roda depois da janela de segurança.</p>{!deletion ? <button className="secondary-button mt-4 border-red-200 text-red-800" disabled={requestDeletion.isPending} onClick={() => requestDeletion.mutate()} type="button">Solicitar exclusão</button> : <div className="mt-4 rounded-2xl bg-red-50 p-4"><p className="text-sm font-semibold text-red-950">Confirmação exata</p><code className="mt-2 block break-all text-xs text-red-900">{deletion.confirmation_phrase}</code><button className="secondary-button mt-4 border-red-300 text-red-900" disabled={confirmDeletion.isPending} onClick={() => window.confirm("Revogar sua sessão e agendar a exclusão definitiva?") && confirmDeletion.mutate()} type="button">Confirmar e revogar acesso</button></div>}</div></section>;
 }
 
 function ProfileForm({ me, onSaved }: { me: Me; onSaved: () => Promise<unknown> }) {

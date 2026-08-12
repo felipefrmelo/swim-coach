@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -38,6 +39,11 @@ STATUS_BY_CODE = {
     "IDEMPOTENCY_CONFLICT": 409,
     "DATABASE_UNAVAILABLE": 503,
     "JOB_ALREADY_RUNNING": 409,
+    "RATE_LIMITED": 429,
+    "PAYLOAD_TOO_LARGE": 413,
+    "SCHEMA_MISMATCH": 503,
+    "STORAGE_UNAVAILABLE": 503,
+    "EXPORT_EXPIRED": 410,
     "GARMIN_NOT_CONNECTED": 409,
     "GARMIN_NOT_CONFIGURED": 503,
 }
@@ -75,6 +81,8 @@ def problem_response(
 
 
 def install_problem_handlers(app: FastAPI) -> None:
+    rate_buckets: dict[tuple[str, str, int], int] = {}
+
     @app.middleware("http")
     async def request_context(request: Request, call_next: Any) -> Any:
         supplied = request.headers.get("X-Correlation-Id")
@@ -83,11 +91,55 @@ def install_problem_handlers(app: FastAPI) -> None:
         except DomainError:
             cid = CorrelationId.new()
         request.state.correlation_id = cid
+        settings = request.app.state.settings
+        if request.url.path.startswith("/api/"):
+            raw_length = request.headers.get("content-length")
+            if (
+                raw_length
+                and raw_length.isdigit()
+                and int(raw_length) > settings.api_max_body_bytes
+            ):
+                return problem_response(
+                    request,
+                    code="PAYLOAD_TOO_LARGE",
+                    detail="The request body exceeds the configured limit.",
+                    status_code=413,
+                )
+            is_write = request.method not in {"GET", "HEAD", "OPTIONS"}
+            category = "write" if is_write else "read"
+            limit = (
+                settings.api_write_rate_limit_per_minute
+                if is_write
+                else settings.api_read_rate_limit_per_minute
+            )
+            minute = int(time.monotonic() // 60)
+            if len(rate_buckets) > 10_000:
+                for stale_bucket in [bucket for bucket in rate_buckets if bucket[2] < minute - 1]:
+                    del rate_buckets[stale_bucket]
+            client = request.client.host if request.client else "unknown"
+            key = (client, category, minute)
+            rate_buckets[key] = rate_buckets.get(key, 0) + 1
+            if rate_buckets[key] > limit:
+                return problem_response(
+                    request,
+                    code="RATE_LIMITED",
+                    detail="The request rate limit was exceeded.",
+                    status_code=429,
+                    details={"retry_after_seconds": 60},
+                )
         response = await call_next(request)
         response.headers["X-Correlation-Id"] = str(cid)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        if request.url.path.startswith("/api/"):
+            response.headers["Cache-Control"] = "no-store"
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'none'; frame-ancestors 'none'"
+            )
+        if settings.environment == "production":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         return response
 
     @app.exception_handler(DomainError)

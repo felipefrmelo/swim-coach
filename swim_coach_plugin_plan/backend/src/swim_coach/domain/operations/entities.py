@@ -22,6 +22,47 @@ class JobStatus(StrEnum):
     NEEDS_RECONCILIATION = "NEEDS_RECONCILIATION"
 
 
+class DataExportStatus(StrEnum):
+    PENDING = "PENDING"
+    READY = "READY"
+    EXPIRED = "EXPIRED"
+    FAILED = "FAILED"
+
+
+class DeletionRequestStatus(StrEnum):
+    REQUESTED = "REQUESTED"
+    CONFIRMED = "CONFIRMED"
+    EXECUTED = "EXECUTED"
+    CANCELLED = "CANCELLED"
+
+
+@dataclass(slots=True)
+class DataExport:
+    id: EntityId
+    user_id: UserId
+    status: DataExportStatus = DataExportStatus.PENDING
+    storage_key: str | None = None
+    checksum: str | None = None
+    size_bytes: int | None = None
+    created_at: datetime = field(default_factory=utc_now)
+    completed_at: datetime | None = None
+    expires_at: datetime | None = None
+
+
+@dataclass(slots=True)
+class DeletionRequest:
+    id: EntityId
+    user_id: UserId | None
+    status: DeletionRequestStatus
+    execute_after: datetime
+    created_at: datetime = field(default_factory=utc_now)
+    executed_at: datetime | None = None
+
+    def __post_init__(self) -> None:
+        if self.execute_after <= self.created_at:
+            raise DomainValidationError("deletion execution must have a cooling-off period")
+
+
 @dataclass(slots=True)
 class Notification:
     """A deduplicated, user-owned in-app notification."""

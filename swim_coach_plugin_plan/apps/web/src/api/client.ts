@@ -18,6 +18,8 @@ import type {
   OperationsSnapshot,
   OperationsJob,
   AppNotification,
+  DataExport,
+  DeletionRequest,
 } from "./types";
 
 export class ApiError extends Error {
@@ -146,6 +148,18 @@ export const api = {
   }),
   notifications: () => request<AppNotification[]>("/operations/notifications"),
   readNotification: (id: string) => request<AppNotification>(`/operations/notifications/${id}/read`, { method: "POST" }),
+  createDataExport: () => request<DataExport>("/privacy/exports", {
+    method: "POST",
+    headers: { "Idempotency-Key": crypto.randomUUID() },
+  }),
+  requestDeletion: () => request<DeletionRequest>("/privacy/deletion-requests", {
+    method: "POST",
+    headers: { "Idempotency-Key": crypto.randomUUID() },
+  }),
+  confirmDeletion: (id: string, confirmation: string) => request<DeletionRequest>(`/privacy/deletion-requests/${id}/confirm`, {
+    method: "POST",
+    body: JSON.stringify({ confirmation }),
+  }),
   disconnectGarmin: () =>
     request<GarminConnection>("/integrations/garmin", { method: "DELETE" }),
   workouts: () => request<Workout[]>("/workouts"),

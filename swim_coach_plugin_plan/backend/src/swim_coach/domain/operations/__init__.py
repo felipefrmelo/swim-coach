@@ -3,6 +3,10 @@
 from swim_coach.domain.operations.entities import (
     ApiIdempotencyRecord,
     AuditEvent,
+    DataExport,
+    DataExportStatus,
+    DeletionRequest,
+    DeletionRequestStatus,
     Job,
     JobStatus,
     McpToolInvocation,
@@ -13,6 +17,10 @@ from swim_coach.domain.operations.entities import (
 __all__ = [
     "ApiIdempotencyRecord",
     "AuditEvent",
+    "DataExport",
+    "DataExportStatus",
+    "DeletionRequest",
+    "DeletionRequestStatus",
     "Job",
     "JobStatus",
     "McpToolInvocation",

@@ -18,6 +18,7 @@ from swim_coach.application.services import (
     McpReadService,
     McpWriteService,
     PlanningService,
+    PrivacyService,
     SessionService,
     WorkoutService,
 )
@@ -54,6 +55,8 @@ class AppServices:
     mcp_write: McpWriteService | None
     planning: PlanningService | None
     automation: AutomationService | None
+    artifact_storage: FilesystemObjectStorage
+    privacy: PrivacyService
 
 
 def build_services(settings: Settings, database: Database | None = None) -> AppServices:
@@ -120,12 +123,14 @@ def build_services(settings: Settings, database: Database | None = None) -> AppS
         garmin_writer = FakeGarminWorkoutProvider()
     context = ContextService(uow_factory)
     workouts = WorkoutService(uow_factory)
+    artifact_storage = FilesystemObjectStorage(settings.activity_storage_path)
     activity_data = ActivityDataService(
         uow_factory,
         garmin_reader,
-        FilesystemObjectStorage(settings.activity_storage_path),
+        artifact_storage,
         GarminFitActivityParser(),
     )
+    privacy = PrivacyService(uow_factory, artifact_storage)
     garmin_publish = GarminPublishService(
         uow_factory,
         write_enabled=settings.garmin_write_enabled,
@@ -173,6 +178,8 @@ def build_services(settings: Settings, database: Database | None = None) -> AppS
         mcp_read=mcp_read,
         planning=planning,
         automation=automation,
+        artifact_storage=artifact_storage,
+        privacy=privacy,
         mcp_write=(
             McpWriteService(
                 uow_factory=uow_factory,
