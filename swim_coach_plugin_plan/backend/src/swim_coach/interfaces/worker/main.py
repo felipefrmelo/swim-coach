@@ -12,7 +12,7 @@ from swim_coach.application.ports.garmin import (
     GarminWorkoutProvider,
 )
 from swim_coach.application.ports.repositories import UnitOfWorkFactory
-from swim_coach.application.services import GarminSyncService
+from swim_coach.application.services import ActivityDataService, GarminSyncService
 from swim_coach.bootstrap.container import build_services
 from swim_coach.domain.actions import (
     ActionExecution,
@@ -41,6 +41,7 @@ class Worker:
     GARMIN_SYNC_JOB_TYPE = "garmin.sync_activities"
     GARMIN_PUBLISH_JOB_TYPE = "workout.publish_garmin"
     GARMIN_SCHEDULE_JOB_TYPE = "workout.schedule_garmin"
+    ACTIVITY_FETCH_FILE_JOB_TYPE = "activity.fetch_file"
 
     def __init__(
         self,
@@ -49,6 +50,7 @@ class Worker:
         garmin_writer: GarminWorkoutProvider | None = None,
         garmin_write_enabled: bool = False,
         *,
+        activity_data: ActivityDataService | None = None,
         worker_id: str = "worker-p01",
         poll_interval: float = 1.0,
     ) -> None:
@@ -56,6 +58,7 @@ class Worker:
         self._garmin_sync = garmin_sync
         self._garmin_writer = garmin_writer
         self._garmin_write_enabled = garmin_write_enabled
+        self._activity_data = activity_data
         self._worker_id = worker_id
         self._poll_interval = poll_interval
 
@@ -67,6 +70,8 @@ class Worker:
             job_types.add(self.GARMIN_SYNC_JOB_TYPE)
         if self._garmin_writer is not None:
             job_types.update({self.GARMIN_PUBLISH_JOB_TYPE, self.GARMIN_SCHEDULE_JOB_TYPE})
+        if self._activity_data is not None:
+            job_types.add(self.ACTIVITY_FETCH_FILE_JOB_TYPE)
         async with self._uow_factory() as uow:
             job = await uow.jobs.lease_next(
                 self._worker_id,
@@ -82,12 +87,43 @@ class Worker:
             return await self._run_garmin_publish(job)
         if job.job_type == self.GARMIN_SCHEDULE_JOB_TYPE:
             return await self._run_garmin_schedule(job)
+        if job.job_type == self.ACTIVITY_FETCH_FILE_JOB_TYPE:
+            return await self._run_activity_fetch_file(job)
         async with self._uow_factory() as uow:
             succeeded = await uow.jobs.mark_succeeded(job.id, self._worker_id, datetime.now(UTC))
             await uow.commit()
         if not succeeded:
             logger.warning("job_lease_lost", extra={"job_id": str(job.id)})
         return succeeded
+
+    async def _run_activity_fetch_file(self, job: Job) -> bool:
+        if self._uow_factory is None or self._activity_data is None or job.user_id is None:
+            return await self._finish_failure(job, "ACTIVITY_JOB_INVALID", retryable=False)
+        raw_activity_id = job.payload.get("activity_id")
+        if not isinstance(raw_activity_id, str):
+            return await self._finish_failure(job, "ACTIVITY_JOB_INVALID", retryable=False)
+        try:
+            await self._activity_data.process(job.user_id, EntityId.parse(raw_activity_id))
+        except GarminProviderError as exc:
+            return await self._finish_failure(
+                job,
+                exc.category.value,
+                retryable=exc.retryable,
+                retry_after_seconds=exc.retry_after_seconds,
+            )
+        except DomainError as exc:
+            return await self._finish_failure(
+                job,
+                exc.code,
+                retryable=exc.code in {"FIT_FILE_UNAVAILABLE", "STORAGE_UNAVAILABLE"},
+            )
+        except Exception:
+            logger.exception("activity_processing_internal_failure", extra={"job_id": str(job.id)})
+            return await self._finish_failure(job, "ACTIVITY_PROCESSING_INTERNAL", retryable=False)
+        async with self._uow_factory() as uow:
+            finished = await uow.jobs.mark_succeeded(job.id, self._worker_id, datetime.now(UTC))
+            await uow.commit()
+        return finished
 
     async def _run_garmin_sync(self, job: Job) -> bool:
         if self._uow_factory is None:
@@ -337,13 +373,15 @@ class Worker:
         compiled_payload = payload.get("compiled_payload")
         compiled_hash = payload.get("compiled_hash")
         revision_hash = payload.get("revision_content_hash")
+        source_revision_hash = payload.get("source_revision_hash", revision_hash)
         if (
             not isinstance(compiled_payload, dict)
             or not isinstance(compiled_hash, str)
             or not isinstance(revision_hash, str)
+            or not isinstance(source_revision_hash, str)
         ):
             raise DomainError("GARMIN_JOB_INVALID", "Compiled Garmin payload is missing.")
-        return GarminWorkoutDTO(compiled_payload, compiled_hash, revision_hash)
+        return GarminWorkoutDTO(compiled_payload, compiled_hash, source_revision_hash)
 
     async def _mark_binding_created(
         self, user_id: UserId, binding_id: EntityId, external_workout_id: str
@@ -523,6 +561,7 @@ async def run_worker() -> None:
             services.garmin_sync,
             services.garmin_writer,
             garmin_write_enabled=settings.garmin_write_enabled,
+            activity_data=services.activity_data,
         ).run(stop_event)
     finally:
         await database.dispose()

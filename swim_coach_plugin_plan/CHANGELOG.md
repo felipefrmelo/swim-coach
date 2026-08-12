@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+### P03 — FIT, normalização e analytics (comparação real pendente)
+
+- adicionado storage privado atômico e deduplicado para artefatos FIT, com
+  checksum, limite de tamanho, permissões restritas e volume Compose persistente;
+- integrado o SDK oficial Garmin FIT com validação de CRC, parser versionado e
+  normalização de session/lap/length/record para piscina de 20 m;
+- criadas migration `000005`, versões imutáveis, laps, intervals, lengths,
+  análises, matching inicial e feedback otimista/auditável;
+- implementadas métricas determinísticas de ritmo, descanso, SWOLF, strokes,
+  consistência, fade, volume, sRPE e qualidade explícita;
+- entregue API user-scoped sem FIT/checksum/storage key e PWA móvel de lista,
+  detalhe, séries e check-in sem diagnóstico;
+- adicionados golden sanitizado, property tests, FIT binário oficial, replay,
+  Testcontainers e E2E de UI por fixture;
+- configurado bootstrap one-shot de posse/modo do volume FIT para manter API e
+  worker sem root e os artefatos em `0700`;
+- corrigido o marker externo P07 para ser único por revisão, preservando replay
+  e evitando colisões entre treinos distintos com conteúdo idêntico;
+- mantido `IN_PROGRESS` até a atividade real persistida do P02 permitir a
+  comparação manual mascarada com as métricas Garmin.
+
 ### P07 — publicação Garmin pela PWA (gate real pendente)
 
 - adicionados proposal/approval/execution/binding com hash canônico, expiração,

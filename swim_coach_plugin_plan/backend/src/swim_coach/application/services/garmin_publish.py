@@ -100,6 +100,7 @@ class GarminPublishService:
                     "workout_id": str(workout.id),
                     "revision_id": str(revision.id),
                     "revision_content_hash": revision.content_hash,
+                    "source_revision_hash": compiled.source_revision_hash,
                     "compiled_hash": compiled.compiled_hash,
                     "compiled_payload": compiled.payload,
                     "scheduled_date": schedule.scheduled_date.isoformat(),

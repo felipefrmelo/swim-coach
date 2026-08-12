@@ -10,6 +10,7 @@ import type {
   Pool,
   ProblemDetail,
   SwimActivity,
+  SwimActivityDetail,
   CanonicalWorkout,
   Workout,
   WorkoutValidation,
@@ -103,6 +104,30 @@ export const api = {
   garminConnection: () => request<GarminConnection>("/integrations/garmin"),
   garminDevices: () => request<GarminDevice[]>("/integrations/garmin/devices"),
   garminActivities: () => request<SwimActivity[]>("/integrations/garmin/activities"),
+  activities: () => request<SwimActivity[]>("/activities"),
+  activity: (id: string) => request<SwimActivityDetail>(`/activities/${id}`),
+  processActivity: (id: string) =>
+    request<GarminSyncJob>(`/activities/${id}/process`, {
+      method: "POST",
+      headers: { "Idempotency-Key": crypto.randomUUID() },
+    }),
+  saveFeedback: (
+    id: string,
+    payload: {
+      rpe: number;
+      technique_rating: number | null;
+      fatigue_rating: number | null;
+      enjoyment_rating: number | null;
+      pain_present: boolean;
+      pain_location: string | null;
+      pain_intensity: number | null;
+      comment: string | null;
+      version: number | null;
+    },
+  ) => request<SwimActivityDetail["feedback"]>(`/activities/${id}/feedback`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  }),
   garminSyncRuns: () => request<GarminSyncRun[]>("/integrations/garmin/sync-runs"),
   requestGarminSync: () =>
     request<GarminSyncJob>("/integrations/garmin/sync", {

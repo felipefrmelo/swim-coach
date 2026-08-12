@@ -8,6 +8,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Date,
@@ -594,6 +595,15 @@ class ActivityModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    current_normalization_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "activity_normalization.id",
+            ondelete="SET NULL",
+            use_alter=True,
+            name="fk_activity_current_normalization",
+        ),
+    )
 
     __table_args__ = (
         UniqueConstraint(
@@ -606,6 +616,316 @@ class ActivityModel(Base):
         ),
         CheckConstraint("pool_length_m IS NULL OR pool_length_m > 0", name="ck_activity_pool"),
         Index("ix_activity_user_start", "user_id", text("start_time_utc DESC")),
+    )
+
+
+class FileArtifactModel(Base):
+    __tablename__ = "file_artifact"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
+    )
+    activity_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("activity.id", ondelete="CASCADE"), nullable=False
+    )
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
+    artifact_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    storage_key: Mapped[str] = mapped_column(String(1024), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    checksum: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_external_id_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint("size_bytes > 0", name="ck_file_artifact_size"),
+        UniqueConstraint(
+            "activity_id",
+            "checksum",
+            "artifact_type",
+            name="uq_file_artifact_activity_checksum_type",
+        ),
+        UniqueConstraint("storage_key", name="uq_file_artifact_storage_key"),
+        Index("ix_file_artifact_activity", "activity_id", "created_at"),
+    )
+
+
+class ActivityNormalizationModel(Base):
+    __tablename__ = "activity_normalization"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
+    )
+    activity_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("activity.id", ondelete="CASCADE"), nullable=False
+    )
+    artifact_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("file_artifact.id", ondelete="RESTRICT"), nullable=False
+    )
+    parser_version: Mapped[str] = mapped_column(String(160), nullable=False)
+    profile_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    input_checksum: Mapped[str] = mapped_column(String(64), nullable=False)
+    pool_length_m: Mapped[int] = mapped_column(Integer, nullable=False)
+    distance_m: Mapped[int] = mapped_column(Integer, nullable=False)
+    elapsed_seconds: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
+    timer_seconds: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
+    moving_seconds: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
+    active_length_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    completeness: Mapped[Decimal] = mapped_column(Numeric(5, 4), nullable=False)
+    quality: Mapped[str] = mapped_column(String(20), nullable=False)
+    warnings_json: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(
+            "pool_length_m > 0 AND distance_m >= 0 AND active_length_count >= 0",
+            name="ck_activity_normalization_totals",
+        ),
+        CheckConstraint(
+            "elapsed_seconds >= 0 AND timer_seconds >= 0 AND moving_seconds >= 0",
+            name="ck_activity_normalization_durations",
+        ),
+        CheckConstraint(
+            "completeness BETWEEN 0 AND 1", name="ck_activity_normalization_completeness"
+        ),
+        CheckConstraint(
+            "quality IN ('complete','partial','poor')",
+            name="ck_activity_normalization_quality",
+        ),
+        UniqueConstraint(
+            "activity_id",
+            "parser_version",
+            "input_checksum",
+            name="uq_activity_normalization_input_version",
+        ),
+        Index("ix_activity_normalization_activity_created", "activity_id", "created_at"),
+    )
+
+
+class ActivityLapModel(Base):
+    __tablename__ = "activity_lap"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    normalization_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("activity_normalization.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    lap_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    start_offset_seconds: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
+    elapsed_seconds: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
+    timer_seconds: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
+    distance_m: Mapped[int] = mapped_column(Integer, nullable=False)
+    avg_hr_bpm: Mapped[int | None] = mapped_column(Integer)
+    max_hr_bpm: Mapped[int | None] = mapped_column(Integer)
+    stroke_type: Mapped[str | None] = mapped_column(String(50))
+
+    __table_args__ = (
+        CheckConstraint(
+            "lap_index >= 0 AND distance_m >= 0", name="ck_activity_lap_index_distance"
+        ),
+        CheckConstraint(
+            "start_offset_seconds >= 0 AND elapsed_seconds >= 0 AND timer_seconds >= 0",
+            name="ck_activity_lap_durations",
+        ),
+        UniqueConstraint(
+            "normalization_id", "lap_index", name="uq_activity_lap_normalization_index"
+        ),
+    )
+
+
+class ActivityIntervalModel(Base):
+    __tablename__ = "activity_interval"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    normalization_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("activity_normalization.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    interval_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    interval_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    start_offset_seconds: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
+    duration_seconds: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
+    rest_seconds: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
+    distance_m: Mapped[int] = mapped_column(Integer, nullable=False)
+    pace_seconds_per_100m: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    avg_hr_bpm: Mapped[int | None] = mapped_column(Integer)
+    max_hr_bpm: Mapped[int | None] = mapped_column(Integer)
+    stroke_type: Mapped[str | None] = mapped_column(String(50))
+    stroke_count: Mapped[int | None] = mapped_column(Integer)
+    stroke_rate: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    swolf: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    source_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+
+    __table_args__ = (
+        CheckConstraint("interval_type IN ('work','rest')", name="ck_activity_interval_type"),
+        CheckConstraint(
+            "interval_index >= 0 AND distance_m >= 0",
+            name="ck_activity_interval_index_distance",
+        ),
+        CheckConstraint(
+            "start_offset_seconds >= 0 AND duration_seconds >= 0 AND rest_seconds >= 0",
+            name="ck_activity_interval_durations",
+        ),
+        UniqueConstraint(
+            "normalization_id", "interval_index", name="uq_activity_interval_normalization_index"
+        ),
+    )
+
+
+class ActivityLengthModel(Base):
+    __tablename__ = "activity_length"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    normalization_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("activity_normalization.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    interval_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("activity_interval.id", ondelete="CASCADE"), nullable=False
+    )
+    length_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    distance_m: Mapped[int] = mapped_column(Integer, nullable=False)
+    duration_seconds: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
+    stroke_type: Mapped[str | None] = mapped_column(String(50))
+    stroke_count: Mapped[int | None] = mapped_column(Integer)
+    stroke_rate: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    swolf: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    avg_hr_bpm: Mapped[int | None] = mapped_column(Integer)
+
+    __table_args__ = (
+        CheckConstraint(
+            "length_index >= 0 AND distance_m > 0 AND duration_seconds >= 0",
+            name="ck_activity_length_values",
+        ),
+        UniqueConstraint(
+            "normalization_id", "length_index", name="uq_activity_length_normalization_index"
+        ),
+    )
+
+
+class ActivityAnalysisModel(Base):
+    __tablename__ = "activity_analysis"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
+    )
+    activity_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("activity.id", ondelete="CASCADE"), nullable=False
+    )
+    normalization_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("activity_normalization.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    planned_workout_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("planned_workout.id", ondelete="SET NULL")
+    )
+    analysis_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    parser_version: Mapped[str] = mapped_column(String(160), nullable=False)
+    input_checksum: Mapped[str] = mapped_column(String(64), nullable=False)
+    pool_length_m: Mapped[int] = mapped_column(Integer, nullable=False)
+    metrics_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    flags_json: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    quality: Mapped[str] = mapped_column(String(20), nullable=False)
+    summary_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint("pool_length_m > 0", name="ck_activity_analysis_pool"),
+        CheckConstraint(
+            "quality IN ('complete','partial','poor')", name="ck_activity_analysis_quality"
+        ),
+        Index("ix_activity_analysis_activity_created", "activity_id", "created_at"),
+        Index(
+            "uq_activity_analysis_version_target",
+            "normalization_id",
+            "analysis_version",
+            text("coalesce(planned_workout_id, '00000000-0000-0000-0000-000000000000'::uuid)"),
+            unique=True,
+        ),
+    )
+
+
+class WorkoutExecutionMatchModel(Base):
+    __tablename__ = "workout_execution_match"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
+    )
+    activity_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("activity.id", ondelete="CASCADE"), nullable=False
+    )
+    planned_workout_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("planned_workout.id", ondelete="CASCADE"), nullable=False
+    )
+    method: Mapped[str] = mapped_column(String(20), nullable=False)
+    confidence: Mapped[Decimal] = mapped_column(Numeric(5, 4), nullable=False)
+    score_details_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    confirmed_by: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(
+            "method IN ('automatic','suggested','manual')",
+            name="ck_workout_execution_match_method",
+        ),
+        CheckConstraint("confidence BETWEEN 0 AND 1", name="ck_workout_execution_match_confidence"),
+        UniqueConstraint("activity_id", name="uq_workout_execution_match_activity"),
+        UniqueConstraint("planned_workout_id", name="uq_workout_execution_match_workout"),
+    )
+
+
+class SessionFeedbackModel(Base):
+    __tablename__ = "session_feedback"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
+    )
+    activity_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("activity.id", ondelete="CASCADE"), nullable=False
+    )
+    rpe: Mapped[int] = mapped_column(Integer, nullable=False)
+    technique_rating: Mapped[int | None] = mapped_column(Integer)
+    fatigue_rating: Mapped[int | None] = mapped_column(Integer)
+    enjoyment_rating: Mapped[int | None] = mapped_column(Integer)
+    pain_present: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    pain_location: Mapped[str | None] = mapped_column(String(120))
+    pain_intensity: Mapped[int | None] = mapped_column(Integer)
+    comment: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        CheckConstraint("rpe BETWEEN 1 AND 10", name="ck_session_feedback_rpe"),
+        CheckConstraint(
+            "technique_rating IS NULL OR technique_rating BETWEEN 1 AND 5",
+            name="ck_session_feedback_technique",
+        ),
+        CheckConstraint(
+            "fatigue_rating IS NULL OR fatigue_rating BETWEEN 1 AND 5",
+            name="ck_session_feedback_fatigue",
+        ),
+        CheckConstraint(
+            "enjoyment_rating IS NULL OR enjoyment_rating BETWEEN 1 AND 5",
+            name="ck_session_feedback_enjoyment",
+        ),
+        CheckConstraint(
+            "(pain_present AND pain_location IS NOT NULL AND pain_intensity BETWEEN 1 AND 10) "
+            "OR (NOT pain_present AND pain_location IS NULL AND pain_intensity IS NULL)",
+            name="ck_session_feedback_pain",
+        ),
+        CheckConstraint("version >= 1", name="ck_session_feedback_version"),
+        UniqueConstraint("activity_id", name="uq_session_feedback_activity"),
     )
 
 

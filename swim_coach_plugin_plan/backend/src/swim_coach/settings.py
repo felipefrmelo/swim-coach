@@ -3,6 +3,7 @@
 import base64
 import binascii
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, HttpUrl, PostgresDsn, SecretStr, model_validator
@@ -47,6 +48,7 @@ class Settings(BaseSettings):
     garmin_write_mode: Literal["disabled", "fake", "live"] = "disabled"
     garmin_write_canary_only: bool = True
     garmin_write_canary_title_prefix: str = "[CANARY]"
+    activity_storage_path: Path = Path(".swim-coach-data/artifacts")
 
     @model_validator(mode="after")
     def validate_oauth_metadata(self) -> "Settings":

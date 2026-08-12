@@ -2,8 +2,8 @@
   "schema_version": "1.0",
   "project": "swim-coach",
   "plan_version": "1.0",
-  "updated_at": "2026-08-11T22:31:00-03:00",
-  "active_phase": "P07",
+  "updated_at": "2026-08-12T09:31:44-03:00",
+  "active_phase": "P03",
   "phases": [
     {
       "id": "P00",
@@ -69,8 +69,23 @@
     },
     {
       "id": "P03",
-      "status": "NOT_STARTED",
-      "evidence": [],
+      "status": "IN_PROGRESS",
+      "evidence": [
+        "docs/evidence/p03-fit-normalization-analytics.md",
+        "docs/handoffs/p03.md",
+        "local:official-garmin-sdk:binary-fit-crc-roundtrip",
+        "local:sanitized-golden:pool-swim-20m",
+        "local:testcontainers:migration-000005-up-down-up",
+        "local:normalization-analysis-feedback:replay-idempotent",
+        "local:rest:no-raw-fit-storage-key-input-checksum",
+        "local:pwa:mobile-quality-feedback",
+        "local:make-check:87-python:2-web",
+        "local:playwright:chrome-mobile:6-flows",
+        "local:compose:healthy:artifact-volume-uid-10001-mode-0700",
+        "local:dependency-scan-clean",
+        "local:secret-scan-clean",
+        "pending:p02-persistent-real-activity-manual-comparison"
+      ],
       "commit": null
     },
     {

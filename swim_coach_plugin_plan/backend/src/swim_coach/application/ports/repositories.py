@@ -13,6 +13,13 @@ from swim_coach.domain.actions import (
     ActionProposal,
     ExternalWorkoutBinding,
 )
+from swim_coach.domain.activities import (
+    ActivityAnalysis,
+    FileArtifact,
+    NormalizedActivity,
+    SessionFeedback,
+    WorkoutExecutionMatch,
+)
 from swim_coach.domain.athlete import (
     AthleteConstraint,
     AthleteProfile,
@@ -111,11 +118,53 @@ class RawProviderPayloadsRepository(Protocol):
 
 
 class ActivitiesRepository(Protocol):
+    async def get(self, user_id: UserId, activity_id: EntityId) -> Activity | None: ...
     async def get_by_external_id(
         self, user_id: UserId, provider: str, external_activity_id: str
     ) -> Activity | None: ...
     async def upsert(self, activity: Activity) -> tuple[ActivityImportStatus, EntityId]: ...
     async def list_recent(self, user_id: UserId, *, limit: int = 50) -> Sequence[Activity]: ...
+
+
+class ActivityDataRepository(Protocol):
+    async def get_artifact_by_checksum(
+        self, user_id: UserId, activity_id: EntityId, checksum: str, artifact_type: str
+    ) -> FileArtifact | None: ...
+    async def add_artifact(self, artifact: FileArtifact) -> None: ...
+    async def get_normalization(
+        self, user_id: UserId, normalization_id: EntityId
+    ) -> NormalizedActivity | None: ...
+    async def get_current_normalization(
+        self, user_id: UserId, activity_id: EntityId
+    ) -> NormalizedActivity | None: ...
+    async def get_normalization_by_input(
+        self,
+        user_id: UserId,
+        activity_id: EntityId,
+        parser_version: str,
+        input_checksum: str,
+    ) -> NormalizedActivity | None: ...
+    async def save_normalization(self, normalized: NormalizedActivity) -> bool: ...
+    async def promote_normalization(
+        self, user_id: UserId, activity_id: EntityId, normalization_id: EntityId
+    ) -> None: ...
+    async def get_analysis(
+        self, user_id: UserId, activity_id: EntityId
+    ) -> ActivityAnalysis | None: ...
+    async def add_analysis(self, analysis: ActivityAnalysis) -> None: ...
+    async def get_match(
+        self, user_id: UserId, activity_id: EntityId
+    ) -> WorkoutExecutionMatch | None: ...
+    async def get_match_by_workout(
+        self, user_id: UserId, workout_id: EntityId
+    ) -> WorkoutExecutionMatch | None: ...
+    async def upsert_match(self, match: WorkoutExecutionMatch) -> None: ...
+    async def get_feedback(
+        self, user_id: UserId, activity_id: EntityId
+    ) -> SessionFeedback | None: ...
+    async def upsert_feedback(
+        self, feedback: SessionFeedback, *, expected_version: int | None
+    ) -> None: ...
 
 
 class ActivityImportsRepository(Protocol):
@@ -265,6 +314,8 @@ class UnitOfWork(Protocol):
     def raw_provider_payloads(self) -> RawProviderPayloadsRepository: ...
     @property
     def activities(self) -> ActivitiesRepository: ...
+    @property
+    def activity_data(self) -> ActivityDataRepository: ...
     @property
     def activity_imports(self) -> ActivityImportsRepository: ...
     @property

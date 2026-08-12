@@ -1,0 +1,59 @@
+{
+  "license": "CC0-1.0 synthetic fixture",
+  "session_mesgs": [
+    {
+      "start_time": "2026-01-15T10:00:00+00:00",
+      "sport": "swimming",
+      "sub_sport": "lap_swimming",
+      "pool_length": 20,
+      "total_distance": 120,
+      "total_elapsed_time": 210,
+      "total_timer_time": 180,
+      "avg_heart_rate": 132
+    }
+  ],
+  "lap_mesgs": [
+    {
+      "message_index": 0,
+      "start_time": "2026-01-15T10:00:00+00:00",
+      "total_distance": 40,
+      "total_elapsed_time": 65,
+      "total_timer_time": 60,
+      "total_strokes": 34,
+      "avg_swolf": 47,
+      "swim_stroke": "freestyle"
+    },
+    {
+      "message_index": 1,
+      "start_time": "2026-01-15T10:01:05+00:00",
+      "total_distance": 40,
+      "total_elapsed_time": 70,
+      "total_timer_time": 62,
+      "total_strokes": 36,
+      "avg_swolf": 49,
+      "swim_stroke": "freestyle"
+    },
+    {
+      "message_index": 2,
+      "start_time": "2026-01-15T10:02:15+00:00",
+      "total_distance": 40,
+      "total_elapsed_time": 75,
+      "total_timer_time": 58,
+      "total_strokes": 35,
+      "avg_swolf": 48,
+      "swim_stroke": "freestyle"
+    }
+  ],
+  "length_mesgs": [
+    {"start_time": "2026-01-15T10:00:00+00:00", "length_type": "active", "total_timer_time": 29, "total_strokes": 16, "swim_stroke": "freestyle"},
+    {"start_time": "2026-01-15T10:00:29+00:00", "length_type": "active", "total_timer_time": 31, "total_strokes": 18, "swim_stroke": "freestyle"},
+    {"start_time": "2026-01-15T10:01:05+00:00", "length_type": "active", "total_timer_time": 30, "total_strokes": 17, "swim_stroke": "freestyle"},
+    {"start_time": "2026-01-15T10:01:35+00:00", "length_type": "active", "total_timer_time": 32, "total_strokes": 19, "swim_stroke": "freestyle"},
+    {"start_time": "2026-01-15T10:02:15+00:00", "length_type": "active", "total_timer_time": 28, "total_strokes": 16, "swim_stroke": "freestyle"},
+    {"start_time": "2026-01-15T10:02:43+00:00", "length_type": "active", "total_timer_time": 30, "total_strokes": 19, "swim_stroke": "freestyle"}
+  ],
+  "record_mesgs": [
+    {"heart_rate": 128},
+    {"heart_rate": 136}
+  ]
+}

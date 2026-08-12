@@ -17,6 +17,27 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
 
+  artifact-storage-init:
+    image: postgres:16.10-alpine
+    user: "0:0"
+    entrypoint: ["chown"]
+    command: ["10001:10001", "/artifacts"]
+    volumes:
+      - activity-artifacts:/artifacts
+    restart: "no"
+
+  artifact-storage-permissions:
+    image: postgres:16.10-alpine
+    user: "0:0"
+    entrypoint: ["chmod"]
+    command: ["0700", "/artifacts"]
+    volumes:
+      - activity-artifacts:/artifacts
+    depends_on:
+      artifact-storage-init:
+        condition: service_completed_successfully
+    restart: "no"
+
   api:
     build:
       context: .
@@ -46,7 +67,10 @@ services:
       SWIM_COACH_GARMIN_WRITE_MODE: ${SWIM_COACH_GARMIN_WRITE_MODE:-disabled}
       SWIM_COACH_GARMIN_WRITE_CANARY_ONLY: ${SWIM_COACH_GARMIN_WRITE_CANARY_ONLY:-true}
       SWIM_COACH_GARMIN_WRITE_CANARY_TITLE_PREFIX: ${SWIM_COACH_GARMIN_WRITE_CANARY_TITLE_PREFIX:-[CANARY]}
+      SWIM_COACH_ACTIVITY_STORAGE_PATH: /var/lib/swim-coach/artifacts
     depends_on:
+      artifact-storage-permissions:
+        condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
     healthcheck:
@@ -62,6 +86,8 @@ services:
       retries: 12
     ports:
       - "127.0.0.1:${SWIM_COACH_API_HOST_PORT:-18000}:8000"
+    volumes:
+      - activity-artifacts:/var/lib/swim-coach/artifacts
     restart: unless-stopped
 
   migrate:
@@ -96,11 +122,16 @@ services:
       SWIM_COACH_GARMIN_WRITE_MODE: ${SWIM_COACH_GARMIN_WRITE_MODE:-disabled}
       SWIM_COACH_GARMIN_WRITE_CANARY_ONLY: ${SWIM_COACH_GARMIN_WRITE_CANARY_ONLY:-true}
       SWIM_COACH_GARMIN_WRITE_CANARY_TITLE_PREFIX: ${SWIM_COACH_GARMIN_WRITE_CANARY_TITLE_PREFIX:-[CANARY]}
+      SWIM_COACH_ACTIVITY_STORAGE_PATH: /var/lib/swim-coach/artifacts
     depends_on:
+      artifact-storage-permissions:
+        condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
     init: true
     restart: unless-stopped
+    volumes:
+      - activity-artifacts:/var/lib/swim-coach/artifacts
 
   web:
     build:
@@ -119,4 +150,5 @@ services:
     restart: unless-stopped
 
 volumes:
+  activity-artifacts:
   postgres-data:

@@ -59,6 +59,9 @@ class GarminWorkoutCompiler:
                 details={"maximum": self._capabilities.max_top_level_steps},
             )
         state = _CompileState(self._capabilities, [])
+        source_revision_hash = hashlib.sha256(
+            f"{revision.id}:{revision.content_hash}".encode()
+        ).hexdigest()
         steps = [
             self._compile_node(node, order=index, depth=1, state=state)
             for index, node in enumerate(definition.nodes, start=1)
@@ -67,7 +70,7 @@ class GarminWorkoutCompiler:
             JsonObject,
             {
                 "workoutName": definition.title,
-                "description": self._description(revision),
+                "description": self._description(revision, source_revision_hash),
                 "sportType": _SPORT,
                 "estimatedDurationInSecs": round(revision.totals.estimated_total_seconds),
                 "workoutSegments": [
@@ -87,7 +90,7 @@ class GarminWorkoutCompiler:
         return GarminWorkoutDTO(
             payload=payload,
             compiled_hash=compiled_hash,
-            source_revision_hash=revision.content_hash,
+            source_revision_hash=source_revision_hash,
             warnings=tuple(dict.fromkeys(state.warnings)),
         )
 
@@ -185,7 +188,7 @@ class GarminWorkoutCompiler:
         return cast(JsonObject, result)
 
     @staticmethod
-    def _description(revision: WorkoutRevision) -> str:
+    def _description(revision: WorkoutRevision, source_revision_hash: str) -> str:
         description = revision.definition.description or "Criado pelo Swim Coach"
-        marker = f"[swim-coach:{revision.content_hash}]"
+        marker = f"[swim-coach:{source_revision_hash}]"
         return f"{description[: 2_000 - len(marker) - 1]} {marker}"

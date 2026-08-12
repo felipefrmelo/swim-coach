@@ -4,14 +4,16 @@
 > Não existe código legado, banco anterior ou dado de aplicação. A P00 foi
 > concluída com evidências locais e integrações externas reais. A P01 concluiu a
 > fundação transacional e a PWA autenticada; P02 segue em validação real e P04
-> foi concluída em paralelo sobre a cadeia linear de migrations.
+> foi concluída em paralelo sobre a cadeia linear de migrations. A implementação
+> P03 está completa por fixture e integração PostgreSQL, mas aguarda a atividade
+> real persistida pelo gate P02 para comparação manual com a Garmin.
 
 | Fase | Estado | Dependências | Evidência mínima | Commit/PR |
 |---:|---|---|---|---|
 | P00 | DONE | — | Garmin read, OAuth resource binding, tunnel/ChatGPT e CI reais | [PR #1](https://github.com/felipefrmelo/swim-coach/pull/1) |
 | P01 | DONE | P00 | migrações + testes de domínio + PWA shell | [PR #2](https://github.com/felipefrmelo/swim-coach/pull/2) |
 | P02 | IN_PROGRESS | P01 | import real Garmin sem duplicata | [draft PR #3](https://github.com/felipefrmelo/swim-coach/pull/3) |
-| P03 | NOT_STARTED | P02 | FIT normalizado e analytics reproduzíveis | — |
+| P03 | IN_PROGRESS | P02 | FIT normalizado e analytics reproduzíveis | branch `p03-fit-normalization-analytics` |
 | P04 | DONE | P01 | treino válido de 20 m criado/revisado/agendado na PWA | [draft PR #4](https://github.com/felipefrmelo/swim-coach/pull/4) |
 | P05 | NOT_STARTED | P03,P04 | MCP read-only autenticado com dados reais | — |
 | P06 | NOT_STARTED | P05 | plugin/Skills instalados e evals aprovadas | — |
@@ -127,8 +129,28 @@
 
 ### P03
 
-- Estado: `NOT_STARTED`
+- Estado: `IN_PROGRESS`
+- Início: 2026-08-12T08:15:00-03:00
+- Implementação local: P03-T01 até P03-T09 concluídas; gate por fixture aprovado.
 - Evidências:
+  - [`docs/evidence/p03-fit-normalization-analytics.md`](docs/evidence/p03-fit-normalization-analytics.md)
+  - [`docs/handoffs/p03.md`](docs/handoffs/p03.md)
+  - FIT sintético binário gerado e decodificado pelo SDK oficial Garmin, com CRC.
+  - golden sanitizado de piscina 20 m e property tests de métricas/unidades.
+  - PostgreSQL/Testcontainers → migration `000005` em `up/down/up`, replay
+    idempotente, feedback versionado e ownership seguro.
+  - `make check` → 87 testes Python, 2 Vitest, Ruff, mypy, ESLint, TypeScript e
+    validadores verdes; dependency/secret scans sem achados.
+  - REST público prova ausência de FIT, storage key e input checksum.
+  - PWA mobile-first mostra qualidade antes da interpretação e feedback sem
+    inferência médica; 6 E2Es Chrome 375×812 passaram, com P03 identificado como fixture.
+- Limite: o FIT real não foi anexado nem exposto. Comparação manual mascarada com
+  a Garmin aguarda conexão persistente + dois syncs do P02; a fase não é `DONE`.
+- Correções encontradas pelo gate: decoder reiniciado após CRC; volume Docker
+  inicializado como UID 10001/mode 0700; marker P07 único por revisão para impedir
+  colisão entre treinos de conteúdo idêntico em banco persistente.
+- Próxima ação: concluir o gate P02, processar uma das atividades importadas e
+  registrar somente métricas agregadas mascaradas e o checksum parcial.
 
 ### P04
 

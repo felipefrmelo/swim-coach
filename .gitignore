@@ -19,6 +19,7 @@ dist/
 .vite/
 playwright-report/
 test-results/
+.swim-coach-data/
 
 # Editors and operating systems
 .idea/

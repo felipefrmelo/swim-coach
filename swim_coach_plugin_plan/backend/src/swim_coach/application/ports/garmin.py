@@ -125,6 +125,18 @@ class GarminActivitySummaryDTO:
 
 
 @dataclass(frozen=True, slots=True)
+class GarminActivityFileDTO:
+    content: bytes
+    content_type: str
+
+    def __post_init__(self) -> None:
+        if not self.content:
+            raise ValueError("Garmin activity file cannot be empty")
+        if self.content_type not in {"application/zip", "application/vnd.ant.fit"}:
+            raise ValueError("Garmin activity file content type is not supported")
+
+
+@dataclass(frozen=True, slots=True)
 class ActivityFilter:
     started_after: datetime | None
     page_size: int = 20
@@ -153,6 +165,9 @@ class GarminProvider(Protocol):
         cursor: str | None,
         filters: ActivityFilter,
     ) -> ProviderPage: ...
+    async def download_activity_file(
+        self, user_id: UserId, external_activity_id: str
+    ) -> GarminActivityFileDTO: ...
 
 
 class GarminWorkoutProvider(Protocol):

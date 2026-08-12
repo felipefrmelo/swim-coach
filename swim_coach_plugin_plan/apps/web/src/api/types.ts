@@ -94,6 +94,48 @@ export interface SwimActivity {
   avg_swolf: string | null;
 }
 
+export interface SwimActivityDetail {
+  activity: SwimActivity;
+  normalized: boolean;
+  parser_version: string | null;
+  profile_version: string | null;
+  quality: "complete" | "partial" | "poor" | null;
+  completeness: string | null;
+  warnings: string[];
+  intervals: Array<{
+    index: number;
+    interval_type: "work" | "rest";
+    distance_m: number;
+    duration_seconds: string;
+    rest_seconds: string;
+    pace_seconds_per_100m: string | null;
+    stroke_type: string | null;
+    swolf: string | null;
+  }>;
+  analysis: {
+    version: string;
+    parser_version: string;
+    quality: "complete" | "partial" | "poor";
+    metrics: Record<string, string | number | boolean | null>;
+    flags: string[];
+  } | null;
+  match: { planned_workout_id: string; method: string; confidence: string } | null;
+  feedback: {
+    id: string;
+    rpe: number;
+    technique_rating: number | null;
+    fatigue_rating: number | null;
+    enjoyment_rating: number | null;
+    pain_present: boolean;
+    pain_location: string | null;
+    pain_intensity: number | null;
+    comment: string | null;
+    version: number;
+    updated_at: string;
+  } | null;
+  raw_fit_exposed: false;
+}
+
 export interface GarminSyncRun {
   id: string;
   status: "running" | "succeeded" | "partial" | "failed" | "cancelled";

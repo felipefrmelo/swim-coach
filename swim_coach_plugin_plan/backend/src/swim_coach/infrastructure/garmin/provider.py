@@ -15,6 +15,7 @@ from swim_coach.application.ports.garmin import (
     ActivityFilter,
     ExternalScheduleResult,
     ExternalWorkoutResult,
+    GarminActivityFileDTO,
     GarminActivitySummaryDTO,
     GarminDeviceDTO,
     GarminErrorCategory,
@@ -162,7 +163,7 @@ class GarminConnectProvider:
         except importlib.metadata.PackageNotFoundError:
             observed_version = "unknown"
         self._capabilities = GarminProviderCapabilities(
-            workout_write=True, observed_version=observed_version
+            file_read=True, workout_write=True, observed_version=observed_version
         )
 
     @property
@@ -337,6 +338,25 @@ class GarminConnectProvider:
         if len(raw_items) == filters.page_size and not boundary_reached:
             next_cursor = str(offset + filters.page_size)
         return ProviderPage(tuple(mapped), next_cursor)
+
+    async def download_activity_file(
+        self, user_id: UserId, external_activity_id: str
+    ) -> GarminActivityFileDTO:
+        if not external_activity_id.isdecimal() or int(external_activity_id) <= 0:
+            raise GarminProviderError(GarminErrorCategory.SCHEMA_CHANGED, retryable=False)
+
+        def download(client: Any) -> bytes:
+            return cast(
+                bytes,
+                client.download_activity(
+                    external_activity_id,
+                    client.ActivityDownloadFormat.ORIGINAL,
+                ),
+            )
+
+        content = await self._call(user_id, download)
+        content_type = "application/zip" if content.startswith(b"PK") else "application/vnd.ant.fit"
+        return GarminActivityFileDTO(content=content, content_type=content_type)
 
     async def create_workout(
         self, user_id: UserId, payload: GarminWorkoutDTO

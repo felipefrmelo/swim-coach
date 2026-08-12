@@ -177,6 +177,17 @@ class GarminSyncService:
                     checksum=checksum,
                 )
             )
+            if status in {ActivityImportStatus.CREATED, ActivityImportStatus.UPDATED}:
+                await uow.jobs.add_idempotent(
+                    Job(
+                        id=EntityId.new(),
+                        user_id=user_id,
+                        job_type="activity.fetch_file",
+                        payload={"activity_id": str(activity_id)},
+                        idempotency_key=f"activity:fetch-fit:{activity_id}:{checksum}",
+                        max_attempts=5,
+                    )
+                )
             await uow.commit()
         if status is ActivityImportStatus.CREATED:
             run.created += 1

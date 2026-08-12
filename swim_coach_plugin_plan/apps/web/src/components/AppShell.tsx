@@ -1,5 +1,6 @@
 import {
   CalendarDays,
+  Activity,
   CircleUserRound,
   Goal,
   Home,
@@ -26,6 +27,7 @@ const navigation: NavigationItem[] = [
   { to: "/", label: "Início", icon: Home },
   { to: "/workouts", label: "Treinos", icon: NotebookPen },
   { to: "/calendar", label: "Calendário", icon: CalendarDays },
+  { to: "/activities", label: "Atividades", icon: Activity },
   { to: "/pools", label: "Piscinas", icon: MapPin },
   { to: "/availability", label: "Agenda", icon: CalendarDays },
   { to: "/goals", label: "Meta", icon: Goal },

@@ -11,6 +11,7 @@ from swim_coach.bootstrap.container import build_services
 from swim_coach.infrastructure.db import Database
 from swim_coach.interfaces.mcp.server import create_mcp_server
 from swim_coach.interfaces.rest.actions import router as actions_router
+from swim_coach.interfaces.rest.activities import router as activities_router
 from swim_coach.interfaces.rest.auth import router as auth_router
 from swim_coach.interfaces.rest.context import router as context_router
 from swim_coach.interfaces.rest.garmin import router as garmin_router
@@ -68,6 +69,7 @@ def create_app(
     app.include_router(garmin_router)
     app.include_router(workouts_router)
     app.include_router(actions_router)
+    app.include_router(activities_router)
     app.mount("/mcp", mcp_app)
     return app
 

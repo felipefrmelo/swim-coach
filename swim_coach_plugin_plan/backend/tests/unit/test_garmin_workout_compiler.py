@@ -74,6 +74,13 @@ def test_compiler_is_deterministic_and_emits_explicit_downgrade_warning() -> Non
     assert segments[0]["workoutSteps"][1]["type"] == "RepeatGroupDTO"
 
 
+def test_identical_content_in_distinct_revisions_has_a_unique_external_marker() -> None:
+    first = GarminWorkoutCompiler().compile(revision(canonical()))
+    second = GarminWorkoutCompiler().compile(revision(canonical()))
+    assert first.source_revision_hash != second.source_revision_hash
+    assert first.compiled_hash != second.compiled_hash
+
+
 def test_compiler_rejects_capability_depth_overflow() -> None:
     definition = canonical().model_dump(mode="json")
     original = definition["nodes"][1]

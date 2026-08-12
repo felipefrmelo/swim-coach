@@ -22,6 +22,18 @@ from swim_coach.domain.actions import (
     ExternalWorkoutBinding,
     ExternalWorkoutBindingStatus,
 )
+from swim_coach.domain.activities import (
+    ActivityAnalysis,
+    ActivityInterval,
+    ActivityLap,
+    ActivityLength,
+    ActivityNormalization,
+    DataQuality,
+    FileArtifact,
+    NormalizedActivity,
+    SessionFeedback,
+    WorkoutExecutionMatch,
+)
 from swim_coach.domain.athlete import (
     AthleteConstraint,
     AthleteProfile,
@@ -80,8 +92,13 @@ from swim_coach.infrastructure.db.models import (
     ActionApprovalModel,
     ActionExecutionModel,
     ActionProposalModel,
+    ActivityAnalysisModel,
     ActivityImportModel,
+    ActivityIntervalModel,
+    ActivityLapModel,
+    ActivityLengthModel,
     ActivityModel,
+    ActivityNormalizationModel,
     ApiIdempotencyRecordModel,
     AppUserModel,
     AthleteConstraintModel,
@@ -91,6 +108,7 @@ from swim_coach.infrastructure.db.models import (
     AvailabilityRuleModel,
     DeviceModel,
     ExternalWorkoutBindingModel,
+    FileArtifactModel,
     GarminConnectionModel,
     GoalMilestoneModel,
     JobModel,
@@ -99,10 +117,12 @@ from swim_coach.infrastructure.db.models import (
     PlannedWorkoutModel,
     PoolModel,
     RawProviderPayloadModel,
+    SessionFeedbackModel,
     SyncCursorModel,
     SyncRunModel,
     TrainingGoalModel,
     WebSessionModel,
+    WorkoutExecutionMatchModel,
     WorkoutRevisionModel,
     WorkoutScheduleModel,
     WorkoutTemplateModel,
@@ -453,6 +473,47 @@ def _activity(model: ActivityModel) -> Activity:
         raw_summary_id=EntityId(model.raw_summary_id),
         raw_fit_id=EntityId(model.raw_fit_id) if model.raw_fit_id else None,
         summary_checksum=model.summary_checksum,
+        created_at=model.created_at,
+        updated_at=model.updated_at,
+        version=model.version,
+    )
+
+
+def _normalization(model: ActivityNormalizationModel) -> ActivityNormalization:
+    return ActivityNormalization(
+        id=EntityId(model.id),
+        user_id=UserId(model.user_id),
+        activity_id=EntityId(model.activity_id),
+        artifact_id=EntityId(model.artifact_id),
+        parser_version=model.parser_version,
+        profile_version=model.profile_version,
+        input_checksum=model.input_checksum,
+        pool_length_m=model.pool_length_m,
+        distance_m=model.distance_m,
+        elapsed_seconds=Decimal(model.elapsed_seconds),
+        timer_seconds=Decimal(model.timer_seconds),
+        moving_seconds=Decimal(model.moving_seconds),
+        active_length_count=model.active_length_count,
+        completeness=Decimal(model.completeness),
+        quality=DataQuality(model.quality),
+        warnings=tuple(model.warnings_json),
+        created_at=model.created_at,
+    )
+
+
+def _feedback(model: SessionFeedbackModel) -> SessionFeedback:
+    return SessionFeedback(
+        id=EntityId(model.id),
+        user_id=UserId(model.user_id),
+        activity_id=EntityId(model.activity_id),
+        rpe=model.rpe,
+        technique_rating=model.technique_rating,
+        fatigue_rating=model.fatigue_rating,
+        enjoyment_rating=model.enjoyment_rating,
+        pain_present=model.pain_present,
+        pain_location=model.pain_location,
+        pain_intensity=model.pain_intensity,
+        comment=model.comment,
         created_at=model.created_at,
         updated_at=model.updated_at,
         version=model.version,
@@ -1001,6 +1062,14 @@ class SqlAlchemyActivitiesRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def get(self, user_id: UserId, activity_id: EntityId) -> Activity | None:
+        statement = select(ActivityModel).where(
+            ActivityModel.id == activity_id.value,
+            ActivityModel.user_id == user_id.value,
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _activity(model) if model else None
+
     async def get_by_external_id(
         self, user_id: UserId, provider: str, external_activity_id: str
     ) -> Activity | None:
@@ -1077,6 +1146,465 @@ class SqlAlchemyActivitiesRepository:
             .limit(limit)
         )
         return [_activity(model) for model in await self._session.scalars(statement)]
+
+
+class SqlAlchemyActivityDataRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_artifact_by_checksum(
+        self, user_id: UserId, activity_id: EntityId, checksum: str, artifact_type: str
+    ) -> FileArtifact | None:
+        statement = select(FileArtifactModel).where(
+            FileArtifactModel.user_id == user_id.value,
+            FileArtifactModel.activity_id == activity_id.value,
+            FileArtifactModel.checksum == checksum,
+            FileArtifactModel.artifact_type == artifact_type,
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        if model is None:
+            return None
+        return FileArtifact(
+            id=EntityId(model.id),
+            user_id=UserId(model.user_id),
+            activity_id=EntityId(model.activity_id),
+            provider=model.provider,
+            artifact_type=model.artifact_type,
+            storage_key=model.storage_key,
+            content_type=model.content_type,
+            size_bytes=model.size_bytes,
+            checksum=model.checksum,
+            source_external_id_hash=model.source_external_id_hash,
+            created_at=model.created_at,
+        )
+
+    async def add_artifact(self, artifact: FileArtifact) -> None:
+        self._session.add(
+            FileArtifactModel(
+                id=artifact.id.value,
+                user_id=artifact.user_id.value,
+                activity_id=artifact.activity_id.value,
+                provider=artifact.provider,
+                artifact_type=artifact.artifact_type,
+                storage_key=artifact.storage_key,
+                content_type=artifact.content_type,
+                size_bytes=artifact.size_bytes,
+                checksum=artifact.checksum,
+                source_external_id_hash=artifact.source_external_id_hash,
+                created_at=artifact.created_at,
+            )
+        )
+
+    async def _load_normalized(
+        self, user_id: UserId, normalization_id: EntityId
+    ) -> NormalizedActivity | None:
+        statement = select(ActivityNormalizationModel).where(
+            ActivityNormalizationModel.id == normalization_id.value,
+            ActivityNormalizationModel.user_id == user_id.value,
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        if model is None:
+            return None
+        lap_models = await self._session.scalars(
+            select(ActivityLapModel)
+            .where(ActivityLapModel.normalization_id == normalization_id.value)
+            .order_by(ActivityLapModel.lap_index)
+        )
+        interval_models = list(
+            await self._session.scalars(
+                select(ActivityIntervalModel)
+                .where(ActivityIntervalModel.normalization_id == normalization_id.value)
+                .order_by(ActivityIntervalModel.interval_index)
+            )
+        )
+        length_models = await self._session.scalars(
+            select(ActivityLengthModel)
+            .where(ActivityLengthModel.normalization_id == normalization_id.value)
+            .order_by(ActivityLengthModel.length_index)
+        )
+        laps = tuple(
+            ActivityLap(
+                id=EntityId(item.id),
+                normalization_id=EntityId(item.normalization_id),
+                lap_index=item.lap_index,
+                start_offset_seconds=Decimal(item.start_offset_seconds),
+                elapsed_seconds=Decimal(item.elapsed_seconds),
+                timer_seconds=Decimal(item.timer_seconds),
+                distance_m=item.distance_m,
+                avg_hr_bpm=item.avg_hr_bpm,
+                max_hr_bpm=item.max_hr_bpm,
+                stroke_type=item.stroke_type,
+            )
+            for item in lap_models
+        )
+        intervals = tuple(
+            ActivityInterval(
+                id=EntityId(item.id),
+                normalization_id=EntityId(item.normalization_id),
+                interval_index=item.interval_index,
+                interval_type=item.interval_type,
+                start_offset_seconds=Decimal(item.start_offset_seconds),
+                duration_seconds=Decimal(item.duration_seconds),
+                rest_seconds=Decimal(item.rest_seconds),
+                distance_m=item.distance_m,
+                pace_seconds_per_100m=(
+                    Decimal(item.pace_seconds_per_100m)
+                    if item.pace_seconds_per_100m is not None
+                    else None
+                ),
+                avg_hr_bpm=item.avg_hr_bpm,
+                max_hr_bpm=item.max_hr_bpm,
+                stroke_type=item.stroke_type,
+                stroke_count=item.stroke_count,
+                stroke_rate=Decimal(item.stroke_rate) if item.stroke_rate is not None else None,
+                swolf=Decimal(item.swolf) if item.swolf is not None else None,
+                source=_json(item.source_json),
+            )
+            for item in interval_models
+        )
+        lengths = tuple(
+            ActivityLength(
+                id=EntityId(item.id),
+                normalization_id=EntityId(item.normalization_id),
+                interval_id=EntityId(item.interval_id),
+                length_index=item.length_index,
+                distance_m=item.distance_m,
+                duration_seconds=Decimal(item.duration_seconds),
+                stroke_type=item.stroke_type,
+                stroke_count=item.stroke_count,
+                stroke_rate=Decimal(item.stroke_rate) if item.stroke_rate is not None else None,
+                swolf=Decimal(item.swolf) if item.swolf is not None else None,
+                avg_hr_bpm=item.avg_hr_bpm,
+            )
+            for item in length_models
+        )
+        return NormalizedActivity(_normalization(model), laps, intervals, lengths)
+
+    async def get_normalization(
+        self, user_id: UserId, normalization_id: EntityId
+    ) -> NormalizedActivity | None:
+        return await self._load_normalized(user_id, normalization_id)
+
+    async def get_current_normalization(
+        self, user_id: UserId, activity_id: EntityId
+    ) -> NormalizedActivity | None:
+        normalization_id = await self._session.scalar(
+            select(ActivityModel.current_normalization_id).where(
+                ActivityModel.id == activity_id.value,
+                ActivityModel.user_id == user_id.value,
+            )
+        )
+        return (
+            await self._load_normalized(user_id, EntityId(normalization_id))
+            if normalization_id is not None
+            else None
+        )
+
+    async def get_normalization_by_input(
+        self,
+        user_id: UserId,
+        activity_id: EntityId,
+        parser_version: str,
+        input_checksum: str,
+    ) -> NormalizedActivity | None:
+        normalization_id = await self._session.scalar(
+            select(ActivityNormalizationModel.id).where(
+                ActivityNormalizationModel.user_id == user_id.value,
+                ActivityNormalizationModel.activity_id == activity_id.value,
+                ActivityNormalizationModel.parser_version == parser_version,
+                ActivityNormalizationModel.input_checksum == input_checksum,
+            )
+        )
+        return (
+            await self._load_normalized(user_id, EntityId(normalization_id))
+            if normalization_id is not None
+            else None
+        )
+
+    async def save_normalization(self, normalized: NormalizedActivity) -> bool:
+        item = normalized.normalization
+        statement = (
+            insert(ActivityNormalizationModel)
+            .values(
+                id=item.id.value,
+                user_id=item.user_id.value,
+                activity_id=item.activity_id.value,
+                artifact_id=item.artifact_id.value,
+                parser_version=item.parser_version,
+                profile_version=item.profile_version,
+                input_checksum=item.input_checksum,
+                pool_length_m=item.pool_length_m,
+                distance_m=item.distance_m,
+                elapsed_seconds=item.elapsed_seconds,
+                timer_seconds=item.timer_seconds,
+                moving_seconds=item.moving_seconds,
+                active_length_count=item.active_length_count,
+                completeness=item.completeness,
+                quality=item.quality.value,
+                warnings_json=list(item.warnings),
+                created_at=item.created_at,
+            )
+            .on_conflict_do_nothing(constraint="uq_activity_normalization_input_version")
+            .returning(ActivityNormalizationModel.id)
+        )
+        if await self._session.scalar(statement) is None:
+            return False
+        self._session.add_all(
+            [
+                ActivityLapModel(
+                    id=lap.id.value,
+                    normalization_id=lap.normalization_id.value,
+                    lap_index=lap.lap_index,
+                    start_offset_seconds=lap.start_offset_seconds,
+                    elapsed_seconds=lap.elapsed_seconds,
+                    timer_seconds=lap.timer_seconds,
+                    distance_m=lap.distance_m,
+                    avg_hr_bpm=lap.avg_hr_bpm,
+                    max_hr_bpm=lap.max_hr_bpm,
+                    stroke_type=lap.stroke_type,
+                )
+                for lap in normalized.laps
+            ]
+        )
+        self._session.add_all(
+            [
+                ActivityIntervalModel(
+                    id=interval.id.value,
+                    normalization_id=interval.normalization_id.value,
+                    interval_index=interval.interval_index,
+                    interval_type=interval.interval_type,
+                    start_offset_seconds=interval.start_offset_seconds,
+                    duration_seconds=interval.duration_seconds,
+                    rest_seconds=interval.rest_seconds,
+                    distance_m=interval.distance_m,
+                    pace_seconds_per_100m=interval.pace_seconds_per_100m,
+                    avg_hr_bpm=interval.avg_hr_bpm,
+                    max_hr_bpm=interval.max_hr_bpm,
+                    stroke_type=interval.stroke_type,
+                    stroke_count=interval.stroke_count,
+                    stroke_rate=interval.stroke_rate,
+                    swolf=interval.swolf,
+                    source_json=interval.source,
+                )
+                for interval in normalized.intervals
+            ]
+        )
+        self._session.add_all(
+            [
+                ActivityLengthModel(
+                    id=length.id.value,
+                    normalization_id=length.normalization_id.value,
+                    interval_id=length.interval_id.value,
+                    length_index=length.length_index,
+                    distance_m=length.distance_m,
+                    duration_seconds=length.duration_seconds,
+                    stroke_type=length.stroke_type,
+                    stroke_count=length.stroke_count,
+                    stroke_rate=length.stroke_rate,
+                    swolf=length.swolf,
+                    avg_hr_bpm=length.avg_hr_bpm,
+                )
+                for length in normalized.lengths
+            ]
+        )
+        return True
+
+    async def promote_normalization(
+        self, user_id: UserId, activity_id: EntityId, normalization_id: EntityId
+    ) -> None:
+        statement = (
+            update(ActivityModel)
+            .where(
+                ActivityModel.id == activity_id.value,
+                ActivityModel.user_id == user_id.value,
+            )
+            .values(current_normalization_id=normalization_id.value)
+            .returning(ActivityModel.id)
+        )
+        if await self._session.scalar(statement) is None:
+            raise RevisionConflictError(1)
+
+    async def get_analysis(self, user_id: UserId, activity_id: EntityId) -> ActivityAnalysis | None:
+        statement = (
+            select(ActivityAnalysisModel)
+            .where(
+                ActivityAnalysisModel.user_id == user_id.value,
+                ActivityAnalysisModel.activity_id == activity_id.value,
+            )
+            .order_by(ActivityAnalysisModel.created_at.desc())
+            .limit(1)
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        if model is None:
+            return None
+        return ActivityAnalysis(
+            id=EntityId(model.id),
+            user_id=UserId(model.user_id),
+            activity_id=EntityId(model.activity_id),
+            normalization_id=EntityId(model.normalization_id),
+            analysis_version=model.analysis_version,
+            parser_version=model.parser_version,
+            input_checksum=model.input_checksum,
+            pool_length_m=model.pool_length_m,
+            metrics=_json(model.metrics_json),
+            flags=tuple(model.flags_json),
+            quality=DataQuality(model.quality),
+            summary=_json(model.summary_json),
+            planned_workout_id=(
+                EntityId(model.planned_workout_id) if model.planned_workout_id else None
+            ),
+            created_at=model.created_at,
+        )
+
+    async def add_analysis(self, analysis: ActivityAnalysis) -> None:
+        self._session.add(
+            ActivityAnalysisModel(
+                id=analysis.id.value,
+                user_id=analysis.user_id.value,
+                activity_id=analysis.activity_id.value,
+                normalization_id=analysis.normalization_id.value,
+                planned_workout_id=(
+                    analysis.planned_workout_id.value if analysis.planned_workout_id else None
+                ),
+                analysis_version=analysis.analysis_version,
+                parser_version=analysis.parser_version,
+                input_checksum=analysis.input_checksum,
+                pool_length_m=analysis.pool_length_m,
+                metrics_json=analysis.metrics,
+                flags_json=list(analysis.flags),
+                quality=analysis.quality.value,
+                summary_json=analysis.summary,
+                created_at=analysis.created_at,
+            )
+        )
+
+    async def get_match(
+        self, user_id: UserId, activity_id: EntityId
+    ) -> WorkoutExecutionMatch | None:
+        statement = select(WorkoutExecutionMatchModel).where(
+            WorkoutExecutionMatchModel.user_id == user_id.value,
+            WorkoutExecutionMatchModel.activity_id == activity_id.value,
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        if model is None:
+            return None
+        return WorkoutExecutionMatch(
+            id=EntityId(model.id),
+            user_id=UserId(model.user_id),
+            activity_id=EntityId(model.activity_id),
+            planned_workout_id=EntityId(model.planned_workout_id),
+            method=model.method,
+            confidence=Decimal(model.confidence),
+            score_details=_json(model.score_details_json),
+            confirmed_at=model.confirmed_at,
+            confirmed_by=model.confirmed_by,
+            created_at=model.created_at,
+        )
+
+    async def get_match_by_workout(
+        self, user_id: UserId, workout_id: EntityId
+    ) -> WorkoutExecutionMatch | None:
+        statement = select(WorkoutExecutionMatchModel).where(
+            WorkoutExecutionMatchModel.user_id == user_id.value,
+            WorkoutExecutionMatchModel.planned_workout_id == workout_id.value,
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        if model is None:
+            return None
+        return WorkoutExecutionMatch(
+            id=EntityId(model.id),
+            user_id=UserId(model.user_id),
+            activity_id=EntityId(model.activity_id),
+            planned_workout_id=EntityId(model.planned_workout_id),
+            method=model.method,
+            confidence=Decimal(model.confidence),
+            score_details=_json(model.score_details_json),
+            confirmed_at=model.confirmed_at,
+            confirmed_by=model.confirmed_by,
+            created_at=model.created_at,
+        )
+
+    async def upsert_match(self, match: WorkoutExecutionMatch) -> None:
+        statement = insert(WorkoutExecutionMatchModel).values(
+            id=match.id.value,
+            user_id=match.user_id.value,
+            activity_id=match.activity_id.value,
+            planned_workout_id=match.planned_workout_id.value,
+            method=match.method,
+            confidence=match.confidence,
+            score_details_json=match.score_details,
+            confirmed_at=match.confirmed_at,
+            confirmed_by=match.confirmed_by,
+            created_at=match.created_at,
+        )
+        await self._session.execute(
+            statement.on_conflict_do_update(
+                constraint="uq_workout_execution_match_activity",
+                set_={
+                    "planned_workout_id": statement.excluded.planned_workout_id,
+                    "method": statement.excluded.method,
+                    "confidence": statement.excluded.confidence,
+                    "score_details_json": statement.excluded.score_details_json,
+                    "confirmed_at": statement.excluded.confirmed_at,
+                    "confirmed_by": statement.excluded.confirmed_by,
+                },
+            )
+        )
+
+    async def get_feedback(self, user_id: UserId, activity_id: EntityId) -> SessionFeedback | None:
+        statement = select(SessionFeedbackModel).where(
+            SessionFeedbackModel.user_id == user_id.value,
+            SessionFeedbackModel.activity_id == activity_id.value,
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _feedback(model) if model else None
+
+    async def upsert_feedback(
+        self, feedback: SessionFeedback, *, expected_version: int | None
+    ) -> None:
+        if expected_version is None:
+            self._session.add(
+                SessionFeedbackModel(
+                    id=feedback.id.value,
+                    user_id=feedback.user_id.value,
+                    activity_id=feedback.activity_id.value,
+                    rpe=feedback.rpe,
+                    technique_rating=feedback.technique_rating,
+                    fatigue_rating=feedback.fatigue_rating,
+                    enjoyment_rating=feedback.enjoyment_rating,
+                    pain_present=feedback.pain_present,
+                    pain_location=feedback.pain_location,
+                    pain_intensity=feedback.pain_intensity,
+                    comment=feedback.comment,
+                    created_at=feedback.created_at,
+                    updated_at=feedback.updated_at,
+                    version=feedback.version,
+                )
+            )
+            return
+        statement = (
+            update(SessionFeedbackModel)
+            .where(
+                SessionFeedbackModel.id == feedback.id.value,
+                SessionFeedbackModel.user_id == feedback.user_id.value,
+                SessionFeedbackModel.version == expected_version,
+            )
+            .values(
+                rpe=feedback.rpe,
+                technique_rating=feedback.technique_rating,
+                fatigue_rating=feedback.fatigue_rating,
+                enjoyment_rating=feedback.enjoyment_rating,
+                pain_present=feedback.pain_present,
+                pain_location=feedback.pain_location,
+                pain_intensity=feedback.pain_intensity,
+                comment=feedback.comment,
+                updated_at=feedback.updated_at,
+                version=feedback.version,
+            )
+            .returning(SessionFeedbackModel.version)
+        )
+        if await self._session.scalar(statement) is None:
+            raise RevisionConflictError(expected_version)
 
 
 class SqlAlchemyActivityImportsRepository:
@@ -2046,6 +2574,7 @@ class SqlAlchemyUnitOfWork:
         self.sync_runs = SqlAlchemySyncRunsRepository(self._session)
         self.raw_provider_payloads = SqlAlchemyRawProviderPayloadsRepository(self._session)
         self.activities = SqlAlchemyActivitiesRepository(self._session)
+        self.activity_data = SqlAlchemyActivityDataRepository(self._session)
         self.activity_imports = SqlAlchemyActivityImportsRepository(self._session)
         self.goals = SqlAlchemyGoalsRepository(self._session)
         self.goal_milestones = SqlAlchemyGoalMilestonesRepository(self._session)
