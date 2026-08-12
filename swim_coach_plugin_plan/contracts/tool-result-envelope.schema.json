@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://swim-coach.local/schemas/mcp/tool-result-envelope/1.0.json",
+  "title": "MCP Tool Result Envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_id",
+    "status",
+    "data",
+    "warnings",
+    "next_actions",
+    "human_summary"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "OK",
+        "ACCEPTED",
+        "PARTIAL",
+        "NOT_FOUND",
+        "NEEDS_INPUT",
+        "NEEDS_AUTHORIZATION",
+        "CONFLICT",
+        "FAILED"
+      ]
+    },
+    "data": {},
+    "warnings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/warning"
+      }
+    },
+    "next_actions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nextAction"
+      }
+    },
+    "human_summary": {
+      "type": "string",
+      "maxLength": 2000
+    }
+  },
+  "$defs": {
+    "warning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "field": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "nextAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action",
+        "label"
+      ],
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "required_scope": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "Swim Coach",
+  "short_name": "Swim Coach",
+  "description": "Painel operacional pessoal de natação",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#083344",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "/swim-coach-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

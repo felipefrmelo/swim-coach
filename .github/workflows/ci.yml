@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: swim_coach_plugin_plan
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Install Python and uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.29"
+          python-version: "3.12.13"
+          enable-cache: true
+          working-directory: swim_coach_plugin_plan
+      - name: Install Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24.14.1"
+          package-manager-cache: false
+      - name: Install locked dependencies
+        run: |
+          uv sync --all-groups --frozen
+          corepack pnpm install --frozen-lockfile
+      - name: Run static checks and tests
+        run: make check
+      - name: Scan dependencies
+        run: make dependency-scan
+      - name: Scan current Git history for secrets
+        run: make secret-scan
+      - name: Build containers
+        run: docker compose build

@@ -1,0 +1,80 @@
+# Runbook pessoal 1.0 — instalar, atualizar, recuperar e responder
+
+## Instalação
+
+1. Copie `.env.example` para um arquivo privado fora do Git e substitua todos os
+   valores locais por URLs HTTPS, allowlist e secrets reais do ambiente.
+2. Mantenha `SWIM_COACH_DEV_AUTH_ENABLED=false` e os writes Garmin/MCP desligados.
+3. Execute `docker compose -f docker-compose.yml -f docker-compose.production.yml
+   config` e revise portas, volumes e variáveis resolvidas.
+4. Execute `docker compose ... build`, depois somente o serviço `migrate`.
+5. Suba API/worker/web, espere `/health/ready`, valide a PWA e execute
+   `backend/scripts/load_smoke.py` contra o endpoint loopback.
+6. Termine TLS no Secure MCP Tunnel/ingress gerenciado. O Compose só publica
+   loopback e nunca deve ser exposto diretamente na Internet.
+
+## Atualização e rollback
+
+Antes de atualizar, crie um backup criptografado verificado e guarde o hash do
+commit/imagem. Pare o worker, aplique a migration one-shot, suba a nova API/PWA e
+rode os smokes. Se uma verificação falhar, desligue `GARMIN_WRITE`, `MCP_WRITE` e
+`AUTOMATION`, restaure a imagem anterior e faça downgrade da migration apenas
+quando o arquivo Alembic declara downgrade seguro. Para perda/corrupção de dados,
+não tente downgrade: restaure o último backup verificado em destino isolado.
+
+## Backup e restore
+
+Gere uma chave de 32 bytes, codifique em base64 URL-safe e salve em arquivo `0600`
+fora do repositório. Exemplo de comandos (URLs e caminhos vêm do secret manager):
+
+```bash
+uv run python -m swim_coach.interfaces.cli.backup create \
+  --database-url "$DATABASE_URL" --artifacts "$ARTIFACTS" \
+  --output "$BACKUPS/swim-coach-$(date +%F).scbk" \
+  --key-file "$BACKUP_KEY_FILE" --retain 7
+
+uv run python -m swim_coach.interfaces.cli.backup restore \
+  --database-url "$ISOLATED_RESTORE_DATABASE_URL" \
+  --artifacts "$EMPTY_RESTORE_ARTIFACTS" \
+  --input "$BACKUP_FILE" --key-file "$BACKUP_KEY_FILE"
+```
+
+O restore recusa storage não vazio por padrão, autentica o envelope AES-GCM,
+valida cada checksum antes do `pg_restore` e nunca segue symlink/path traversal.
+Depois, compare `alembic_version`, counts de usuário/identidade/atividade/treino,
+resolução de login e checksums de artefatos. Só então declare o backup verificado.
+
+## API ou banco indisponível
+
+Veja `/health/live` e `/health/ready`. Readiness exige banco, migration `000010` e
+volume de artefatos gravável. Não reinicie em loop se houver `SCHEMA_MISMATCH`;
+execute a migration controlada. Em falha de storage, preserve o volume e corrija
+owner/permissões antes de reabrir exports ou FIT.
+
+## Fila parada
+
+Abra `/operations`, confira idade, estado e código sanitizado. Retry só aparece
+para falha terminal classificada como segura, sem efeito externo ambíguo. Nunca
+repita cegamente publicação Garmin. Se a idade exceder 300 s, pare automação,
+capture correlation/job ID sanitizados e reinicie um único worker.
+
+## Pressão de disco
+
+Acima de 80%, pare imports/exports, confirme que existe backup recente e remova
+somente backups além da retenção ou jobs finalizados pela rotina prevista. Não
+apague FIT, volume PostgreSQL ou export diretamente. Faça export/delete pela API.
+
+## OAuth, Garmin ou plugin
+
+Para OAuth, reexecute o metadata probe e valide issuer/audience/PKCE sem imprimir
+token. Para Garmin, respeite `429`, espere o backoff e reconecte pela CLI segura;
+senha não entra na PWA. Para o plugin, confirme o app mapping, reinstale a versão
+1.0.0 e abra conversa nova. Mantenha writes desligados até read smoke user-scoped.
+
+## Incidente de segurança/privacidade
+
+1. Desligue writes, automação e túnel; preserve logs sanitizados e backups.
+2. Revogue sessão/OAuth/Garmin e rotacione somente secrets possivelmente afetados.
+3. Determine usuários/objetos pelo audit/correlation ID, sem copiar payload livre.
+4. Corrija, execute secret/dependency/image scans e restore drill.
+5. Reabra em ordem: health, login, leitura, proposta e por último efeito externo.

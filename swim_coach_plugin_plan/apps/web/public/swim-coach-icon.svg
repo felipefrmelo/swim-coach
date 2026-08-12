@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Swim Coach">
+  <rect width="512" height="512" rx="112" fill="#083344"/>
+  <circle cx="356" cy="152" r="48" fill="#fb923c"/>
+  <path d="M72 246c68-58 116-58 184 0s116 58 184 0v58c-68 58-116 58-184 0S140 246 72 304v-58Z" fill="#67e8f9"/>
+  <path d="M72 342c68-58 116-58 184 0s116 58 184 0v58c-68 58-116 58-184 0S140 342 72 400v-58Z" fill="#ecfeff"/>
+</svg>

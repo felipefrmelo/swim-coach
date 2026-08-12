@@ -1,0 +1,4 @@
+interface:
+  display_name: "Diagnose Swim Sync"
+  short_description: "Explain Garmin sync health without writes"
+  default_prompt: "Use $diagnose-sync to explain why my latest swim is missing."

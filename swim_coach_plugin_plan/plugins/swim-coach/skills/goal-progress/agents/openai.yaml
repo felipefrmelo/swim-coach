@@ -1,0 +1,4 @@
+interface:
+  display_name: "Goal Progress"
+  short_description: "Explain swimming goal progress from evidence"
+  default_prompt: "Use $goal-progress to explain my progress toward my swimming goal."

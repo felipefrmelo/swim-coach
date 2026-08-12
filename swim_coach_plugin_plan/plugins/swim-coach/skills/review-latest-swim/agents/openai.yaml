@@ -1,0 +1,4 @@
+interface:
+  display_name: "Review Latest Swim"
+  short_description: "Review a recent pool swim safely"
+  default_prompt: "Use $review-latest-swim to review my latest pool swim."

@@ -1,0 +1,198 @@
+schema_version: "1.0"
+server:
+  name: swim-coach
+  transport: streamable-http
+  path: /mcp
+  auth: oauth-2.1
+result_envelope: ./tool-result-envelope.schema.json
+tools:
+  - name: get_capabilities
+    title: Get Swim Coach capabilities
+    description: Return supported workflows, tool contract versions, current limitations, and whether Garmin read/write and UI are available.
+    scopes: []
+    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
+    input: {type: object, additionalProperties: false, properties: {}}
+  - name: get_training_context
+    title: Get training context
+    description: Return the authenticated athlete's pool, active goal, availability, constraints, and current training summary.
+    scopes: [profile:read, goals:read]
+    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
+    input: {type: object, additionalProperties: false, properties: {include_constraints: {type: boolean, default: true}}}
+  - name: get_today_workout
+    title: Get today's swim workout
+    description: Return a planned pool workout for a date in the athlete's configured timezone, including steps and Garmin publish status when requested.
+    scopes: [workouts:read]
+    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
+    input:
+      type: object
+      additionalProperties: false
+      properties:
+        date: {type: [string, "null"], format: date}
+        include_steps: {type: boolean, default: true}
+        include_publish_status: {type: boolean, default: true}
+  - name: get_week_plan
+    title: Get weekly swim plan
+    description: Return planned sessions, volume, objectives, statuses, and warnings for a week.
+    scopes: [workouts:read]
+    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
+    input: {type: object, additionalProperties: false, properties: {week_start: {type: [string, "null"], format: date}}}
+  - name: list_recent_swims
+    title: List recent pool swims
+    description: List the athlete's recent normalized pool-swimming activities with concise analysis summaries.
+    scopes: [activities:read]
+    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
+    input: {type: object, additionalProperties: false, properties: {limit: {type: integer, minimum: 1, maximum: 20, default: 5}, before: {type: [string, "null"]}, include_analysis_summary: {type: boolean, default: true}}}
+  - name: get_swim_activity
+    title: Get a swim activity analysis
+    description: Return one normalized pool swim with intervals, planned-versus-completed comparison, data quality, and feedback when available.
+    scopes: [activities:read, analytics:read]
+    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
+    input: {type: object, additionalProperties: false, required: [activity_id], properties: {activity_id: {type: string, format: uuid}, include_intervals: {type: boolean, default: true}, include_lengths: {type: boolean, default: false}, max_intervals: {type: integer, minimum: 1, maximum: 100, default: 50}}}
+  - name: get_goal_progress
+    title: Get swimming goal progress
+    description: Return evidence-based progress toward the active goal, including pace and endurance gaps and sample quality.
+    scopes: [goals:read, analytics:read]
+    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
+    input: {type: object, additionalProperties: false, properties: {goal_id: {type: [string, "null"], format: uuid}}}
+  - name: get_sync_status
+    title: Get Garmin sync status
+    description: Return connection health, last successful sync, data staleness, and active or failed sync jobs.
+    scopes: [sync:read]
+    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
+    input: {type: object, additionalProperties: false, properties: {}}
+  - name: render_workout_card
+    title: Render workout or week card
+    description: Render an optional portable card from authoritative workout data while preserving the complete headless result.
+    scopes: [workouts:read]
+    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
+    ui_resource: ui://swim-coach/workout-card/v1.html
+    input: {type: object, additionalProperties: false, properties: {view: {type: string, enum: [today, week], default: today}, date: {type: [string, "null"], format: date}, week_start: {type: [string, "null"], format: date}}}
+  - name: render_activity_comparison_card
+    title: Render swim comparison card
+    description: Render an optional planned-versus-executed swim card with bounded intervals and feedback status.
+    scopes: [activities:read, analytics:read]
+    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
+    ui_resource: ui://swim-coach/activity-comparison-card/v1.html
+    input: {type: object, additionalProperties: false, required: [activity_id], properties: {activity_id: {type: string, format: uuid}, max_intervals: {type: integer, minimum: 1, maximum: 30, default: 20}}}
+  - name: render_goal_progress_card
+    title: Render goal progress card
+    description: Render an optional evidence-based goal card with explicit sample quality.
+    scopes: [goals:read, analytics:read]
+    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
+    ui_resource: ui://swim-coach/goal-progress-card/v1.html
+    input: {type: object, additionalProperties: false, properties: {goal_id: {type: [string, "null"], format: uuid}}}
+  - name: render_proposal_confirmation_card
+    title: Render exact proposal confirmation card
+    description: Render an owned persisted proposal that can approve or reject its exact hash but never execute it.
+    scopes: [proposals:read]
+    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
+    ui_resource: ui://swim-coach/proposal-confirmation-card/v1.html
+    input: {type: object, additionalProperties: false, required: [proposal_id], properties: {proposal_id: {type: string, format: uuid}}}
+  - name: render_sync_status_card
+    title: Render sync and job status card
+    description: Render Garmin sync state and optionally one owned job with safe retry only when the server classifies it retryable.
+    scopes: [sync:read]
+    conditional_scopes: {job_id: [operations:read]}
+    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
+    ui_resource: ui://swim-coach/sync-status-card/v1.html
+    input: {type: object, additionalProperties: false, properties: {job_id: {type: [string, "null"], format: uuid}}}
+  - name: get_action_proposal
+    title: Get action proposal
+    description: Return the exact persisted impact, hash, expiry, required scopes, and execution state of an action proposal.
+    scopes: [proposals:read]
+    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
+    input: {type: object, additionalProperties: false, required: [proposal_id], properties: {proposal_id: {type: string, format: uuid}}}
+  - name: get_job_status
+    title: Get background job status
+    description: Return progress, retryability, result references, and sanitized errors for a user-owned job.
+    scopes: [operations:read]
+    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
+    input: {type: object, additionalProperties: false, required: [job_id], properties: {job_id: {type: string, format: uuid}}}
+  - name: sync_garmin_activities
+    title: Sync Garmin activities
+    description: Queue an idempotent read from Garmin and local import; returns a job and does not wait for the provider.
+    scopes: [sync:run]
+    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: true}
+    input: {type: object, additionalProperties: false, required: [idempotency_key], properties: {from_date: {type: [string, "null"], format: date}, force: {type: boolean, default: false}, idempotency_key: {type: string, minLength: 8, maxLength: 200}}}
+  - name: record_session_feedback
+    title: Record post-swim feedback
+    description: Store RPE, technique, pain signal, and notes for a user-owned activity; this is not medical diagnosis.
+    scopes: [feedback:write]
+    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
+    input: {type: object, additionalProperties: false, required: [activity_id, rpe, technique, pain, idempotency_key], properties: {activity_id: {type: string, format: uuid}, rpe: {type: integer, minimum: 1, maximum: 10}, technique: {type: string}, pain: {type: object}, notes: {type: [string, "null"], maxLength: 2000}, idempotency_key: {type: string}}}
+  - name: create_workout_draft
+    title: Create a validated workout draft
+    description: Create a local canonical workout draft; never publishes or schedules it externally.
+    scopes: [workouts:write]
+    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
+    input:
+      type: object
+      additionalProperties: false
+      required: [definition]
+      properties:
+        definition: {$ref: ./canonical-workout.schema.json}
+        pool_id: {type: [string, "null"], format: uuid}
+  - name: propose_week_plan
+    title: Propose a weekly swim plan
+    description: Generate and persist a reviewable weekly plan proposal from current data and versioned training rules; never approves or publishes it.
+    scopes: [planning:write, proposals:write]
+    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
+    input:
+      type: object
+      additionalProperties: false
+      required: [week_start]
+      properties:
+        week_start: {type: string, format: date}
+        constraints:
+          type: [object, "null"]
+          additionalProperties: false
+          properties:
+            session_count: {type: [integer, "null"], minimum: 1, maximum: 7}
+            max_session_duration_minutes: {type: [integer, "null"], minimum: 20, maximum: 120}
+            focus: {type: string, enum: [BALANCED, TECHNIQUE, ENDURANCE, GOAL_PACE], default: BALANCED}
+            avoid_high_intensity: {type: boolean, default: false}
+            preserve_technique: {type: boolean, default: true}
+        user_notes: {type: [string, "null"], maxLength: 1000}
+  - name: propose_workout_change
+    title: Propose a workout change
+    description: Create a new validated revision and proposal showing before-and-after impact; never alters a published revision in place.
+    scopes: [workouts:write, proposals:write]
+    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
+    input: {type: object, additionalProperties: false, required: [workout_id, expected_revision, change_request], properties: {workout_id: {type: string, format: uuid}, expected_revision: {type: integer, minimum: 1}, change_request: {type: object}}}
+  - name: propose_workout_reschedule
+    title: Propose rescheduling a workout
+    description: Create a proposal to move a workout, showing calendar and recovery impact; does not change local or Garmin schedules.
+    scopes: [workouts:write, proposals:write]
+    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
+    input: {type: object, additionalProperties: false, required: [workout_id, new_date], properties: {workout_id: {type: string, format: uuid}, new_date: {type: string, format: date}, local_time: {type: [string, "null"]}}}
+  - name: preview_garmin_publish
+    title: Preview Garmin publication
+    description: Compile a workout revision and persist a reviewable Garmin publication proposal; never calls Garmin.
+    scopes: [garmin:publish, proposals:write]
+    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
+    input: {type: object, additionalProperties: false, required: [workout_id, revision, schedule_date, idempotency_key], properties: {workout_id: {type: string, format: uuid}, revision: {type: integer, minimum: 1}, schedule_date: {type: string, format: date}, target_device_id: {type: [string, "null"], format: uuid}, idempotency_key: {type: string}}}
+  - name: cancel_action_proposal
+    title: Cancel an action proposal
+    description: Cancel a user-owned proposal that has not completed execution; preserves audit history.
+    scopes: [proposals:write]
+    annotations: {readOnlyHint: false, destructiveHint: true, openWorldHint: false}
+    input: {type: object, additionalProperties: false, required: [proposal_id], properties: {proposal_id: {type: string, format: uuid}, reason: {type: [string, "null"], maxLength: 500}}}
+  - name: approve_action_proposal
+    title: Approve an exact action proposal
+    description: Record explicit approval for the exact persisted action_hash after the user has reviewed the impact; never executes the action.
+    scopes: [proposals:approve]
+    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
+    input: {type: object, additionalProperties: false, required: [proposal_id, expected_action_hash, decision, confirmation_text], properties: {proposal_id: {type: string, format: uuid}, expected_action_hash: {type: string}, decision: {type: string, enum: [APPROVE, REJECT]}, confirmation_text: {type: string, minLength: 1, maxLength: 1000}}}
+  - name: execute_approved_action
+    title: Execute an approved action
+    description: Queue execution of an approved, unexpired, hash-matching proposal; may call Garmin and returns a job.
+    scopes: [proposals:approve]
+    dynamic_action_scope: true
+    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: true}
+    input: {type: object, additionalProperties: false, required: [proposal_id, idempotency_key], properties: {proposal_id: {type: string, format: uuid}, idempotency_key: {type: string}}}
+  - name: retry_failed_job
+    title: Retry a safe failed job
+    description: Queue a retry only when the failure is explicitly classified as retryable and no ambiguous external effect exists.
+    scopes: [operations:retry]
+    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: true}
+    input: {type: object, additionalProperties: false, required: [job_id, idempotency_key], properties: {job_id: {type: string, format: uuid}, idempotency_key: {type: string}}}

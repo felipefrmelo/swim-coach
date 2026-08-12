@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0",
+  "plugin": "swim-coach",
+  "version": "0.4.0",
+  "mode": "adaptive-planning",
+  "status": "release_candidate",
+  "created_at": "2026-08-12T12:44:37-03:00",
+  "registered_app": "plugin_asdk_app_6a7b7fbeceec819196c168888a9494b6",
+  "skills": [
+    "review-latest-swim",
+    "goal-progress",
+    "diagnose-sync",
+    "adapt-workout",
+    "publish-to-garmin",
+    "post-swim-checkin",
+    "plan-swim-week"
+  ],
+  "hashes": {
+    "plugins/swim-coach/.codex-plugin/plugin.json": "3584b6b9655caec68489f50364babb2d74632e1d313ade49efc42cb7dd597d60",
+    "plugins/swim-coach/.app.json": "c9a2762870f08690de4f94978addbedb2e05ec35215823d4773093c49909a7b9",
+    "plugins/swim-coach/skills/adapt-workout/SKILL.md": "c993eba69b4ea3b80c212f5caf465ad2784eaeda03e3cea94dc48bf66c603385",
+    "plugins/swim-coach/skills/diagnose-sync/SKILL.md": "ff267a2aeb8bca0a3d04fb9b70e2226aa65949032f046a36644f532aa2f40476",
+    "plugins/swim-coach/skills/goal-progress/SKILL.md": "94932eb3b558e71367d2ac08958d3ebbaee682dcfb6727934d66c1ba4aa3ac6e",
+    "plugins/swim-coach/skills/post-swim-checkin/SKILL.md": "fd5823d8e22b6bb236fd91cfb2c72f54c4005ed8d0d4519ef4476379bdaf0c3e",
+    "plugins/swim-coach/skills/publish-to-garmin/SKILL.md": "456ff94bc9d68d611f398c1abb668ebf86fa286e92ec9aa13c5763d970ce37a2",
+    "plugins/swim-coach/skills/review-latest-swim/SKILL.md": "52b16d1f462a406a0442d391108fa302fc63e953d44c03cdbdf82f885e073e6b",
+    "plugins/swim-coach/skills/plan-swim-week/SKILL.md": "6ff7a2fad5063919919db8b6e9760d195f4be495ee8e026897e6ff2e863d8775",
+    "contracts/mcp-tools.yaml": "2ffb835c60f28f99301e3a064bba75d720fdce79164e40e946ee74ba807d74b7",
+    "contracts/capability-release-matrix.yaml": "557114dffab2fdfaee55b5b1d0a010b53b6bb8a75efa61288f5e7650d3187510",
+    "backend/src/swim_coach/domain/planning/entities.py": "a38b18bc5f080013b203f0f1d8bad0656d6cc0f02b46944e11ee9d4cc099e3bd",
+    "backend/alembic/versions/000008_p10_adaptive_planning.py": "0d6a19910a517afd5a6dca1cf7dea8ad96668ac0b5e647d104f6ba0a845939ca"
+  },
+  "automated_evals": {
+    "total": 154,
+    "per_skill": 22,
+    "result": "passed"
+  },
+  "planning_verification": {
+    "python_tests": 117,
+    "web_unit_tests": 2,
+    "golden_output_hash": "e31028ff8982cef8ba488e67ef93bf7b6e21e0f857cabe21b840e31f8d0b039c",
+    "property_examples": 40,
+    "postgresql_migration_round_trip": "passed",
+    "mcp_streamable_http_proposal_replay": "passed",
+    "approval_applies_week": false,
+    "result": "passed"
+  },
+  "publication": {
+    "draft_pr": 11,
+    "implementation_commit": "543e3f9",
+    "verification_commit": "79a822c",
+    "ci_run": 31614812787,
+    "base_branch": "p09-mcp-apps-ui",
+    "quality": "local_and_ci_passed"
+  },
+  "pending_gates": [
+    "real athlete-owned weekly proposal reviewed humanly in ChatGPT",
+    "sanitized decision trace and ruleset hash retained from that proposal",
+    "earlier P02/P03/P05/P06/P07/P08/P09 real gates"
+  ]
+}

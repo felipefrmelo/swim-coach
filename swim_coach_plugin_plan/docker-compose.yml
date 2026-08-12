@@ -1,0 +1,173 @@
+name: swim-coach
+
+services:
+  postgres:
+    image: postgres:16.10-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-swim_coach}
+      POSTGRES_USER: ${POSTGRES_USER:-swim_coach}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_only}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    ports:
+      - "127.0.0.1:${SWIM_COACH_POSTGRES_HOST_PORT:-55432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  artifact-storage-init:
+    image: postgres:16.10-alpine
+    user: "0:0"
+    entrypoint: ["chown"]
+    command: ["10001:10001", "/artifacts"]
+    volumes:
+      - activity-artifacts:/artifacts
+    restart: "no"
+
+  artifact-storage-permissions:
+    image: postgres:16.10-alpine
+    user: "0:0"
+    entrypoint: ["chmod"]
+    command: ["0700", "/artifacts"]
+    volumes:
+      - activity-artifacts:/artifacts
+    depends_on:
+      artifact-storage-init:
+        condition: service_completed_successfully
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      SWIM_COACH_ENVIRONMENT: development
+      SWIM_COACH_HOST: 0.0.0.0
+      SWIM_COACH_PORT: 8000
+      SWIM_COACH_DATABASE_URL: postgresql://swim_coach:local_only@postgres:5432/swim_coach
+      SWIM_COACH_PUBLIC_BASE_URL: ${SWIM_COACH_PUBLIC_BASE_URL:-}
+      SWIM_COACH_OAUTH_ISSUER: ${SWIM_COACH_OAUTH_ISSUER:-}
+      SWIM_COACH_OAUTH_RESOURCE: ${SWIM_COACH_OAUTH_RESOURCE:-}
+      SWIM_COACH_OAUTH_JWKS_CACHE_SECONDS: ${SWIM_COACH_OAUTH_JWKS_CACHE_SECONDS:-300}
+      SWIM_COACH_MCP_WRITE_ENABLED: ${SWIM_COACH_MCP_WRITE_ENABLED:-false}
+      SWIM_COACH_MCP_UI_ENABLED: ${SWIM_COACH_MCP_UI_ENABLED:-false}
+      SWIM_COACH_PLANNING_ENABLED: ${SWIM_COACH_PLANNING_ENABLED:-false}
+      SWIM_COACH_AUTOMATION_ENABLED: ${SWIM_COACH_AUTOMATION_ENABLED:-false}
+      SWIM_COACH_API_READ_RATE_LIMIT_PER_MINUTE: ${SWIM_COACH_API_READ_RATE_LIMIT_PER_MINUTE:-120}
+      SWIM_COACH_API_WRITE_RATE_LIMIT_PER_MINUTE: ${SWIM_COACH_API_WRITE_RATE_LIMIT_PER_MINUTE:-30}
+      SWIM_COACH_API_MAX_BODY_BYTES: ${SWIM_COACH_API_MAX_BODY_BYTES:-1048576}
+      SWIM_COACH_PWA_BASE_URL: ${SWIM_COACH_PWA_BASE_URL:-http://127.0.0.1:14173}
+      SWIM_COACH_OIDC_ISSUER: ${SWIM_COACH_OIDC_ISSUER:-}
+      SWIM_COACH_OIDC_CLIENT_ID: ${SWIM_COACH_OIDC_CLIENT_ID:-}
+      SWIM_COACH_OIDC_CLIENT_SECRET: ${SWIM_COACH_OIDC_CLIENT_SECRET:-}
+      SWIM_COACH_AUTH_ALLOWED_EMAILS: ${SWIM_COACH_AUTH_ALLOWED_EMAILS:-local-swimmer@example.test}
+      SWIM_COACH_AUTH_ALLOWED_SUBJECTS: ${SWIM_COACH_AUTH_ALLOWED_SUBJECTS:-}
+      SWIM_COACH_DEV_AUTH_ENABLED: ${SWIM_COACH_DEV_AUTH_ENABLED:-true}
+      SWIM_COACH_DEV_AUTH_EMAIL: ${SWIM_COACH_DEV_AUTH_EMAIL:-local-swimmer@example.test}
+      SWIM_COACH_GARMIN_MASTER_KEYS: ${SWIM_COACH_GARMIN_MASTER_KEYS:-}
+      SWIM_COACH_GARMIN_ACTIVE_KEY_VERSION: ${SWIM_COACH_GARMIN_ACTIVE_KEY_VERSION:-}
+      SWIM_COACH_GARMIN_SYNC_LOOKBACK_DAYS: ${SWIM_COACH_GARMIN_SYNC_LOOKBACK_DAYS:-90}
+      SWIM_COACH_GARMIN_SYNC_OVERLAP_SECONDS: ${SWIM_COACH_GARMIN_SYNC_OVERLAP_SECONDS:-172800}
+      SWIM_COACH_GARMIN_READ_ENABLED: ${SWIM_COACH_GARMIN_READ_ENABLED:-true}
+      SWIM_COACH_GARMIN_WRITE_ENABLED: ${SWIM_COACH_GARMIN_WRITE_ENABLED:-false}
+      SWIM_COACH_GARMIN_WRITE_MODE: ${SWIM_COACH_GARMIN_WRITE_MODE:-disabled}
+      SWIM_COACH_GARMIN_WRITE_CANARY_ONLY: ${SWIM_COACH_GARMIN_WRITE_CANARY_ONLY:-true}
+      SWIM_COACH_GARMIN_WRITE_CANARY_TITLE_PREFIX: ${SWIM_COACH_GARMIN_WRITE_CANARY_TITLE_PREFIX:-[CANARY]}
+      SWIM_COACH_AUTOMATION_SYNC_HOUR: ${SWIM_COACH_AUTOMATION_SYNC_HOUR:-6}
+      SWIM_COACH_AUTOMATION_PLANNING_WEEKDAY: ${SWIM_COACH_AUTOMATION_PLANNING_WEEKDAY:-6}
+      SWIM_COACH_AUTOMATION_PLANNING_HOUR: ${SWIM_COACH_AUTOMATION_PLANNING_HOUR:-18}
+      SWIM_COACH_JOB_RETENTION_DAYS: ${SWIM_COACH_JOB_RETENTION_DAYS:-30}
+      SWIM_COACH_ACTIVITY_STORAGE_PATH: /var/lib/swim-coach/artifacts
+    depends_on:
+      artifact-storage-permissions:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2)",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    ports:
+      - "127.0.0.1:${SWIM_COACH_API_HOST_PORT:-18000}:8000"
+    volumes:
+      - activity-artifacts:/var/lib/swim-coach/artifacts
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["alembic", "-c", "backend/alembic.ini", "upgrade", "head"]
+    environment:
+      SWIM_COACH_ENVIRONMENT: development
+      SWIM_COACH_DATABASE_URL: postgresql://swim_coach:local_only@postgres:5432/swim_coach
+      SWIM_COACH_GARMIN_MASTER_KEYS: ${SWIM_COACH_GARMIN_MASTER_KEYS:-}
+      SWIM_COACH_GARMIN_ACTIVE_KEY_VERSION: ${SWIM_COACH_GARMIN_ACTIVE_KEY_VERSION:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["python", "-m", "swim_coach.interfaces.worker.main"]
+    environment:
+      SWIM_COACH_ENVIRONMENT: development
+      SWIM_COACH_DATABASE_URL: postgresql://swim_coach:local_only@postgres:5432/swim_coach
+      SWIM_COACH_GARMIN_MASTER_KEYS: ${SWIM_COACH_GARMIN_MASTER_KEYS:-}
+      SWIM_COACH_GARMIN_ACTIVE_KEY_VERSION: ${SWIM_COACH_GARMIN_ACTIVE_KEY_VERSION:-}
+      SWIM_COACH_GARMIN_SYNC_LOOKBACK_DAYS: ${SWIM_COACH_GARMIN_SYNC_LOOKBACK_DAYS:-90}
+      SWIM_COACH_GARMIN_SYNC_OVERLAP_SECONDS: ${SWIM_COACH_GARMIN_SYNC_OVERLAP_SECONDS:-172800}
+      SWIM_COACH_GARMIN_READ_ENABLED: ${SWIM_COACH_GARMIN_READ_ENABLED:-true}
+      SWIM_COACH_GARMIN_WRITE_ENABLED: ${SWIM_COACH_GARMIN_WRITE_ENABLED:-false}
+      SWIM_COACH_GARMIN_WRITE_MODE: ${SWIM_COACH_GARMIN_WRITE_MODE:-disabled}
+      SWIM_COACH_GARMIN_WRITE_CANARY_ONLY: ${SWIM_COACH_GARMIN_WRITE_CANARY_ONLY:-true}
+      SWIM_COACH_GARMIN_WRITE_CANARY_TITLE_PREFIX: ${SWIM_COACH_GARMIN_WRITE_CANARY_TITLE_PREFIX:-[CANARY]}
+      SWIM_COACH_AUTOMATION_ENABLED: ${SWIM_COACH_AUTOMATION_ENABLED:-false}
+      SWIM_COACH_PLANNING_ENABLED: ${SWIM_COACH_PLANNING_ENABLED:-false}
+      SWIM_COACH_MCP_WRITE_ENABLED: ${SWIM_COACH_MCP_WRITE_ENABLED:-false}
+      SWIM_COACH_AUTOMATION_SYNC_HOUR: ${SWIM_COACH_AUTOMATION_SYNC_HOUR:-6}
+      SWIM_COACH_AUTOMATION_PLANNING_WEEKDAY: ${SWIM_COACH_AUTOMATION_PLANNING_WEEKDAY:-6}
+      SWIM_COACH_AUTOMATION_PLANNING_HOUR: ${SWIM_COACH_AUTOMATION_PLANNING_HOUR:-18}
+      SWIM_COACH_JOB_RETENTION_DAYS: ${SWIM_COACH_JOB_RETENTION_DAYS:-30}
+      SWIM_COACH_ACTIVITY_STORAGE_PATH: /var/lib/swim-coach/artifacts
+    depends_on:
+      artifact-storage-permissions:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+    init: true
+    restart: unless-stopped
+    volumes:
+      - activity-artifacts:/var/lib/swim-coach/artifacts
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    ports:
+      - "127.0.0.1:${SWIM_COACH_WEB_HOST_PORT:-14173}:8080"
+    restart: unless-stopped
+
+volumes:
+  activity-artifacts:
+  postgres-data:

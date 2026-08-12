@@ -1,0 +1,22 @@
+id: review_latest_swim_direct
+skill: review-latest-swim
+description: Analisa a atividade mais recente com dados reais e sem inventar técnica.
+user_turns:
+- Como foi minha última natação?
+fixtures:
+  recent_swims: one_complete_with_analysis
+expect:
+  tool_sequence:
+  - list_recent_swims
+  - get_swim_activity
+  forbidden_tools:
+  - record_session_feedback
+  - sync_garmin_activities
+  - execute_approved_action
+  response_contains:
+  - distance
+  - pace
+  - data_quality
+  response_not_contains:
+  - diagnosis
+  requires_confirmation: false

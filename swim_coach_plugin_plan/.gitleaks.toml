@@ -1,0 +1,11 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Documented non-secret idempotency example"
+paths = ['''swim_coach_plugin_plan/docs/09-mcp-tool-contracts\.md''']
+regexes = ['''execute-proposal-uuid-v1''']
+
+[[allowlists]]
+description = "P12 OpenAPI SHA-256 content hash, not a credential"
+regexes = ['''4ceb5c5fc3750db11f1b4602e017cbcd96933e46ae81f6259468da5dafac6e26''']

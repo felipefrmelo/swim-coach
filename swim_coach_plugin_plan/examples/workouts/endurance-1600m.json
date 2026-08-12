@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "title": "Endurance controlado — 1.600 m",
+  "sport": "POOL_SWIMMING",
+  "pool_length_m": 20,
+  "purpose": "ENDURANCE",
+  "tags": ["endurance", "20m"],
+  "nodes": [
+    {"type": "step", "step_role": "WARMUP", "end_condition": {"type": "distance", "meters": 200}, "intensity": "EASY"},
+    {"type": "repeat", "repetitions": 6, "children": [
+      {"type": "step", "step_role": "WORK", "end_condition": {"type": "distance", "meters": 200}, "target": {"type": "pace_range", "min_seconds_per_100m": 140, "max_seconds_per_100m": 150}},
+      {"type": "step", "step_role": "REST", "end_condition": {"type": "time", "seconds": 20}}
+    ]},
+    {"type": "step", "step_role": "COOLDOWN", "end_condition": {"type": "distance", "meters": 200}, "intensity": "EASY"}
+  ]
+}

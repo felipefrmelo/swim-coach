@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://swim-coach.local/schemas/implementation-status/1.0.json",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "project",
+    "plan_version",
+    "updated_at",
+    "active_phase",
+    "phases"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "project": {
+      "const": "swim-coach"
+    },
+    "plan_version": {
+      "type": "string"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "active_phase": {
+      "type": "string",
+      "pattern": "^P(0[0-9]|1[0-2])$"
+    },
+    "phases": {
+      "type": "array",
+      "minItems": 13,
+      "maxItems": 13,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "evidence",
+          "commit"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^P(0[0-9]|1[0-2])$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "NOT_STARTED",
+              "IN_PROGRESS",
+              "BLOCKED",
+              "DONE",
+              "SKIPPED"
+            ]
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "commit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": false
+}

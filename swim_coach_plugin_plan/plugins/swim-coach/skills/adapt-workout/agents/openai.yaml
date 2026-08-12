@@ -1,0 +1,4 @@
+interface:
+  display_name: "Adapt Swim Workout"
+  short_description: "Propose a safer workout adjustment"
+  default_prompt: "Use $adapt-workout to adapt my next swim."

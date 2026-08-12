@@ -1,0 +1,287 @@
+{
+  "schema_version": "1.0",
+  "project": "swim-coach",
+  "plan_version": "1.0",
+  "updated_at": "2026-08-12T17:04:00-03:00",
+  "active_phase": "P12",
+  "phases": [
+    {
+      "id": "P00",
+      "status": "DONE",
+      "evidence": [
+        "docs/evidence/p00-foundation-evidence.md",
+        "docs/handoffs/p00.md",
+        "local:make-check",
+        "local:dependency-scan-clean",
+        "local:secret-scan-clean",
+        "local:docker-compose-healthy",
+        "local:mcp-inspector-get-capabilities",
+        "local:codex-exec-swim-coach-p00-get-capabilities",
+        "personal-plugin:swim-coach@personal:0.0.0-spike",
+        "garmin:real-read:no-external-write",
+        "auth0:real-discovery:authorization-code-pkce-s256-dcr",
+        "local:oauth-protected-resource:path-aware-resource-binding",
+        "auth0:real-discovery:protected-resource-binding",
+        "local:tunnel-client-doctor:oauth-metadata-pass",
+        "openai:secure-mcp-tunnel:chatgpt-get-capabilities",
+        "github:authenticated-keyring:ssh-remote-accessible",
+        "https://github.com/felipefrmelo/swim-coach/pull/1",
+        "https://github.com/felipefrmelo/swim-coach/actions/runs/31515474864"
+      ],
+      "commit": "2faaf62962501f464e2efb419127d6b4fd088512"
+    },
+    {
+      "id": "P01",
+      "status": "DONE",
+      "evidence": [
+        "docs/evidence/p01-domain-persistence-identity.md",
+        "docs/evidence/p01-pwa-dashboard.png",
+        "docs/handoffs/p01.md",
+        "local:make-check:39-python:2-web",
+        "local:testcontainers:migrations-up-down-up",
+        "local:postgresql:000001-head:16-tables:55-constraints",
+        "local:seed-initial-context:idempotent",
+        "local:playwright:chrome-mobile-auth-context",
+        "local:dependency-scan-clean",
+        "local:secret-scan-clean",
+        "local:docker-compose-healthy",
+        "https://github.com/felipefrmelo/swim-coach/pull/2",
+        "https://github.com/felipefrmelo/swim-coach/actions/runs/31546007309"
+      ],
+      "commit": "2e1e72274fe08137911959208e7b6c4ed22523ea"
+    },
+    {
+      "id": "P02",
+      "status": "IN_PROGRESS",
+      "evidence": [
+        "docs/evidence/p02-garmin-read-sync.md",
+        "local:make-check:49-python:2-web",
+        "local:testcontainers:migration-000002-up-down-up",
+        "local:garmin-fixture:pagination-replay-deduplicated",
+        "local:worker:rate-limit-retry-auth-terminal",
+        "local:pwa:typescript-eslint-vitest-build",
+        "local:playwright:chrome-mobile-garmin-no-browser-password",
+        "garmin:real-read:p00-proof-not-yet-persisted-p02",
+        "https://github.com/felipefrmelo/swim-coach/pull/3",
+        "https://github.com/felipefrmelo/swim-coach/actions/runs/31549934953"
+      ],
+      "commit": "3319aa7f92594b0d3b45ad795c713af7a9f07e55"
+    },
+    {
+      "id": "P03",
+      "status": "IN_PROGRESS",
+      "evidence": [
+        "docs/evidence/p03-fit-normalization-analytics.md",
+        "docs/handoffs/p03.md",
+        "local:official-garmin-sdk:binary-fit-crc-roundtrip",
+        "local:sanitized-golden:pool-swim-20m",
+        "local:testcontainers:migration-000005-up-down-up",
+        "local:normalization-analysis-feedback:replay-idempotent",
+        "local:rest:no-raw-fit-storage-key-input-checksum",
+        "local:pwa:mobile-quality-feedback",
+        "local:make-check:87-python:2-web",
+        "local:playwright:chrome-mobile:6-flows",
+        "local:compose:healthy:artifact-volume-uid-10001-mode-0700",
+        "local:dependency-scan-clean",
+        "local:secret-scan-clean",
+        "pending:p02-persistent-real-activity-manual-comparison"
+      ],
+      "commit": "e6a8df73efd45ab9bd8eb5b48c95a3d41e9af6c9"
+    },
+    {
+      "id": "P04",
+      "status": "DONE",
+      "evidence": [
+        "docs/evidence/p04-workout-authoring-pwa.md",
+        "docs/evidence/p04-workout-editor-mobile.png",
+        "docs/handoffs/p04.md",
+        "local:make-check:60-python:2-web",
+        "local:testcontainers:migration-000003-up-down-up:immutable-trigger",
+        "local:playwright:chrome-mobile:4-flows",
+        "local:canonical-fixtures:technique-endurance-speed-test",
+        "local:dependency-scan-clean",
+        "local:secret-scan-clean",
+        "local:no-garmin-provider-in-p04",
+        "https://github.com/felipefrmelo/swim-coach/pull/4",
+        "https://github.com/felipefrmelo/swim-coach/actions/runs/31551697015"
+      ],
+      "commit": "82e9e77184df4c0a57a6e5125737a022d46b9b59"
+    },
+    {
+      "id": "P05",
+      "status": "IN_PROGRESS",
+      "evidence": [
+        "docs/evidence/p05-mcp-read-only.md",
+        "docs/handoffs/p05.md",
+        "official-openai:mcp-plugin-authentication:revalidated-2026-08-12",
+        "local:branch:p05-mcp-read-only",
+        "local:oauth-jwt-jwks-issuer-audience-expiry-scopes-redaction",
+        "local:testcontainers:migration-000006-up-down-up",
+        "local:mcp-client:8-read-tools-auth-scope-idor-contract",
+        "local:mcp-minimization:no-fit-token-email-storage-key-input-checksum",
+        "local:mcp-performance:2-query-swims:5-query-week:p95-under-500ms",
+        "local:make-check:91-python:2-web",
+        "local:compose:healthy:migration-000006:oauth-unconfigured-fail-closed",
+        "local:dependency-scan-clean",
+        "local:secret-scan-clean:16-commits-worktree",
+        "github:draft-pr:7",
+        "github:actions:31601391000:quality-pass",
+        "pending:mcp-inspector-real-oauth",
+        "pending:host-real-auth-scoped-read-only-query"
+      ],
+      "commit": "ec86e8c6d4fe44ff6a382ba3b78ffa0ebddc0504"
+    },
+    {
+      "id": "P06",
+      "status": "IN_PROGRESS",
+      "evidence": [
+        "local:branch:p06-plugin-read-only",
+        "docs/evidence/p06-plugin-read-only.md",
+        "docs/handoffs/p06.md",
+        "local:registered-app-id:plugin_asdk_app_6a7b7fbeceec819196c168888a9494b6",
+        "local:personal-marketplace:swim-coach-installed-enabled:0.0.0-spike",
+        "local:plugin-creator-validation:passed",
+        "local:skill-creator-validation:3-passed",
+        "local:evals:66-passed:22-per-skill",
+        "local:make-check:94-python:2-web",
+        "local:dependency-scan-clean",
+        "local:secret-scan-clean:19-commits-worktree",
+        "local:release-candidate:releases/plugin-0.1.0.json",
+        "github:draft-pr:8",
+        "github:commit:dfd68b3:aes-gcm-tamper-test-deterministic",
+        "github:actions:31603753428:quality-pass",
+        "local:personal-marketplace-upgraded-by-p12:1.0.0+codex.20260812170215",
+        "pending:fresh-conversation-skill-smoke",
+        "pending:p05-authenticated-real-data-host-gate"
+      ],
+      "commit": "4528e593c26594b915e4d12baf26e350b0f3ae9e"
+    },
+    {
+      "id": "P07",
+      "status": "IN_PROGRESS",
+      "evidence": [
+        "local:p07-started-on-p04-linear-migration-chain",
+        "docs/evidence/p07-garmin-write-pwa.md",
+        "docs/evidence/p07-garmin-publish-mobile.png",
+        "docs/handoffs/p07.md",
+        "local:50-unit-tests:14-postgresql-integration-tests:2-web-tests",
+        "local:make-check:75-python:2-web",
+        "local:playwright:chrome-mobile:proposal-approve-publish-schedule-success",
+        "local:ambiguous-create-schedule:reconciled-no-duplicate",
+        "local:kill-switch:live-canary-only",
+        "local:dependency-scan-clean",
+        "local:secret-scan-clean",
+        "github:draft-pr-5:ci-run-31553966600",
+        "pending:garmin-real-disposable-canary"
+      ],
+      "commit": "c88d660"
+    },
+    {
+      "id": "P08",
+      "status": "IN_PROGRESS",
+      "evidence": [
+        "local:branch:p08-mcp-controlled-write",
+        "local:base:p06-plugin-read-only",
+        "docs/evidence/p08-mcp-write-approvals.md",
+        "docs/handoffs/p08.md",
+        "local:migration-000007:invocation-correlation-causation",
+        "local:mcp:12-write-tools:scope-hash-idor-contract",
+        "local:approval-execution-hard-boundary",
+        "local:replay:one-approval-one-execution-one-job",
+        "local:retry-safe-atomic:ambiguous-rejected",
+        "local:gate-final:81-nondocker:7-focused-postgresql:2-web",
+        "local:dependency-scan-clean",
+        "local:secret-scan-clean:20-commits-final-tree",
+        "local:plugin-0.2.0:6-skills:132-evals",
+        "local:release-candidate:releases/plugin-0.2.0.json",
+        "github:draft-pr:9",
+        "github:commit:ee728f0:controlled-mcp-write-workflows",
+        "pending:p06-personal-plugin-smoke",
+        "pending:p07-real-disposable-canary",
+        "pending:p08-chatgpt-two-turn-exact-hash-canary"
+      ],
+      "commit": "ee728f0"
+    },
+    {
+      "id": "P09",
+      "status": "IN_PROGRESS",
+      "evidence": [
+        "local:branch:p09-mcp-apps-ui",
+        "docs/evidence/p09-mcp-apps-ui.md",
+        "docs/handoffs/p09.md",
+        "local:mcp-apps:5-versioned-resources:5-render-tools",
+        "local:optional-ui:exact-p08-headless-parity",
+        "local:csp-closed:self-contained:no-token-no-fetch",
+        "local:bridge-mock:mobile-a11y-expiry-double-click",
+        "local:plugin-0.3.0:6-skills:132-evals",
+        "github:draft-pr:10",
+        "github:commit:48729a9:optional-mcp-apps-ui",
+        "https://github.com/felipefrmelo/swim-coach/actions/runs/31611210574",
+        "pending:chatgpt-real-host-card-smoke"
+      ],
+      "commit": "48729a97eaa098b6f7c22bc0c9fa6f80294d6596"
+    },
+    {
+      "id": "P10",
+      "status": "IN_PROGRESS",
+      "evidence": [
+        "local:branch:p10-adaptive-planning",
+        "docs/evidence/p10-adaptive-planning.md",
+        "docs/handoffs/p10.md",
+        "local:migration-000008:testcontainers-up-down-up",
+        "local:planning:golden-output-hash:property-40-examples",
+        "local:mcp-streamable-http:closed-schema-scopes-ownership-replay",
+        "local:proposal-approval:no-workout-no-schedule-no-external-effect",
+        "local:goal-progress:four-dimensions-confidence-sample-size",
+        "local:plugin-0.4.0:7-skills:154-evals",
+        "local:release-candidate:releases/plugin-0.4.0.json",
+        "github:draft-pr:11",
+        "github:commit:543e3f9:adaptive-weekly-planning",
+        "github:actions:31614812787:quality-pass",
+        "pending:real-athlete-week-human-review-chatgpt"
+      ],
+      "commit": "543e3f9"
+    },
+    {
+      "id": "P11",
+      "status": "IN_PROGRESS",
+      "evidence": [
+        "docs/evidence/p11-automation-offline.md",
+        "docs/handoffs/p11.md",
+        "local:migration-000009:testcontainers-up-down-up",
+        "local:scheduler:timezone-dedupe-next-monday",
+        "local:activity-pipeline:automatic-replay-safe",
+        "local:pwa:workout-read-cache-controlled-actions-denied",
+        "local:feedback:indexeddb-idempotent-reconciliation",
+        "local:operations:metrics-safe-retry-notification-dedupe",
+        "github:draft-pr:12",
+        "github:commit:f379551:automation-offline-hardening",
+        "github:actions:31617300086:quality-pass",
+        "ci:quality:119-python:4-vitest:scans:build-4-images",
+        "pending:personal-cycle-offline-screenshot-live-queue-metrics"
+      ],
+      "commit": "f379551"
+    },
+    {
+      "id": "P12",
+      "status": "IN_PROGRESS",
+      "evidence": [
+        "docs/evidence/p12-production-hardening-release.md",
+        "docs/handoffs/p12.md",
+        "local:migration-000010:testcontainers-up-down-up",
+        "local:backup:aes-gcm-manifest-checksum-retention",
+        "local:restore-drill:postgresql-login-activity-workout-artifact:5.02s",
+        "local:privacy:owned-export-staged-delete-cascade-tombstone",
+        "local:load-smoke:120:concurrency-12:p95-82.35ms",
+        "local:security:dependency-secret-image-scans-zero",
+        "local:sbom:744-components",
+        "local:release-candidate:releases/plugin-1.0.0.json",
+        "local:plugin-personal:1.0.0+codex.20260812170215:enabled",
+        "github:ready-pr:13:base-main",
+        "github:commit:aa98d80:personal-release-hardening",
+        "pending:new-thread-plugin-smoke-and-earlier-real-gates"
+      ],
+      "commit": "aa98d80"
+    }
+  ]
+}

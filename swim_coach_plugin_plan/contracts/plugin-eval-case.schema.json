@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://swim-coach.local/schemas/plugin-eval-case/1.0.json",
+  "title": "Swim Coach Plugin Eval Case",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "skill",
+    "user_turns",
+    "expect"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_-]+$"
+    },
+    "skill": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "user_turns": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "fixtures": {
+      "type": "object"
+    },
+    "expect": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tool_sequence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "allowed_tools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "forbidden_tools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "response_contains": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "response_not_contains": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "requires_confirmation": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

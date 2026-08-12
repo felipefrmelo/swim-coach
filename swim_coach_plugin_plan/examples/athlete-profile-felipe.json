@@ -1,0 +1,25 @@
+{
+  "user_id": "56b53e6e-9bb5-47a1-ac46-11f91d000104",
+  "display_name": "Felipe",
+  "locale": "pt-BR",
+  "timezone": "America/Sao_Paulo",
+  "sport": "POOL_SWIMMING",
+  "device": {
+    "provider": "GARMIN",
+    "model": "Forerunner 265",
+    "is_primary": true
+  },
+  "default_pool": {
+    "name": "Piscina principal",
+    "length_m": 20
+  },
+  "goal": {
+    "distance_m": 2000,
+    "duration_seconds": 2700,
+    "pace_seconds_per_100m": 135
+  },
+  "training_preferences": {
+    "sessions_per_week": 3,
+    "distance_unit": "METERS"
+  }
+}

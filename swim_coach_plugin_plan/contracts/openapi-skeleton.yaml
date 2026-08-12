@@ -1,0 +1,317 @@
+openapi: 3.1.0
+info:
+  title: Swim Coach API
+  version: 1.0.0
+servers:
+  - url: /api/v1
+security:
+  - cookieSession: []
+paths:
+  /auth/config:
+    get:
+      operationId: getAuthConfig
+      security: []
+      responses:
+        "200": {description: Enabled PWA login methods}
+  /auth/login:
+    get:
+      operationId: startOidcLogin
+      security: []
+      responses:
+        "303": {description: Redirect to the configured OIDC authorization endpoint}
+  /auth/callback:
+    get:
+      operationId: completeOidcLogin
+      security: []
+      responses:
+        "303": {description: Validated identity mapped to an opaque BFF session}
+        "403": {$ref: "#/components/responses/Problem"}
+  /auth/logout:
+    post:
+      operationId: logout
+      parameters: [{$ref: "#/components/parameters/CsrfToken"}]
+      responses:
+        "204": {description: Session revoked and cookies cleared}
+  /me:
+    get:
+      operationId: getMe
+      responses:
+        "200": {description: Current user profile}
+        "401": {$ref: "#/components/responses/Problem"}
+  /me/profile:
+    patch:
+      operationId: updateProfile
+      parameters: [{$ref: "#/components/parameters/CsrfToken"}]
+      responses:
+        "200": {description: Profile updated with optimistic version control}
+        "409": {$ref: "#/components/responses/Problem"}
+  /pools:
+    get:
+      operationId: listPools
+      responses: {"200": {description: User-owned pools}}
+    post:
+      operationId: createPool
+      parameters:
+        - {$ref: "#/components/parameters/CsrfToken"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "201": {description: User-owned pool created}
+        "409": {$ref: "#/components/responses/Problem"}
+  /pools/{pool_id}:
+    patch:
+      operationId: updatePool
+      parameters:
+        - {in: path, name: pool_id, required: true, schema: {type: string, format: uuid}}
+        - {$ref: "#/components/parameters/CsrfToken"}
+      responses:
+        "200": {description: User-owned pool updated}
+        "404": {$ref: "#/components/responses/Problem"}
+  /availability:
+    get:
+      operationId: listAvailability
+      responses: {"200": {description: User availability rules}}
+    put:
+      operationId: replaceAvailability
+      parameters: [{$ref: "#/components/parameters/CsrfToken"}]
+      responses: {"200": {description: Availability replaced atomically}}
+  /goals:
+    get:
+      operationId: listGoals
+      responses: {"200": {description: User-owned goals}}
+    post:
+      operationId: createGoal
+      parameters:
+        - {$ref: "#/components/parameters/CsrfToken"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses: {"201": {description: Goal created with derived pace}}
+  /goals/{goal_id}:
+    patch:
+      operationId: updateGoal
+      parameters:
+        - {in: path, name: goal_id, required: true, schema: {type: string, format: uuid}}
+        - {$ref: "#/components/parameters/CsrfToken"}
+      responses:
+        "200": {description: Goal updated and pace recalculated}
+        "404": {$ref: "#/components/responses/Problem"}
+  /activities:
+    get:
+      operationId: listActivities
+      parameters:
+        - {in: query, name: cursor, schema: {type: string}}
+        - {in: query, name: limit, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+      responses:
+        "200": {description: Activity page}
+  /activities/{activity_id}:
+    get:
+      operationId: getActivity
+      parameters:
+        - {in: path, name: activity_id, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200": {description: Activity detail}
+        "404": {$ref: "#/components/responses/Problem"}
+  /activities/{activity_id}/feedback:
+    put:
+      operationId: putActivityFeedback
+      parameters:
+        - {in: path, name: activity_id, required: true, schema: {type: string, format: uuid}}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "200": {description: Feedback stored}
+        "409": {description: Idempotency or feedback version conflict}
+  /operations:
+    get:
+      operationId: getOperations
+      responses:
+        "200": {description: User-owned recent jobs and redacted queue metrics}
+  /operations/jobs/{job_id}/retry:
+    post:
+      operationId: retryFailedJob
+      parameters:
+        - {in: path, name: job_id, required: true, schema: {type: string, format: uuid}}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "200": {description: A terminal safe job was scheduled for retry}
+        "404": {$ref: "#/components/responses/Problem"}
+  /operations/notifications:
+    get:
+      operationId: listNotifications
+      responses:
+        "200": {description: User-owned deduplicated notification inbox}
+  /operations/notifications/{notification_id}/read:
+    post:
+      operationId: markNotificationRead
+      parameters:
+        - {in: path, name: notification_id, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200": {description: Notification marked as read}
+        "404": {$ref: "#/components/responses/Problem"}
+  /privacy/exports:
+    post:
+      operationId: createDataExport
+      parameters:
+        - {$ref: "#/components/parameters/CsrfToken"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "201": {description: User-owned structured JSON and verified FIT export created}
+        "409": {$ref: "#/components/responses/Problem"}
+  /privacy/exports/{export_id}/download:
+    get:
+      operationId: downloadDataExport
+      parameters:
+        - {in: path, name: export_id, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200": {description: Integrity-checked private ZIP download with no-store policy}
+        "404": {$ref: "#/components/responses/Problem"}
+        "410": {$ref: "#/components/responses/Problem"}
+  /privacy/deletion-requests:
+    post:
+      operationId: requestAccountDeletion
+      parameters:
+        - {$ref: "#/components/parameters/CsrfToken"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "201": {description: Staged user-owned deletion request with cooling-off period}
+  /privacy/deletion-requests/{request_id}/confirm:
+    post:
+      operationId: confirmAccountDeletion
+      parameters:
+        - {in: path, name: request_id, required: true, schema: {type: string, format: uuid}}
+        - {$ref: "#/components/parameters/CsrfToken"}
+      responses:
+        "200": {description: Sessions and Garmin access revoked; due deletion queued}
+        "409": {$ref: "#/components/responses/Problem"}
+  /workouts:
+    get: {operationId: listWorkouts, responses: {"200": {description: Workout page}}}
+    post:
+      operationId: createWorkout
+      parameters: [{$ref: "#/components/parameters/IdempotencyKey"}]
+      responses: {"201": {description: Workout created}, "422": {$ref: "#/components/responses/Problem"}}
+  /workouts/{workout_id}:
+    get:
+      operationId: getWorkout
+      parameters: [{in: path, name: workout_id, required: true, schema: {type: string, format: uuid}}]
+      responses: {"200": {description: Workout detail}, "404": {$ref: "#/components/responses/Problem"}}
+  /workouts/validate:
+    post:
+      operationId: validateWorkout
+      responses: {"200": {description: Canonical totals, errors and warnings without persistence}}
+  /workouts/{workout_id}/revisions:
+    post:
+      operationId: reviseWorkout
+      parameters:
+        - {in: path, name: workout_id, required: true, schema: {type: string, format: uuid}}
+        - {$ref: "#/components/parameters/IfMatch"}
+      responses:
+        "200": {description: Immutable revision appended}
+        "409": {$ref: "#/components/responses/Problem"}
+  /workouts/{workout_id}/approve-local:
+    post:
+      operationId: approveWorkoutLocally
+      parameters:
+        - {in: path, name: workout_id, required: true, schema: {type: string, format: uuid}}
+        - {$ref: "#/components/parameters/IfMatch"}
+      responses:
+        "200": {description: Exact current revision approved locally; no provider call}
+        "409": {$ref: "#/components/responses/Problem"}
+  /workouts/{workout_id}/schedule:
+    post:
+      operationId: scheduleWorkoutLocally
+      parameters:
+        - {in: path, name: workout_id, required: true, schema: {type: string, format: uuid}}
+        - {$ref: "#/components/parameters/IfMatch"}
+      responses:
+        "200": {description: Approved revision scheduled in an IANA timezone}
+        "409": {$ref: "#/components/responses/Problem"}
+  /workout-templates:
+    get:
+      operationId: listWorkoutTemplates
+      responses: {"200": {description: System and user-owned canonical templates}}
+    post:
+      operationId: createWorkoutTemplate
+      responses: {"201": {description: User-owned valid canonical template created}}
+  /proposals/{proposal_id}:
+    get:
+      operationId: getProposal
+      parameters: [{in: path, name: proposal_id, required: true, schema: {type: string, format: uuid}}]
+      responses: {"200": {description: Proposal}}
+  /proposals/{proposal_id}/approve:
+    post:
+      operationId: approveProposal
+      parameters:
+        - {in: path, name: proposal_id, required: true, schema: {type: string, format: uuid}}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses: {"200": {description: Approved}, "409": {$ref: "#/components/responses/Problem"}}
+  /proposals/{proposal_id}/execute:
+    post:
+      operationId: executeProposal
+      parameters:
+        - {in: path, name: proposal_id, required: true, schema: {type: string, format: uuid}}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses: {"202": {description: Job queued}, "409": {$ref: "#/components/responses/Problem"}}
+  /integrations/garmin:
+    get:
+      operationId: getGarminConnection
+      responses: {"200": {description: Sanitized connection status; never returns a token}}
+    delete:
+      operationId: disconnectGarmin
+      parameters: [{$ref: "#/components/parameters/CsrfToken"}]
+      responses: {"200": {description: Local encrypted token revoked}}
+  /integrations/garmin/devices:
+    get:
+      operationId: listGarminDevices
+      responses: {"200": {description: User-owned Garmin devices without raw identifiers}}
+  /integrations/garmin/activities:
+    get:
+      operationId: listGarminActivities
+      responses: {"200": {description: User-owned pool swimming activity summaries}}
+  /integrations/garmin/sync-runs:
+    get:
+      operationId: listGarminSyncRuns
+      responses: {"200": {description: Sanitized incremental sync history}}
+  /integrations/garmin/sync:
+    post:
+      operationId: syncGarminActivities
+      parameters:
+        - {$ref: "#/components/parameters/CsrfToken"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses: {"202": {description: Sync job queued}}
+  /jobs/{job_id}:
+    get:
+      operationId: getJob
+      parameters: [{in: path, name: job_id, required: true, schema: {type: string, format: uuid}}]
+      responses: {"200": {description: Job status}}
+components:
+  securitySchemes:
+    cookieSession: {type: apiKey, in: cookie, name: swim_coach_session}
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
+  parameters:
+    CsrfToken:
+      in: header
+      name: X-CSRF-Token
+      required: true
+      schema: {type: string, minLength: 32, maxLength: 200}
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema: {type: string, minLength: 8, maxLength: 200}
+    IfMatch:
+      in: header
+      name: If-Match
+      required: true
+      schema: {type: string, pattern: '^"?[1-9][0-9]*"?$'}
+  responses:
+    Problem:
+      description: Problem Details
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            required: [type, title, status, code, correlation_id]
+            properties:
+              type: {type: string}
+              title: {type: string}
+              status: {type: integer}
+              detail: {type: string}
+              code: {type: string}
+              correlation_id: {type: string}

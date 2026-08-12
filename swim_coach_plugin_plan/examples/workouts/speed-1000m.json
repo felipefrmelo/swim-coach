@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "title": "Velocidade curta — 1.000 m",
+  "sport": "POOL_SWIMMING",
+  "pool_length_m": 20,
+  "purpose": "SPEED",
+  "tags": ["speed", "20m"],
+  "nodes": [
+    {"type": "step", "step_role": "WARMUP", "end_condition": {"type": "distance", "meters": 200}, "intensity": "EASY"},
+    {"type": "repeat", "repetitions": 8, "children": [
+      {"type": "step", "step_role": "WORK", "end_condition": {"type": "distance", "meters": 40}, "target": {"type": "rpe", "min": 8, "max": 9}, "intensity": "FAST"},
+      {"type": "step", "step_role": "REST", "end_condition": {"type": "time", "seconds": 30}}
+    ]},
+    {"type": "step", "step_role": "COOLDOWN", "end_condition": {"type": "distance", "meters": 480}, "intensity": "EASY"}
+  ]
+}
