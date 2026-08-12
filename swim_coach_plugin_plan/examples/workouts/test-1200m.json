@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "title": "Teste 400 + 200 — 1.200 m",
+  "sport": "POOL_SWIMMING",
+  "pool_length_m": 20,
+  "purpose": "TEST",
+  "tags": ["test", "20m"],
+  "nodes": [
+    {"type": "step", "step_role": "WARMUP", "end_condition": {"type": "distance", "meters": 200}, "intensity": "EASY"},
+    {"type": "step", "step_role": "WORK", "label": "Teste de 400 m", "end_condition": {"type": "distance", "meters": 400}, "target": {"type": "rpe", "min": 9, "max": 10}, "intensity": "MAX"},
+    {"type": "step", "step_role": "REST", "end_condition": {"type": "time", "seconds": 300}},
+    {"type": "step", "step_role": "WORK", "label": "Teste de 200 m", "end_condition": {"type": "distance", "meters": 200}, "target": {"type": "rpe", "min": 9, "max": 10}, "intensity": "MAX"},
+    {"type": "step", "step_role": "COOLDOWN", "end_condition": {"type": "distance", "meters": 400}, "intensity": "EASY"}
+  ]
+}

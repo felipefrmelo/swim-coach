@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "title": "Técnica de nado — 800 m",
+  "sport": "POOL_SWIMMING",
+  "pool_length_m": 20,
+  "purpose": "TECHNIQUE",
+  "tags": ["technique", "20m"],
+  "nodes": [
+    {"type": "step", "step_role": "WARMUP", "end_condition": {"type": "distance", "meters": 200}, "intensity": "EASY"},
+    {"type": "repeat", "repetitions": 4, "children": [
+      {"type": "step", "step_role": "DRILL", "end_condition": {"type": "distance", "meters": 40}, "stroke": {"type": "drill", "drill": "CATCH_UP"}, "equipment": ["SNORKEL"]},
+      {"type": "step", "step_role": "RECOVERY", "end_condition": {"type": "distance", "meters": 40}, "intensity": "EASY"}
+    ]},
+    {"type": "step", "step_role": "COOLDOWN", "end_condition": {"type": "distance", "meters": 280}, "intensity": "EASY"}
+  ]
+}

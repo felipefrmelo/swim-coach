@@ -19,7 +19,7 @@ export function DashboardPage() {
   return (
     <div className="page-stack">
       <section>
-        <p className="eyebrow">Fundação pronta · P01</p>
+        <p className="eyebrow">Treinos locais prontos · P04</p>
         <h1 className="page-title">Seu ponto de partida</h1>
         <p className="page-copy">Contexto confiável para os próximos treinos, sem depender da memória da conversa.</p>
       </section>
@@ -39,7 +39,7 @@ export function DashboardPage() {
           {["Perfil local autenticado", `Piscina padrão de ${defaultPool?.length_m ?? "—"} m`, ...(contextComplete ? ["Disponibilidade semanal registrada"] : []), `Meta de ${(primaryGoal?.target_distance_m ?? 0).toLocaleString("pt-BR")} m em 45 min`].map((item) => <p className="check-row" key={item}><Check className="size-4" />{item}</p>)}
         </div>
       </section>
-      <section className="empty-card"><CalendarPlus className="size-7 text-cyan-800" /><div><h2 className="section-title">Nenhum treino agendado ainda</h2><p className="mt-2 text-sm leading-6 text-slate-600">O editor e o calendário de treinos entram no P04. Aqui mostramos somente fatos já disponíveis.</p></div></section>
+      <section className="empty-card"><CalendarPlus className="size-7 text-cyan-800" /><div><h2 className="section-title">Crie sua próxima sessão</h2><p className="mt-2 text-sm leading-6 text-slate-600">O editor valida cada distância contra a piscina de 20 m e guarda revisões imutáveis antes de agendar.</p></div></section>
     </div>
   );
 }

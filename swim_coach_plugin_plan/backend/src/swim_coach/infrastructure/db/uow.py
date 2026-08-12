@@ -58,6 +58,15 @@ from swim_coach.domain.shared.value_objects import (
     PoolLength,
     UserId,
 )
+from swim_coach.domain.workouts import (
+    CanonicalWorkout,
+    PlannedWorkout,
+    PlannedWorkoutStatus,
+    WorkoutRevision,
+    WorkoutSchedule,
+    WorkoutTemplate,
+    WorkoutTotals,
+)
 from swim_coach.infrastructure.db.models import (
     ActivityImportModel,
     ActivityModel,
@@ -74,12 +83,16 @@ from swim_coach.infrastructure.db.models import (
     JobModel,
     OidcLoginAttemptModel,
     OutboxEventModel,
+    PlannedWorkoutModel,
     PoolModel,
     RawProviderPayloadModel,
     SyncCursorModel,
     SyncRunModel,
     TrainingGoalModel,
     WebSessionModel,
+    WorkoutRevisionModel,
+    WorkoutScheduleModel,
+    WorkoutTemplateModel,
 )
 
 
@@ -204,6 +217,52 @@ def _goal(model: TrainingGoalModel) -> TrainingGoal:
     )
     goal.target_pace = Pace(Decimal(model.target_pace_seconds_per_100m))
     return goal
+
+
+def _workout(model: PlannedWorkoutModel) -> PlannedWorkout:
+    return PlannedWorkout(
+        id=EntityId(model.id),
+        user_id=UserId(model.user_id),
+        title=model.title,
+        purpose=model.purpose,
+        pool_id=EntityId(model.pool_id),
+        status=PlannedWorkoutStatus(model.status),
+        current_revision_id=EntityId(model.current_revision_id)
+        if model.current_revision_id
+        else None,
+        approved_revision_id=EntityId(model.approved_revision_id)
+        if model.approved_revision_id
+        else None,
+        source=model.source,
+        created_at=model.created_at,
+        updated_at=model.updated_at,
+        version=model.version,
+    )
+
+
+def _workout_revision(model: WorkoutRevisionModel) -> WorkoutRevision:
+    totals = WorkoutTotals(
+        distance_m=model.total_distance_m,
+        distance_steps=model.distance_steps,
+        executable_steps=model.executable_steps,
+        lengths=model.lengths,
+        active_seconds=float(model.estimated_active_seconds),
+        rest_seconds=float(model.estimated_rest_seconds),
+        estimated_total_seconds=float(model.estimated_total_seconds),
+    )
+    return WorkoutRevision(
+        id=EntityId(model.id),
+        workout_id=EntityId(model.workout_id),
+        revision_number=model.revision_number,
+        definition=CanonicalWorkout.model_validate(model.definition_json),
+        totals=totals,
+        validation=dict(model.validation_json),
+        content_hash=model.content_hash,
+        change_reason=model.change_reason,
+        created_by_type=model.created_by_type,
+        created_by_id=model.created_by_id,
+        created_at=model.created_at,
+    )
 
 
 def _job(model: JobModel) -> Job:
@@ -1087,6 +1146,229 @@ class SqlAlchemyGoalMilestonesRepository:
         )
 
 
+class SqlAlchemyWorkoutsRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def list(self, user_id: UserId) -> Sequence[PlannedWorkout]:
+        statement = (
+            select(PlannedWorkoutModel)
+            .where(PlannedWorkoutModel.user_id == user_id.value)
+            .order_by(PlannedWorkoutModel.updated_at.desc())
+        )
+        return [_workout(model) for model in await self._session.scalars(statement)]
+
+    async def get(self, user_id: UserId, workout_id: EntityId) -> PlannedWorkout | None:
+        statement = select(PlannedWorkoutModel).where(
+            PlannedWorkoutModel.id == workout_id.value,
+            PlannedWorkoutModel.user_id == user_id.value,
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _workout(model) if model else None
+
+    async def add(self, workout: PlannedWorkout) -> None:
+        self._session.add(
+            PlannedWorkoutModel(
+                id=workout.id.value,
+                user_id=workout.user_id.value,
+                title=workout.title,
+                sport="POOL_SWIMMING",
+                purpose=workout.purpose,
+                pool_id=workout.pool_id.value,
+                status=workout.status.value,
+                current_revision_id=(
+                    workout.current_revision_id.value if workout.current_revision_id else None
+                ),
+                approved_revision_id=(
+                    workout.approved_revision_id.value if workout.approved_revision_id else None
+                ),
+                source=workout.source,
+                created_at=workout.created_at,
+                updated_at=workout.updated_at,
+                version=workout.version,
+            )
+        )
+
+    async def update(self, workout: PlannedWorkout, *, expected_version: int) -> None:
+        statement = (
+            update(PlannedWorkoutModel)
+            .where(
+                PlannedWorkoutModel.id == workout.id.value,
+                PlannedWorkoutModel.user_id == workout.user_id.value,
+                PlannedWorkoutModel.version == expected_version,
+            )
+            .values(
+                title=workout.title,
+                purpose=workout.purpose,
+                pool_id=workout.pool_id.value,
+                status=workout.status.value,
+                current_revision_id=(
+                    workout.current_revision_id.value if workout.current_revision_id else None
+                ),
+                approved_revision_id=(
+                    workout.approved_revision_id.value if workout.approved_revision_id else None
+                ),
+                updated_at=workout.updated_at,
+                version=workout.version,
+            )
+            .returning(PlannedWorkoutModel.version)
+        )
+        if (await self._session.scalar(statement)) is None:
+            raise RevisionConflictError(expected_version)
+
+
+class SqlAlchemyWorkoutRevisionsRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def list(self, user_id: UserId, workout_id: EntityId) -> Sequence[WorkoutRevision]:
+        statement = (
+            select(WorkoutRevisionModel)
+            .join(PlannedWorkoutModel, PlannedWorkoutModel.id == WorkoutRevisionModel.workout_id)
+            .where(
+                WorkoutRevisionModel.workout_id == workout_id.value,
+                PlannedWorkoutModel.user_id == user_id.value,
+            )
+            .order_by(WorkoutRevisionModel.revision_number.desc())
+        )
+        return [_workout_revision(model) for model in await self._session.scalars(statement)]
+
+    async def get(self, user_id: UserId, revision_id: EntityId) -> WorkoutRevision | None:
+        statement = (
+            select(WorkoutRevisionModel)
+            .join(PlannedWorkoutModel, PlannedWorkoutModel.id == WorkoutRevisionModel.workout_id)
+            .where(
+                WorkoutRevisionModel.id == revision_id.value,
+                PlannedWorkoutModel.user_id == user_id.value,
+            )
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _workout_revision(model) if model else None
+
+    async def add(self, revision: WorkoutRevision) -> None:
+        totals = revision.totals
+        self._session.add(
+            WorkoutRevisionModel(
+                id=revision.id.value,
+                workout_id=revision.workout_id.value,
+                revision_number=revision.revision_number,
+                definition_json=revision.definition.model_dump(mode="json", exclude_none=True),
+                total_distance_m=totals.distance_m,
+                estimated_active_seconds=Decimal(str(totals.active_seconds)),
+                estimated_rest_seconds=Decimal(str(totals.rest_seconds)),
+                estimated_total_seconds=Decimal(str(totals.estimated_total_seconds)),
+                distance_steps=totals.distance_steps,
+                executable_steps=totals.executable_steps,
+                lengths=totals.lengths,
+                validation_json=revision.validation,
+                content_hash=revision.content_hash,
+                change_reason=revision.change_reason,
+                created_by_type=revision.created_by_type,
+                created_by_id=revision.created_by_id,
+                created_at=revision.created_at,
+            )
+        )
+
+
+class SqlAlchemyWorkoutSchedulesRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get(self, user_id: UserId, workout_id: EntityId) -> WorkoutSchedule | None:
+        statement = (
+            select(WorkoutScheduleModel)
+            .join(PlannedWorkoutModel, PlannedWorkoutModel.id == WorkoutScheduleModel.workout_id)
+            .where(
+                WorkoutScheduleModel.workout_id == workout_id.value,
+                PlannedWorkoutModel.user_id == user_id.value,
+            )
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        if not model:
+            return None
+        return WorkoutSchedule(
+            id=EntityId(model.id),
+            workout_id=EntityId(model.workout_id),
+            scheduled_date=model.scheduled_date,
+            scheduled_start_time=model.scheduled_start_time,
+            timezone=model.timezone,
+            pool_id=EntityId(model.pool_id),
+            created_at=model.created_at,
+        )
+
+    async def upsert(self, schedule: WorkoutSchedule) -> None:
+        statement = insert(WorkoutScheduleModel).values(
+            id=schedule.id.value,
+            workout_id=schedule.workout_id.value,
+            scheduled_date=schedule.scheduled_date,
+            scheduled_start_time=schedule.scheduled_start_time,
+            timezone=schedule.timezone,
+            pool_id=schedule.pool_id.value,
+            created_at=schedule.created_at,
+            updated_at=schedule.created_at,
+        )
+        statement = statement.on_conflict_do_update(
+            index_elements=[WorkoutScheduleModel.workout_id],
+            set_={
+                "scheduled_date": schedule.scheduled_date,
+                "scheduled_start_time": schedule.scheduled_start_time,
+                "timezone": schedule.timezone,
+                "pool_id": schedule.pool_id.value,
+                "updated_at": schedule.created_at,
+            },
+        )
+        await self._session.execute(statement)
+
+
+class SqlAlchemyWorkoutTemplatesRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def list(self, user_id: UserId) -> Sequence[WorkoutTemplate]:
+        statement = (
+            select(WorkoutTemplateModel)
+            .where(
+                WorkoutTemplateModel.active.is_(True),
+                or_(
+                    WorkoutTemplateModel.owner_user_id.is_(None),
+                    WorkoutTemplateModel.owner_user_id == user_id.value,
+                ),
+            )
+            .order_by(WorkoutTemplateModel.is_system.desc(), WorkoutTemplateModel.name)
+        )
+        return [
+            WorkoutTemplate(
+                id=EntityId(model.id),
+                owner_user_id=UserId(model.owner_user_id) if model.owner_user_id else None,
+                name=model.name,
+                objective=model.objective,
+                tags=tuple(model.tags_json),
+                definition=CanonicalWorkout.model_validate(model.definition_json),
+                schema_version=model.schema_version,
+                is_system=model.is_system,
+                active=model.active,
+                created_at=model.created_at,
+            )
+            for model in await self._session.scalars(statement)
+        ]
+
+    async def add(self, template: WorkoutTemplate) -> None:
+        self._session.add(
+            WorkoutTemplateModel(
+                id=template.id.value,
+                owner_user_id=(template.owner_user_id.value if template.owner_user_id else None),
+                name=template.name,
+                objective=template.objective,
+                tags_json=list(template.tags),
+                definition_json=template.definition.model_dump(mode="json", exclude_none=True),
+                schema_version=template.schema_version,
+                is_system=template.is_system,
+                active=template.active,
+                created_at=template.created_at,
+            )
+        )
+
+
 class SqlAlchemyJobsRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -1460,6 +1742,10 @@ class SqlAlchemyUnitOfWork:
         self.activity_imports = SqlAlchemyActivityImportsRepository(self._session)
         self.goals = SqlAlchemyGoalsRepository(self._session)
         self.goal_milestones = SqlAlchemyGoalMilestonesRepository(self._session)
+        self.workouts = SqlAlchemyWorkoutsRepository(self._session)
+        self.workout_revisions = SqlAlchemyWorkoutRevisionsRepository(self._session)
+        self.workout_schedules = SqlAlchemyWorkoutSchedulesRepository(self._session)
+        self.workout_templates = SqlAlchemyWorkoutTemplatesRepository(self._session)
         self.jobs = SqlAlchemyJobsRepository(self._session)
         self.outbox = SqlAlchemyOutboxRepository(self._session)
         self.audit = SqlAlchemyAuditRepository(self._session)

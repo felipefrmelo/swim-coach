@@ -5,6 +5,7 @@ from swim_coach.application.services.garmin_connection import GarminConnectionSe
 from swim_coach.application.services.garmin_sync import GarminSyncService
 from swim_coach.application.services.identity import IdentityService
 from swim_coach.application.services.sessions import SessionService
+from swim_coach.application.services.workouts import WorkoutService
 
 __all__ = [
     "ContextService",
@@ -12,4 +13,5 @@ __all__ = [
     "GarminSyncService",
     "IdentityService",
     "SessionService",
+    "WorkoutService",
 ]

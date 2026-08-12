@@ -31,6 +31,10 @@ async def test_migration_up_down_up_and_constraints(
         "raw_provider_payload",
         "activity",
         "activity_import",
+        "workout_template",
+        "planned_workout",
+        "workout_revision",
+        "workout_schedule",
     }
     assert expected_tables <= round_trip.tables_after_upgrade
     assert expected_tables.isdisjoint(round_trip.tables_after_downgrade)
@@ -44,10 +48,17 @@ async def test_migration_up_down_up_and_constraints(
             revision = (
                 await connection.exec_driver_sql("SELECT version_num FROM alembic_version")
             ).scalar_one()
+            immutable_trigger = (
+                await connection.exec_driver_sql(
+                    "SELECT count(*) FROM pg_trigger "
+                    "WHERE tgname = 'trg_workout_revision_immutable' AND NOT tgisinternal"
+                )
+            ).scalar_one()
     finally:
         await database.dispose()
 
-    assert revision == "000002"
+    assert revision == "000003"
+    assert immutable_trigger == 1
     assert {item["name"] for item in constraints} >= {
         "ck_pool_length_positive",
         "ck_pool_version",

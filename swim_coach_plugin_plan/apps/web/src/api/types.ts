@@ -112,3 +112,72 @@ export interface GarminSyncJob {
   id: string;
   status: "QUEUED" | "LEASED" | "RUNNING" | "SUCCEEDED" | "RETRY_SCHEDULED" | "FAILED_TERMINAL" | "NEEDS_RECONCILIATION";
 }
+
+export type WorkoutPurpose = "TECHNIQUE" | "BASE" | "ENDURANCE" | "THRESHOLD" | "SPEED" | "RECOVERY" | "TEST" | "MIXED";
+export type WorkoutRole = "WARMUP" | "WORK" | "RECOVERY" | "REST" | "COOLDOWN" | "DRILL" | "OTHER";
+
+export interface WorkoutStep {
+  type: "step";
+  id?: string;
+  label?: string | null;
+  step_role?: WorkoutRole;
+  end_condition: { type: "distance"; meters: number } | { type: "time"; seconds: number } | { type: "lap_button" };
+  target?: { type: "none" } | { type: "rpe"; min: number; max: number } | { type: "pace_range"; min_seconds_per_100m: number; max_seconds_per_100m: number } | { type: "zone"; zone: string };
+  stroke?: { type: "freestyle" | "backstroke" | "breaststroke" | "butterfly" | "mixed" | "choice" | "kick" } | { type: "drill"; drill: string; side?: "LEFT" | "RIGHT" | "ALTERNATE" | null };
+  intensity?: "EASY" | "MODERATE" | "TEMPO" | "THRESHOLD" | "FAST" | "MAX" | "CUSTOM" | null;
+  equipment?: Array<"BOARD" | "FINS" | "PADDLES" | "PULL_BUOY" | "SNORKEL" | "NONE">;
+  instructions?: string | null;
+}
+
+export interface WorkoutRepeat {
+  type: "repeat";
+  id?: string;
+  label?: string | null;
+  repetitions: number;
+  children: WorkoutNode[];
+}
+
+export type WorkoutNode = WorkoutStep | WorkoutRepeat;
+
+export interface CanonicalWorkout {
+  schema_version: "1.0";
+  title: string;
+  description?: string | null;
+  sport: "POOL_SWIMMING";
+  pool_length_m: number;
+  purpose: WorkoutPurpose;
+  tags?: string[];
+  nodes: WorkoutNode[];
+}
+
+export interface WorkoutValidationIssue { code: string; path: string; message: string; }
+export interface WorkoutValidation {
+  valid: boolean;
+  errors: WorkoutValidationIssue[];
+  warnings: WorkoutValidationIssue[];
+  totals: { distance_m: number; distance_steps: number; executable_steps: number; lengths: number; active_seconds: number; rest_seconds: number; estimated_total_seconds: number; };
+}
+
+export interface WorkoutRevision {
+  id: string;
+  revision_number: number;
+  definition: CanonicalWorkout;
+  validation: WorkoutValidation;
+  content_hash: string;
+  change_reason: string | null;
+  created_at: string;
+}
+
+export interface Workout {
+  id: string;
+  title: string;
+  purpose: WorkoutPurpose;
+  pool_id: string;
+  status: "draft" | "approved" | "scheduled" | "cancelled" | "archived";
+  version: number;
+  current_revision_id: string;
+  approved_revision_id: string | null;
+  current_revision: WorkoutRevision;
+  revisions: WorkoutRevision[];
+  schedule: { id: string; scheduled_date: string; scheduled_start_time: string | null; timezone: string; pool_id: string } | null;
+}

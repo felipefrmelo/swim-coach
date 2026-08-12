@@ -3,7 +3,8 @@
 > Atualizar este arquivo no mesmo commit de cada fase. `DONE` exige evidência. Uma fase pode ficar `BLOCKED` sem comprometer a honestidade do projeto.
 > Não existe código legado, banco anterior ou dado de aplicação. A P00 foi
 > concluída com evidências locais e integrações externas reais. A P01 concluiu a
-> fundação transacional e a PWA autenticada; P02 é a próxima fase elegível.
+> fundação transacional e a PWA autenticada; P02 segue em validação real e P04
+> foi concluída em paralelo sobre a cadeia linear de migrations.
 
 | Fase | Estado | Dependências | Evidência mínima | Commit/PR |
 |---:|---|---|---|---|
@@ -11,7 +12,7 @@
 | P01 | DONE | P00 | migrações + testes de domínio + PWA shell | [PR #2](https://github.com/felipefrmelo/swim-coach/pull/2) |
 | P02 | IN_PROGRESS | P01 | import real Garmin sem duplicata | [draft PR #3](https://github.com/felipefrmelo/swim-coach/pull/3) |
 | P03 | NOT_STARTED | P02 | FIT normalizado e analytics reproduzíveis | — |
-| P04 | NOT_STARTED | P01 | treino válido de 20 m criado na PWA | — |
+| P04 | DONE | P01 | treino válido de 20 m criado/revisado/agendado na PWA | branch `p04-workout-authoring-pwa` |
 | P05 | NOT_STARTED | P03,P04 | MCP read-only autenticado com dados reais | — |
 | P06 | NOT_STARTED | P05 | plugin/Skills instalados e evals aprovadas | — |
 | P07 | NOT_STARTED | P04 | publicação Garmin pela PWA com aprovação | — |
@@ -131,8 +132,22 @@
 
 ### P04
 
-- Estado: `NOT_STARTED`
+- Estado: `DONE`
+- Início: 2026-08-11T21:25:00-03:00
+- Conclusão local: 2026-08-11T21:49:43-03:00
+- Implementação: P04-T01 até P04-T09 concluídas.
 - Evidências:
+  - [`docs/evidence/p04-workout-authoring-pwa.md`](docs/evidence/p04-workout-authoring-pwa.md)
+  - [`docs/evidence/p04-workout-editor-mobile.png`](docs/evidence/p04-workout-editor-mobile.png)
+  - [`docs/handoffs/p04.md`](docs/handoffs/p04.md)
+  - `make check` → 60 testes Python, 2 Vitest, Ruff, mypy, ESLint,
+    TypeScript e validadores verdes.
+  - Testcontainers → migration `000003` e trigger de revisão imutável em
+    `up/down/up`.
+  - Playwright Chrome 375×812 → quatro fluxos P01/P02/P04 passaram.
+  - `make dependency-scan` e `make secret-scan` → limpos.
+- Limite preservado: aprovação e agenda são somente locais; não há dependência,
+  compilação, chamada ou efeito Garmin no contexto P04.
 
 ### P05
 

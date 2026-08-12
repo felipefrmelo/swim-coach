@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### P04 — treino canônico, calendário e editor PWA
+
+- criado modelo canônico provider-neutral com steps/repeats discriminados,
+  validação de parede, ranges, limites, totais recursivos e hash determinístico;
+- adicionadas revisões append-only protegidas contra `UPDATE`, ETag/`If-Match`,
+  aprovação local, templates e agenda IANA na migration `000003`;
+- implementados REST e serviços user-scoped sem dependência Garmin;
+- entregue editor PWA móvel com preset 1.600 m, reordenação acessível, repeats,
+  totais ao vivo, erros/warnings, histórico e calendário semana/mês;
+- adicionadas fixtures de técnica/endurance/velocidade/teste, property/contract/
+  integration tests e quatro fluxos Playwright móveis;
+- comprovados 60 testes Python, 2 Vitest, E2E Chrome, Compose saudável e scans
+  de dependências/segredos limpos.
+
 ### P02 — Garmin somente leitura (em validação real)
 
 - implementados provider Garmin isolado, DTOs internos e classificação

@@ -10,6 +10,9 @@ import type {
   Pool,
   ProblemDetail,
   SwimActivity,
+  CanonicalWorkout,
+  Workout,
+  WorkoutValidation,
 } from "./types";
 
 export class ApiError extends Error {
@@ -107,4 +110,35 @@ export const api = {
     }),
   disconnectGarmin: () =>
     request<GarminConnection>("/integrations/garmin", { method: "DELETE" }),
+  workouts: () => request<Workout[]>("/workouts"),
+  workout: (id: string) => request<Workout>(`/workouts/${id}`),
+  validateWorkout: (definition: CanonicalWorkout) =>
+    request<WorkoutValidation>("/workouts/validate", {
+      method: "POST",
+      body: JSON.stringify(definition),
+    }),
+  createWorkout: (poolId: string, definition: CanonicalWorkout) =>
+    request<Workout>("/workouts", {
+      method: "POST",
+      headers: { "Idempotency-Key": crypto.randomUUID() },
+      body: JSON.stringify({ pool_id: poolId, definition }),
+    }),
+  reviseWorkout: (workout: Workout, definition: CanonicalWorkout, changeReason: string) =>
+    request<Workout>(`/workouts/${workout.id}/revisions`, {
+      method: "POST",
+      headers: { "If-Match": `"${workout.version}"` },
+      body: JSON.stringify({ definition, change_reason: changeReason || null }),
+    }),
+  approveWorkout: (workout: Workout) =>
+    request<Workout>(`/workouts/${workout.id}/approve-local`, {
+      method: "POST",
+      headers: { "If-Match": `"${workout.version}"` },
+      body: JSON.stringify({ content_hash: workout.current_revision.content_hash }),
+    }),
+  scheduleWorkout: (workout: Workout, scheduledDate: string, startTime: string | null, timezone: string) =>
+    request<Workout>(`/workouts/${workout.id}/schedule`, {
+      method: "POST",
+      headers: { "If-Match": `"${workout.version}"` },
+      body: JSON.stringify({ scheduled_date: scheduledDate, scheduled_start_time: startTime, timezone, pool_id: workout.pool_id }),
+    }),
 };

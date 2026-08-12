@@ -5,6 +5,7 @@ import {
   Home,
   LogOut,
   MapPin,
+  NotebookPen,
   Watch,
   Waves,
   type LucideIcon,
@@ -23,6 +24,8 @@ interface NavigationItem {
 
 const navigation: NavigationItem[] = [
   { to: "/", label: "Início", icon: Home },
+  { to: "/workouts", label: "Treinos", icon: NotebookPen },
+  { to: "/calendar", label: "Calendário", icon: CalendarDays },
   { to: "/pools", label: "Piscinas", icon: MapPin },
   { to: "/availability", label: "Agenda", icon: CalendarDays },
   { to: "/goals", label: "Meta", icon: Goal },
@@ -67,7 +70,7 @@ export function AppShell({ me }: { me: Me }) {
         <main className="px-5 sm:px-8 lg:px-12"><Outlet /></main>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-slate-200 bg-white/95 px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 shadow-[0_-12px_32px_rgba(8,47,73,0.08)] backdrop-blur lg:hidden" aria-label="Navegação principal">
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex overflow-x-auto border-t border-slate-200 bg-white/95 px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 shadow-[0_-12px_32px_rgba(8,47,73,0.08)] backdrop-blur lg:hidden" aria-label="Navegação principal">
         {navigation.map((item) => (
           <NavItem key={item.to} item={item} active={pathname === item.to} compact />
         ))}
@@ -95,7 +98,7 @@ function NavItem({ item, active, compact = false }: { item: NavigationItem; acti
   return (
     <Link
       to={item.to}
-      className={compact ? `mobile-nav ${active ? "mobile-nav-active" : ""}` : `nav-button ${active ? "nav-button-active" : ""}`}
+      className={compact ? `mobile-nav min-w-[72px] flex-1 ${active ? "mobile-nav-active" : ""}` : `nav-button ${active ? "nav-button-active" : ""}`}
       aria-current={active ? "page" : undefined}
     >
       <Icon className="size-5" aria-hidden="true" />

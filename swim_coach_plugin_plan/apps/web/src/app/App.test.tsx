@@ -15,7 +15,7 @@ function jsonResponse(value: unknown, status = 200) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("App", () => {
-  it("shows an honest authenticated P01 dashboard", async () => {
+  it("shows the authenticated dashboard without inventing scheduled workouts", async () => {
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
       const path = String(input);
       if (path.endsWith("/auth/config")) return jsonResponse({ oidc_enabled: false, dev_auth_enabled: true });
@@ -29,7 +29,7 @@ describe("App", () => {
 
     expect(await screen.findByRole("heading", { name: "Seu ponto de partida" })).toBeVisible();
     expect(screen.getByText("Piscina padrão de 20 m")).toBeVisible();
-    expect(screen.getByText(/editor e o calendário de treinos entram no P04/i)).toBeVisible();
+    expect(screen.getByText(/o editor valida cada distância contra a piscina de 20 m/i)).toBeVisible();
     expect(screen.queryByText(/chat/i)).not.toBeInTheDocument();
   });
 

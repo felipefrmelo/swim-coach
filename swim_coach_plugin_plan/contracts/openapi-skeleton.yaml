@@ -128,6 +128,44 @@ paths:
       operationId: getWorkout
       parameters: [{in: path, name: workout_id, required: true, schema: {type: string, format: uuid}}]
       responses: {"200": {description: Workout detail}, "404": {$ref: "#/components/responses/Problem"}}
+  /workouts/validate:
+    post:
+      operationId: validateWorkout
+      responses: {"200": {description: Canonical totals, errors and warnings without persistence}}
+  /workouts/{workout_id}/revisions:
+    post:
+      operationId: reviseWorkout
+      parameters:
+        - {in: path, name: workout_id, required: true, schema: {type: string, format: uuid}}
+        - {$ref: "#/components/parameters/IfMatch"}
+      responses:
+        "200": {description: Immutable revision appended}
+        "409": {$ref: "#/components/responses/Problem"}
+  /workouts/{workout_id}/approve-local:
+    post:
+      operationId: approveWorkoutLocally
+      parameters:
+        - {in: path, name: workout_id, required: true, schema: {type: string, format: uuid}}
+        - {$ref: "#/components/parameters/IfMatch"}
+      responses:
+        "200": {description: Exact current revision approved locally; no provider call}
+        "409": {$ref: "#/components/responses/Problem"}
+  /workouts/{workout_id}/schedule:
+    post:
+      operationId: scheduleWorkoutLocally
+      parameters:
+        - {in: path, name: workout_id, required: true, schema: {type: string, format: uuid}}
+        - {$ref: "#/components/parameters/IfMatch"}
+      responses:
+        "200": {description: Approved revision scheduled in an IANA timezone}
+        "409": {$ref: "#/components/responses/Problem"}
+  /workout-templates:
+    get:
+      operationId: listWorkoutTemplates
+      responses: {"200": {description: System and user-owned canonical templates}}
+    post:
+      operationId: createWorkoutTemplate
+      responses: {"201": {description: User-owned valid canonical template created}}
   /proposals/{proposal_id}:
     get:
       operationId: getProposal
@@ -194,6 +232,11 @@ components:
       name: Idempotency-Key
       required: true
       schema: {type: string, minLength: 8, maxLength: 200}
+    IfMatch:
+      in: header
+      name: If-Match
+      required: true
+      schema: {type: string, pattern: '^"?[1-9][0-9]*"?$'}
   responses:
     Problem:
       description: Problem Details

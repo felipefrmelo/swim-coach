@@ -3,6 +3,7 @@ import { createRootRoute, createRoute, createRouter } from "@tanstack/react-rout
 import { AppShell } from "../components/AppShell";
 import type { Me } from "../api/types";
 import { AvailabilityPage, DashboardPage, GarminPage, GoalsPage, PoolsPage, ProfilePage } from "./pages";
+import { CalendarPage, NewWorkoutPage, WorkoutDetailPage, WorkoutsPage } from "./workouts";
 
 let authenticatedMe: Me;
 
@@ -13,8 +14,12 @@ const poolsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/pools"
 const availabilityRoute = createRoute({ getParentRoute: () => rootRoute, path: "/availability", component: AvailabilityPage });
 const goalsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/goals", component: GoalsPage });
 const garminRoute = createRoute({ getParentRoute: () => rootRoute, path: "/garmin", component: GarminPage });
+const workoutsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/workouts", component: WorkoutsPage });
+const newWorkoutRoute = createRoute({ getParentRoute: () => rootRoute, path: "/workouts/new", component: NewWorkoutPage });
+const workoutDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: "/workouts/$workoutId", component: WorkoutDetailPage });
+const calendarRoute = createRoute({ getParentRoute: () => rootRoute, path: "/calendar", component: CalendarPage });
 
-const routeTree = rootRoute.addChildren([indexRoute, profileRoute, poolsRoute, availabilityRoute, goalsRoute, garminRoute]);
+const routeTree = rootRoute.addChildren([indexRoute, profileRoute, poolsRoute, availabilityRoute, goalsRoute, garminRoute, workoutsRoute, newWorkoutRoute, workoutDetailRoute, calendarRoute]);
 export const router = createRouter({ routeTree });
 
 export function setAuthenticatedMe(me: Me) { authenticatedMe = me; }

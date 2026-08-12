@@ -638,3 +638,107 @@ class ActivityImportModel(Base):
         ),
         Index("ix_activity_import_user_created", "user_id", text("created_at DESC")),
     )
+
+
+class WorkoutTemplateModel(Base):
+    __tablename__ = "workout_template"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    owner_user_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE")
+    )
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    objective: Mapped[str] = mapped_column(String(500), nullable=False)
+    tags_json: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    definition_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    schema_version: Mapped[str] = mapped_column(String(20), nullable=False)
+    is_system: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (Index("ix_workout_template_owner_active", "owner_user_id", "active"),)
+
+
+class PlannedWorkoutModel(Base):
+    __tablename__ = "planned_workout"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
+    )
+    title: Mapped[str] = mapped_column(String(160), nullable=False)
+    sport: Mapped[str] = mapped_column(String(30), nullable=False, default="POOL_SWIMMING")
+    purpose: Mapped[str] = mapped_column(String(30), nullable=False)
+    pool_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("pool.id", ondelete="RESTRICT"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    current_revision_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True))
+    approved_revision_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True))
+    source: Mapped[str] = mapped_column(String(30), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        CheckConstraint("sport = 'POOL_SWIMMING'", name="ck_planned_workout_sport"),
+        CheckConstraint(
+            "status IN ('draft','approved','scheduled','cancelled','archived')",
+            name="ck_planned_workout_status",
+        ),
+        CheckConstraint("version >= 1", name="ck_planned_workout_version"),
+        Index("ix_planned_workout_user_status", "user_id", "status"),
+    )
+
+
+class WorkoutRevisionModel(Base):
+    __tablename__ = "workout_revision"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    workout_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("planned_workout.id", ondelete="CASCADE"), nullable=False
+    )
+    revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    definition_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    total_distance_m: Mapped[int] = mapped_column(Integer, nullable=False)
+    estimated_active_seconds: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
+    estimated_rest_seconds: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
+    estimated_total_seconds: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
+    distance_steps: Mapped[int] = mapped_column(Integer, nullable=False)
+    executable_steps: Mapped[int] = mapped_column(Integer, nullable=False)
+    lengths: Mapped[int] = mapped_column(Integer, nullable=False)
+    validation_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    change_reason: Mapped[str | None] = mapped_column(String(500))
+    created_by_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    created_by_id: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("workout_id", "revision_number", name="uq_workout_revision_number"),
+        CheckConstraint("revision_number >= 1", name="ck_workout_revision_number"),
+        CheckConstraint("total_distance_m >= 0", name="ck_workout_revision_distance"),
+        Index("ix_workout_revision_workout_created", "workout_id", "created_at"),
+    )
+
+
+class WorkoutScheduleModel(Base):
+    __tablename__ = "workout_schedule"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    workout_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("planned_workout.id", ondelete="CASCADE"), nullable=False
+    )
+    scheduled_date: Mapped[date] = mapped_column(Date, nullable=False)
+    scheduled_start_time: Mapped[time | None] = mapped_column(Time(timezone=False))
+    timezone: Mapped[str] = mapped_column(String(100), nullable=False)
+    pool_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("pool.id", ondelete="RESTRICT"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("workout_id", name="uq_workout_schedule_workout"),
+        Index("ix_workout_schedule_date", "scheduled_date"),
+    )

@@ -12,6 +12,7 @@ from swim_coach.application.services import (
     GarminSyncService,
     IdentityService,
     SessionService,
+    WorkoutService,
 )
 from swim_coach.application.services.oidc_login import OidcLoginService
 from swim_coach.domain.shared.value_objects import UserId
@@ -32,6 +33,7 @@ class AppServices:
     oidc_login: OidcLoginService | None
     garmin_connection: GarminConnectionService | None
     garmin_sync: GarminSyncService | None
+    workouts: WorkoutService
 
 
 def build_services(settings: Settings, database: Database | None = None) -> AppServices:
@@ -97,4 +99,5 @@ def build_services(settings: Settings, database: Database | None = None) -> AppS
         oidc_login=oidc_login,
         garmin_connection=garmin_connection,
         garmin_sync=garmin_sync,
+        workouts=WorkoutService(uow_factory),
     )
