@@ -354,7 +354,7 @@
 
 - Estado: `IN_PROGRESS`
 - Implementação: P12-T01..T10 concluídas; gate automatizado/integrado aprovado.
-- Commit de implementação/PR: [`aa98d80`](https://github.com/felipefrmelo/swim-coach/commit/aa98d80) / [PR umbrella #13](https://github.com/felipefrmelo/swim-coach/pull/13), pronto e baseado em `main` para integrar a cadeia linear P00–P12.
+- Commit de implementação/PR: [`aa98d80`](https://github.com/felipefrmelo/swim-coach/commit/aa98d80) / [PR umbrella #13](https://github.com/felipefrmelo/swim-coach/pull/13), integrado em `main` como `a81d30c` com a cadeia linear P00–P12.
 - Evidências:
   - [`docs/evidence/p12-production-hardening-release.md`](docs/evidence/p12-production-hardening-release.md)
   - [`docs/handoffs/p12.md`](docs/handoffs/p12.md)
@@ -368,5 +368,7 @@
   - plugin pessoal instalado/enabled em `1.0.0+codex.20260812170215`.
   - GitHub Actions [run 31621402450](https://github.com/felipefrmelo/swim-coach/actions/runs/31621402450)
     → quality verde, incluindo checks, testes, scans e build das quatro imagens.
+  - GitHub Actions [run 31624985510](https://github.com/felipefrmelo/swim-coach/actions/runs/31624985510)
+    → gate pós-merge da `main` verde no commit `a81d30c`.
 - Gate pendente: conversa nova com as sete Skills e fechamento dos gates reais
   P11/anteriores. O release permanece candidate e não está pronto para público.

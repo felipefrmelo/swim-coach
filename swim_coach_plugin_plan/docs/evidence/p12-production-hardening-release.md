@@ -3,8 +3,9 @@
 State: implementation and automated/integration gate complete; phase remains
 `IN_PROGRESS` because P11 and earlier real-data gates are still open.
 
-Publication: implementation commit `aa98d80`; PR #13 is the ready, green umbrella
-integration from the complete linear P00–P12 head into `main`.
+Publication: implementation commit `aa98d80`; the green umbrella PR #13 merged
+the complete linear P00–P12 head `0562893` into `main` as `a81d30c`. Main CI
+run `31624985510` passed after the merge.
 
 ## Delivered by task
 

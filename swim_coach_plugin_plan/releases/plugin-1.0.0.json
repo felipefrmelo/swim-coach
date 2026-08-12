@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "mode": "hardened-personal-release",
   "status": "release_candidate",
-  "created_at": "2026-08-12T17:04:00-03:00",
+  "created_at": "2026-08-12T14:04:00-03:00",
   "registered_app": "plugin_asdk_app_6a7b7fbeceec819196c168888a9494b6",
   "skills": [
     "review-latest-swim",
@@ -62,10 +62,11 @@
   },
   "publication": {
     "pr": 13,
-    "pr_state": "ready",
+    "pr_state": "merged",
     "implementation_commit": "aa98d80",
     "base_branch": "main",
-    "integration_head_commit": "0e67818"
+    "integration_head_commit": "0562893",
+    "merge_commit": "a81d30c"
   },
   "pending_gates": [
     "P11 personal automation/offline/queue evidence",

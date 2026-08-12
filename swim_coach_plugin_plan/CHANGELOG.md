@@ -19,6 +19,8 @@
   `31621402450` verde antes da integração da pilha na `main`;
 - promovido o PR #13 de draft empilhado para PR umbrella pronto contra `main`,
   preservando os gates operacionais abertos e o histórico linear P00–P12;
+- integrado o PR umbrella #13 em `main` como `a81d30c`; o gate pós-merge
+  `31624985510` passou e os PRs empilhados incorporados foram encerrados;
 - fase permanece `IN_PROGRESS` até o smoke em conversa nova e os gates reais P11
   e anteriores fecharem; `1.0.0` continua release candidate pessoal.
 
