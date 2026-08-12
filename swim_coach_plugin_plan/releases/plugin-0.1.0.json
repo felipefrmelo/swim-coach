@@ -28,6 +28,13 @@
     "adversarial": 9,
     "result": "passed"
   },
+  "publication": {
+    "draft_pr": 8,
+    "implementation_commit": "4528e593c26594b915e4d12baf26e350b0f3ae9e",
+    "verification_commit": "dfd68b3",
+    "github_actions_run": 31603753428,
+    "quality": "passed"
+  },
   "pending_gates": [
     "personal marketplace upgrade to the 0.1.0 copy",
     "fresh-conversation Skill activation smoke",

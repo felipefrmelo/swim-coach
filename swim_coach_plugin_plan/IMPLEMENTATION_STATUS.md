@@ -207,6 +207,7 @@
 
 - Estado: `IN_PROGRESS`
 - Início: 2026-08-12T10:34:52-03:00
+- Commit/PR: [`4528e59`](https://github.com/felipefrmelo/swim-coach/commit/4528e593c26594b915e4d12baf26e350b0f3ae9e) / [draft PR #8](https://github.com/felipefrmelo/swim-coach/pull/8)
 - Escopo: P06-T01..T08; implementação independente iniciada enquanto o gate
   externo P05 permanece pendente.
 - Implementação local: P06-T01..T04 e P06-T06 concluídas; P06-T05/T07/T08
@@ -224,7 +225,11 @@
     follow-up, empty, auth e adversarial com todas as writes proibidas;
   - `make check` → 94 testes Python, 2 Vitest, lint, tipos e validadores verdes;
   - dependency scan sem vulnerabilidades conhecidas e gitleaks sem achados em
-    17 commits + worktree;
+    19 commits + worktree;
+  - flake AES-GCM corrigido no commit [`dfd68b3`](https://github.com/felipefrmelo/swim-coach/commit/dfd68b3),
+    sem alteração na implementação criptográfica;
+  - GitHub Actions [run 31603753428](https://github.com/felipefrmelo/swim-coach/actions/runs/31603753428)
+    → `quality` aprovado em 1m33s.
   - release candidate [`releases/plugin-0.1.0.json`](releases/plugin-0.1.0.json)
     registra hashes de manifesto, app mapping e Skills.
 - Gate pendente: duas tentativas de mover a cópia pessoal para backup expiraram

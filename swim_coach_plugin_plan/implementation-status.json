@@ -145,13 +145,16 @@
         "local:evals:66-passed:22-per-skill",
         "local:make-check:94-python:2-web",
         "local:dependency-scan-clean",
-        "local:secret-scan-clean:17-commits-worktree",
+        "local:secret-scan-clean:19-commits-worktree",
         "local:release-candidate:releases/plugin-0.1.0.json",
+        "github:draft-pr:8",
+        "github:commit:dfd68b3:aes-gcm-tamper-test-deterministic",
+        "github:actions:31603753428:quality-pass",
         "pending:personal-marketplace-upgrade:approval-timeout",
         "pending:fresh-conversation-skill-smoke",
         "pending:p05-authenticated-real-data-host-gate"
       ],
-      "commit": null
+      "commit": "4528e593c26594b915e4d12baf26e350b0f3ae9e"
     },
     {
       "id": "P07",

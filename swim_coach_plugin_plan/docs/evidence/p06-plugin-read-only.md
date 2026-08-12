@@ -2,6 +2,13 @@
 
 Estado: release candidate `0.1.0` validado; upgrade pessoal e smoke de host pendentes.
 
+Publicação: commit [`4528e59`](https://github.com/felipefrmelo/swim-coach/commit/4528e593c26594b915e4d12baf26e350b0f3ae9e),
+[draft PR #8](https://github.com/felipefrmelo/swim-coach/pull/8), correção de
+teste flakey [`dfd68b3`](https://github.com/felipefrmelo/swim-coach/commit/dfd68b3)
+e GitHub Actions
+[run 31603753428](https://github.com/felipefrmelo/swim-coach/actions/runs/31603753428)
+com `quality` aprovado em 1m33s.
+
 ## Escopo comprovado
 
 - P06-T01: `contracts/capability-release-matrix.yaml` libera exatamente
@@ -32,7 +39,9 @@ Estado: release candidate `0.1.0` validado; upgrade pessoal e smoke de host pend
 - `make check` → Ruff, mypy, ESLint, TypeScript, 94 testes Python, 2 Vitest e
   validadores do repositório/plano aprovados;
 - `make dependency-scan` → nenhuma vulnerabilidade conhecida em Python/pnpm;
-- `make secret-scan` → 17 commits e worktree sem vazamentos;
+- `make secret-scan` → 19 commits e worktree sem vazamentos;
+- regressão CI: o teste substituía o último byte aleatório por `x`, que em
+  1/256 dos casos já era `x`; XOR `0x01` agora garante adulteração e o run verde;
 - mapeamento real comparado com a cópia remota criada pelo host em cache local;
 - `codex plugin list` → `swim-coach@personal` instalado e habilitado no spike.
 
