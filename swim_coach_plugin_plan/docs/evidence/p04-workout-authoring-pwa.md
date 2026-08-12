@@ -36,6 +36,8 @@ revisão e preservou o histórico. Nenhum caminho P04 importa ou recebe um
   endurance, velocidade e teste validam no JSON Schema e terminam na parede.
 - `make dependency-scan`: nenhuma vulnerabilidade conhecida em Python ou pnpm.
 - `make secret-scan`: 9 commits e a árvore de trabalho sem vazamentos.
+- GitHub Actions run `31551697015`: job `quality` verde em 1m29s em clone
+  limpo do draft PR #4, incluindo testes, scans e build das imagens.
 
 ## Decisões e limites
 

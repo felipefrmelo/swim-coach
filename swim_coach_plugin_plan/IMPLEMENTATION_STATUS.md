@@ -147,6 +147,8 @@
     `up/down/up`.
   - Playwright Chrome 375×812 → quatro fluxos P01/P02/P04 passaram.
   - `make dependency-scan` e `make secret-scan` → limpos.
+  - [GitHub Actions run `31551697015`](https://github.com/felipefrmelo/swim-coach/actions/runs/31551697015)
+    → job `quality` verde em 1m29s no draft PR #4.
 - Limite preservado: aprovação e agenda são somente locais; não há dependência,
   compilação, chamada ou efeito Garmin no contexto P04.
 

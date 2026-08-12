@@ -87,7 +87,8 @@
         "local:dependency-scan-clean",
         "local:secret-scan-clean",
         "local:no-garmin-provider-in-p04",
-        "https://github.com/felipefrmelo/swim-coach/pull/4"
+        "https://github.com/felipefrmelo/swim-coach/pull/4",
+        "https://github.com/felipefrmelo/swim-coach/actions/runs/31551697015"
       ],
       "commit": "82e9e77184df4c0a57a6e5125737a022d46b9b59"
     },
