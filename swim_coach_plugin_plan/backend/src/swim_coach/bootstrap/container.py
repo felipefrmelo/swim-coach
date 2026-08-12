@@ -6,9 +6,11 @@ from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from datetime import timedelta
 
+from swim_coach.application.ports.garmin import GarminWorkoutProvider
 from swim_coach.application.services import (
     ContextService,
     GarminConnectionService,
+    GarminPublishService,
     GarminSyncService,
     IdentityService,
     SessionService,
@@ -18,7 +20,11 @@ from swim_coach.application.services.oidc_login import OidcLoginService
 from swim_coach.domain.shared.value_objects import UserId
 from swim_coach.infrastructure.auth import OidcClient
 from swim_coach.infrastructure.db import Database, SqlAlchemyUnitOfWorkFactory
-from swim_coach.infrastructure.garmin import GarminConnectBootstrap, GarminConnectProvider
+from swim_coach.infrastructure.garmin import (
+    FakeGarminWorkoutProvider,
+    GarminConnectBootstrap,
+    GarminConnectProvider,
+)
 from swim_coach.infrastructure.security import AesGcmSecretCipher
 from swim_coach.settings import Settings
 
@@ -33,6 +39,8 @@ class AppServices:
     oidc_login: OidcLoginService | None
     garmin_connection: GarminConnectionService | None
     garmin_sync: GarminSyncService | None
+    garmin_publish: GarminPublishService
+    garmin_writer: GarminWorkoutProvider | None
     workouts: WorkoutService
 
 
@@ -51,6 +59,7 @@ def build_services(settings: Settings, database: Database | None = None) -> AppS
     oidc_login: OidcLoginService | None = None
     garmin_connection: GarminConnectionService | None = None
     garmin_sync: GarminSyncService | None = None
+    garmin_writer: GarminWorkoutProvider | None = None
     if settings.oidc_issuer is not None and settings.oidc_client_id is not None:
         client_secret = (
             settings.oidc_client_secret.get_secret_value()
@@ -83,13 +92,18 @@ def build_services(settings: Settings, database: Database | None = None) -> AppS
             GarminConnectBootstrap(),
             cipher,
         )
-        garmin_sync = GarminSyncService(
-            uow_factory,
-            provider,
-            user_sync_lock,
-            lookback_days=settings.garmin_sync_lookback_days,
-            overlap_seconds=settings.garmin_sync_overlap_seconds,
-        )
+        if settings.garmin_read_enabled:
+            garmin_sync = GarminSyncService(
+                uow_factory,
+                provider,
+                user_sync_lock,
+                lookback_days=settings.garmin_sync_lookback_days,
+                overlap_seconds=settings.garmin_sync_overlap_seconds,
+            )
+        if settings.garmin_write_enabled and settings.garmin_write_mode == "live":
+            garmin_writer = provider
+    if settings.garmin_write_enabled and settings.garmin_write_mode == "fake":
+        garmin_writer = FakeGarminWorkoutProvider()
     return AppServices(
         database=database,
         uow_factory=uow_factory,
@@ -99,5 +113,16 @@ def build_services(settings: Settings, database: Database | None = None) -> AppS
         oidc_login=oidc_login,
         garmin_connection=garmin_connection,
         garmin_sync=garmin_sync,
+        garmin_publish=GarminPublishService(
+            uow_factory,
+            write_enabled=settings.garmin_write_enabled,
+            allow_fake_device=settings.garmin_write_mode == "fake",
+            canary_title_prefix=(
+                settings.garmin_write_canary_title_prefix
+                if settings.garmin_write_mode == "live" and settings.garmin_write_canary_only
+                else None
+            ),
+        ),
+        garmin_writer=garmin_writer,
         workouts=WorkoutService(uow_factory),
     )

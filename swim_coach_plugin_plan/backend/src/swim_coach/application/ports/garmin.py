@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Protocol
@@ -31,11 +31,13 @@ class GarminProviderError(Exception):
         *,
         retryable: bool,
         retry_after_seconds: int | None = None,
+        outcome_ambiguous: bool = False,
     ) -> None:
         super().__init__(category.value)
         self.category = category
         self.retryable = retryable
         self.retry_after_seconds = retry_after_seconds
+        self.outcome_ambiguous = outcome_ambiguous
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +47,40 @@ class GarminProviderCapabilities:
     file_read: bool = False
     workout_write: bool = False
     observed_version: str = "unknown"
+
+
+@dataclass(frozen=True, slots=True)
+class GarminWorkoutCapabilities:
+    max_repeat_depth: int = 2
+    max_top_level_steps: int = 50
+    supported_strokes: frozenset[str] = frozenset(
+        {"freestyle", "backstroke", "breaststroke", "butterfly", "mixed", "choice"}
+    )
+    supports_pace_target: bool = False
+    supports_rpe_target: bool = False
+    supports_named_zone_target: bool = False
+    supports_equipment: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class GarminWorkoutDTO:
+    payload: JsonObject
+    compiled_hash: str
+    source_revision_hash: str
+    warnings: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ExternalWorkoutResult:
+    external_workout_id: str
+    provider_payload: JsonObject = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class ExternalScheduleResult:
+    external_schedule_id: str | None
+    scheduled_date: date
+    provider_payload: JsonObject = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,6 +153,26 @@ class GarminProvider(Protocol):
         cursor: str | None,
         filters: ActivityFilter,
     ) -> ProviderPage: ...
+
+
+class GarminWorkoutProvider(Protocol):
+    """Write-side port kept separate so read-only services cannot publish by accident."""
+
+    async def create_workout(
+        self, user_id: UserId, payload: GarminWorkoutDTO
+    ) -> ExternalWorkoutResult: ...
+
+    async def schedule_workout(
+        self, user_id: UserId, external_workout_id: str, scheduled_date: date
+    ) -> ExternalScheduleResult: ...
+
+    async def find_workout_by_source_hash(
+        self, user_id: UserId, source_revision_hash: str
+    ) -> ExternalWorkoutResult | None: ...
+
+    async def find_schedule(
+        self, user_id: UserId, external_workout_id: str, scheduled_date: date
+    ) -> ExternalScheduleResult | None: ...
 
 
 class GarminCredentialBootstrap(Protocol):

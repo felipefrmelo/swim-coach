@@ -7,17 +7,20 @@ import hashlib
 import importlib
 import importlib.metadata
 from collections.abc import Callable, Mapping
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, TypeVar, cast
 
 from swim_coach.application.ports.garmin import (
     ActivityFilter,
+    ExternalScheduleResult,
+    ExternalWorkoutResult,
     GarminActivitySummaryDTO,
     GarminDeviceDTO,
     GarminErrorCategory,
     GarminProviderCapabilities,
     GarminProviderError,
+    GarminWorkoutDTO,
     ProviderConnectionStatus,
     ProviderPage,
 )
@@ -158,7 +161,9 @@ class GarminConnectProvider:
             observed_version = importlib.metadata.version("garminconnect")
         except importlib.metadata.PackageNotFoundError:
             observed_version = "unknown"
-        self._capabilities = GarminProviderCapabilities(observed_version=observed_version)
+        self._capabilities = GarminProviderCapabilities(
+            workout_write=True, observed_version=observed_version
+        )
 
     @property
     def capabilities(self) -> GarminProviderCapabilities:
@@ -332,3 +337,119 @@ class GarminConnectProvider:
         if len(raw_items) == filters.page_size and not boundary_reached:
             next_cursor = str(offset + filters.page_size)
         return ProviderPage(tuple(mapped), next_cursor)
+
+    async def create_workout(
+        self, user_id: UserId, payload: GarminWorkoutDTO
+    ) -> ExternalWorkoutResult:
+        try:
+            raw = await self._call(user_id, lambda client: client.upload_workout(payload.payload))
+            if not isinstance(raw, Mapping):
+                raise GarminProviderError(
+                    GarminErrorCategory.SCHEMA_CHANGED,
+                    retryable=False,
+                    outcome_ambiguous=True,
+                )
+            external_id = raw.get("workoutId", raw.get("id"))
+            if not isinstance(external_id, str | int):
+                raise GarminProviderError(
+                    GarminErrorCategory.SCHEMA_CHANGED,
+                    retryable=False,
+                    outcome_ambiguous=True,
+                )
+            return ExternalWorkoutResult(str(external_id), cast(JsonObject, _json_safe(raw)))
+        except GarminProviderError as exc:
+            if exc.category in {GarminErrorCategory.NETWORK, GarminErrorCategory.UNKNOWN}:
+                raise GarminProviderError(
+                    exc.category,
+                    retryable=exc.retryable,
+                    retry_after_seconds=exc.retry_after_seconds,
+                    outcome_ambiguous=True,
+                ) from exc
+            raise
+
+    async def schedule_workout(
+        self, user_id: UserId, external_workout_id: str, scheduled_date: date
+    ) -> ExternalScheduleResult:
+        try:
+            raw = await self._call(
+                user_id,
+                lambda client: client.schedule_workout(
+                    external_workout_id, scheduled_date.isoformat()
+                ),
+            )
+            if not isinstance(raw, Mapping):
+                raise GarminProviderError(
+                    GarminErrorCategory.SCHEMA_CHANGED,
+                    retryable=False,
+                    outcome_ambiguous=True,
+                )
+            external_schedule_id = raw.get("scheduledWorkoutId", raw.get("id"))
+            if not isinstance(external_schedule_id, str | int):
+                external_schedule_id = None
+            return ExternalScheduleResult(
+                str(external_schedule_id) if external_schedule_id is not None else None,
+                scheduled_date,
+                cast(JsonObject, _json_safe(raw)),
+            )
+        except GarminProviderError as exc:
+            if exc.category in {GarminErrorCategory.NETWORK, GarminErrorCategory.UNKNOWN}:
+                raise GarminProviderError(
+                    exc.category,
+                    retryable=exc.retryable,
+                    retry_after_seconds=exc.retry_after_seconds,
+                    outcome_ambiguous=True,
+                ) from exc
+            raise
+
+    async def find_workout_by_source_hash(
+        self, user_id: UserId, source_revision_hash: str
+    ) -> ExternalWorkoutResult | None:
+        marker = f"[swim-coach:{source_revision_hash}]"
+        raw_items = await self._call(user_id, lambda client: client.get_workouts(0, 100))
+        for raw in raw_items:
+            if not isinstance(raw, Mapping) or marker not in str(raw.get("description", "")):
+                continue
+            external_id = raw.get("workoutId", raw.get("id"))
+            if isinstance(external_id, str | int):
+                return ExternalWorkoutResult(str(external_id), cast(JsonObject, _json_safe(raw)))
+        return None
+
+    async def find_schedule(
+        self, user_id: UserId, external_workout_id: str, scheduled_date: date
+    ) -> ExternalScheduleResult | None:
+        raw = await self._call(
+            user_id,
+            lambda client: client.get_scheduled_workouts(scheduled_date.year, scheduled_date.month),
+        )
+        for item in _walk_mappings(raw):
+            workout_id = item.get(
+                "workoutId",
+                item.get("workout", {}).get("workoutId")
+                if isinstance(item.get("workout"), Mapping)
+                else None,
+            )
+            item_date = item.get("date", item.get("calendarDate"))
+            if (
+                str(workout_id) != external_workout_id
+                or str(item_date)[:10] != scheduled_date.isoformat()
+            ):
+                continue
+            schedule_id = item.get("scheduledWorkoutId", item.get("id"))
+            return ExternalScheduleResult(
+                str(schedule_id) if isinstance(schedule_id, str | int) else None,
+                scheduled_date,
+                cast(JsonObject, _json_safe(item)),
+            )
+        return None
+
+
+def _walk_mappings(value: object) -> list[Mapping[str, Any]]:
+    result: list[Mapping[str, Any]] = []
+    if isinstance(value, Mapping):
+        result.append(value)
+        for child in value.values():
+            result.extend(_walk_mappings(child))
+    elif isinstance(value, list | tuple):
+        for child in value:
+            result.extend(_walk_mappings(child))
+    return result

@@ -17,6 +17,8 @@ class PlannedWorkoutStatus(StrEnum):
     DRAFT = "draft"
     APPROVED = "approved"
     SCHEDULED = "scheduled"
+    PUBLISHED = "published"
+    COMPLETED = "completed"
     CANCELLED = "cancelled"
     ARCHIVED = "archived"
 

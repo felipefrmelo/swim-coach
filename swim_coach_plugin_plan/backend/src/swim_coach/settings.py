@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     garmin_active_key_version: str | None = None
     garmin_sync_lookback_days: int = Field(default=90, ge=1, le=365)
     garmin_sync_overlap_seconds: int = Field(default=172_800, ge=0, le=604_800)
+    garmin_read_enabled: bool = True
+    garmin_write_enabled: bool = False
+    garmin_write_mode: Literal["disabled", "fake", "live"] = "disabled"
+    garmin_write_canary_only: bool = True
+    garmin_write_canary_title_prefix: str = "[CANARY]"
 
     @model_validator(mode="after")
     def validate_oauth_metadata(self) -> "Settings":
@@ -81,6 +86,18 @@ class Settings(BaseSettings):
             keyring = self.garmin_keyring
             if self.garmin_active_key_version not in keyring:
                 raise ValueError("garmin_active_key_version is not present in garmin_master_keys")
+        if self.garmin_write_enabled and self.garmin_write_mode == "disabled":
+            raise ValueError("garmin_write_enabled requires fake or live write mode")
+        if self.environment == "production" and self.garmin_write_mode == "fake":
+            raise ValueError("fake Garmin writes are forbidden in production")
+        if (
+            self.garmin_write_enabled
+            and self.garmin_write_mode == "live"
+            and self.garmin_master_keys is None
+        ):
+            raise ValueError("live Garmin writes require encrypted Garmin credentials")
+        if not self.garmin_write_canary_title_prefix.strip():
+            raise ValueError("garmin_write_canary_title_prefix cannot be empty")
         if (self.dev_auth_enabled or self.oidc_issuer is not None) and not (
             self.allowed_emails or self.allowed_subjects
         ):

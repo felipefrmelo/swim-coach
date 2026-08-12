@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### P07 — publicação Garmin pela PWA (gate real pendente)
+
+- adicionados proposal/approval/execution/binding com hash canônico, expiração,
+  optimistic locking, constraints e migration `000004`;
+- implementado compilador determinístico e adapter Garmin de escrita isolado;
+- criada revisão PWA de impacto com aprovação explícita e dois jobs idempotentes;
+- resultados ambíguos agora são consultados externamente antes de qualquer retry;
+- adicionados kill switch, flags read/write independentes e canário live obrigatório;
+- provados 50 unitários, 14 integrações e E2E mobile fake; o gate permanece aberto
+  até a única escrita real descartável ser confirmada sem duplicação.
+
 ### P04 — treino canônico, calendário e editor PWA
 
 - criado modelo canônico provider-neutral com steps/repeats discriminados,

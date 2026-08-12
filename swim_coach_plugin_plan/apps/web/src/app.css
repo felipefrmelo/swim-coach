@@ -57,6 +57,21 @@
   .segmented-control { display: grid; grid-template-columns: 1fr 1fr; border-radius: 16px; background: #e2e8f0; padding: 4px; }
   .segmented-control button { min-height: 44px; border-radius: 12px; color: #64748b; font-size: .875rem; font-weight: 700; }
   .segmented-control button.active { background: white; color: #155e75; box-shadow: 0 4px 16px rgb(15 23 42 / 8%); }
+  .garmin-publish-card { overflow: hidden; border: 1px solid #a5f3fc; border-radius: 24px; background: linear-gradient(145deg, #fff 60%, #ecfeff); padding: 24px; box-shadow: 0 18px 52px rgb(8 47 73 / 8%); }
+  .impact-flow { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; border-radius: 20px; background: #f8fafc; padding: 16px; }
+  .impact-label { margin-bottom: 4px; color: #0e7490; font-size: .7rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+  .impact-row { display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; }
+  .impact-row dt { color: #64748b; }
+  .impact-row dd { max-width: 65%; text-align: right; font-weight: 600; }
+  .sticky-action-zone { display: grid; gap: 12px; margin: 24px -24px -24px; border-top: 1px solid #e2e8f0; background: rgb(255 255 255 / 96%); padding: 16px 24px calc(16px + env(safe-area-inset-bottom)); }
+  .execution-timeline { display: grid; gap: 0; }
+  .execution-timeline li { display: grid; min-height: 48px; grid-template-columns: 32px 1fr; align-items: center; gap: 10px; color: #94a3b8; font-size: .875rem; font-weight: 650; }
+  .execution-timeline li span { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 999px; background: #f1f5f9; }
+  .execution-timeline li span svg { width: 15px; height: 15px; }
+  .execution-timeline li.done { color: #047857; }
+  .execution-timeline li.done span { background: #d1fae5; }
+  .execution-timeline li.active { color: #0e7490; }
+  .execution-timeline li.active span { background: #cffafe; }
 }
 
 @media (min-width: 640px) {

@@ -13,6 +13,15 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from swim_coach.application.ports.repositories import UnitOfWork
+from swim_coach.domain.actions import (
+    ActionApproval,
+    ActionExecution,
+    ActionExecutionStatus,
+    ActionProposal,
+    ActionProposalStatus,
+    ExternalWorkoutBinding,
+    ExternalWorkoutBindingStatus,
+)
 from swim_coach.domain.athlete import (
     AthleteConstraint,
     AthleteProfile,
@@ -68,6 +77,9 @@ from swim_coach.domain.workouts import (
     WorkoutTotals,
 )
 from swim_coach.infrastructure.db.models import (
+    ActionApprovalModel,
+    ActionExecutionModel,
+    ActionProposalModel,
     ActivityImportModel,
     ActivityModel,
     ApiIdempotencyRecordModel,
@@ -78,6 +90,7 @@ from swim_coach.infrastructure.db.models import (
     AuthIdentityModel,
     AvailabilityRuleModel,
     DeviceModel,
+    ExternalWorkoutBindingModel,
     GarminConnectionModel,
     GoalMilestoneModel,
     JobModel,
@@ -287,6 +300,63 @@ def _job(model: JobModel) -> Job:
         created_at=model.created_at,
         updated_at=model.updated_at,
         finished_at=model.finished_at,
+        version=model.version,
+    )
+
+
+def _action_proposal(model: ActionProposalModel) -> ActionProposal:
+    return ActionProposal(
+        id=EntityId(model.id),
+        user_id=UserId(model.user_id),
+        action_type=model.action_type,
+        target_type=model.target_type,
+        target_id=EntityId(model.target_id),
+        target_revision_id=EntityId(model.target_revision_id),
+        payload=_json(model.payload_json),
+        impact=_json(model.impact_json),
+        action_hash=model.action_hash,
+        expires_at=model.expires_at,
+        status=ActionProposalStatus(model.status),
+        created_at=model.created_at,
+        updated_at=model.updated_at,
+        version=model.version,
+    )
+
+
+def _action_execution(model: ActionExecutionModel) -> ActionExecution:
+    return ActionExecution(
+        id=EntityId(model.id),
+        proposal_id=EntityId(model.proposal_id),
+        user_id=UserId(model.user_id),
+        idempotency_key=model.idempotency_key,
+        status=ActionExecutionStatus(model.status),
+        result=_json(model.result_json) if model.result_json else None,
+        error=_json(model.error_json_redacted) if model.error_json_redacted else None,
+        started_at=model.started_at,
+        finished_at=model.finished_at,
+        created_at=model.created_at,
+        updated_at=model.updated_at,
+        version=model.version,
+    )
+
+
+def _external_workout_binding(model: ExternalWorkoutBindingModel) -> ExternalWorkoutBinding:
+    return ExternalWorkoutBinding(
+        id=EntityId(model.id),
+        user_id=UserId(model.user_id),
+        workout_id=EntityId(model.workout_id),
+        revision_id=EntityId(model.revision_id),
+        provider=model.provider,
+        compiled_hash=model.compiled_hash,
+        status=ExternalWorkoutBindingStatus(model.status),
+        external_workout_id=model.external_workout_id,
+        external_schedule_id=model.external_schedule_id,
+        scheduled_date=model.scheduled_date,
+        last_error=(
+            _json(model.last_error_json_redacted) if model.last_error_json_redacted else None
+        ),
+        created_at=model.created_at,
+        updated_at=model.updated_at,
         version=model.version,
     )
 
@@ -1369,6 +1439,218 @@ class SqlAlchemyWorkoutTemplatesRepository:
         )
 
 
+class SqlAlchemyActionProposalsRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get(self, user_id: UserId, proposal_id: EntityId) -> ActionProposal | None:
+        statement = select(ActionProposalModel).where(
+            ActionProposalModel.id == proposal_id.value,
+            ActionProposalModel.user_id == user_id.value,
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _action_proposal(model) if model else None
+
+    async def get_by_hash(self, user_id: UserId, action_hash: str) -> ActionProposal | None:
+        statement = select(ActionProposalModel).where(
+            ActionProposalModel.user_id == user_id.value,
+            ActionProposalModel.action_hash == action_hash,
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _action_proposal(model) if model else None
+
+    async def list_recent(self, user_id: UserId, *, limit: int = 50) -> Sequence[ActionProposal]:
+        statement = (
+            select(ActionProposalModel)
+            .where(ActionProposalModel.user_id == user_id.value)
+            .order_by(ActionProposalModel.created_at.desc())
+            .limit(limit)
+        )
+        return [_action_proposal(model) for model in await self._session.scalars(statement)]
+
+    async def add(self, proposal: ActionProposal) -> None:
+        self._session.add(
+            ActionProposalModel(
+                id=proposal.id.value,
+                user_id=proposal.user_id.value,
+                action_type=proposal.action_type,
+                target_type=proposal.target_type,
+                target_id=proposal.target_id.value,
+                target_revision_id=proposal.target_revision_id.value,
+                payload_json=proposal.payload,
+                impact_json=proposal.impact,
+                action_hash=proposal.action_hash,
+                status=proposal.status.value,
+                expires_at=proposal.expires_at,
+                created_at=proposal.created_at,
+                updated_at=proposal.updated_at,
+                version=proposal.version,
+            )
+        )
+
+    async def update(self, proposal: ActionProposal, *, expected_version: int) -> None:
+        statement = (
+            update(ActionProposalModel)
+            .where(
+                ActionProposalModel.id == proposal.id.value,
+                ActionProposalModel.user_id == proposal.user_id.value,
+                ActionProposalModel.version == expected_version,
+            )
+            .values(
+                status=proposal.status.value,
+                updated_at=proposal.updated_at,
+                version=proposal.version,
+            )
+            .returning(ActionProposalModel.version)
+        )
+        if (await self._session.scalar(statement)) is None:
+            raise RevisionConflictError(expected_version)
+
+
+class SqlAlchemyActionApprovalsRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, approval: ActionApproval) -> None:
+        self._session.add(
+            ActionApprovalModel(
+                id=approval.id.value,
+                proposal_id=approval.proposal_id.value,
+                user_id=approval.user_id.value,
+                action_hash=approval.action_hash,
+                decision=approval.decision.value,
+                explicit_verb=approval.explicit_verb,
+                created_at=approval.created_at,
+            )
+        )
+
+
+class SqlAlchemyActionExecutionsRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_by_proposal(
+        self, user_id: UserId, proposal_id: EntityId
+    ) -> ActionExecution | None:
+        statement = select(ActionExecutionModel).where(
+            ActionExecutionModel.user_id == user_id.value,
+            ActionExecutionModel.proposal_id == proposal_id.value,
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _action_execution(model) if model else None
+
+    async def add(self, execution: ActionExecution) -> None:
+        self._session.add(
+            ActionExecutionModel(
+                id=execution.id.value,
+                proposal_id=execution.proposal_id.value,
+                user_id=execution.user_id.value,
+                idempotency_key=execution.idempotency_key,
+                status=execution.status.value,
+                result_json=execution.result,
+                error_json_redacted=execution.error,
+                started_at=execution.started_at,
+                finished_at=execution.finished_at,
+                created_at=execution.created_at,
+                updated_at=execution.updated_at,
+                version=execution.version,
+            )
+        )
+
+    async def update(self, execution: ActionExecution, *, expected_version: int) -> None:
+        statement = (
+            update(ActionExecutionModel)
+            .where(
+                ActionExecutionModel.id == execution.id.value,
+                ActionExecutionModel.user_id == execution.user_id.value,
+                ActionExecutionModel.version == expected_version,
+            )
+            .values(
+                status=execution.status.value,
+                result_json=execution.result,
+                error_json_redacted=execution.error,
+                started_at=execution.started_at,
+                finished_at=execution.finished_at,
+                updated_at=execution.updated_at,
+                version=execution.version,
+            )
+            .returning(ActionExecutionModel.version)
+        )
+        if (await self._session.scalar(statement)) is None:
+            raise RevisionConflictError(expected_version)
+
+
+class SqlAlchemyExternalWorkoutBindingsRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get(self, user_id: UserId, binding_id: EntityId) -> ExternalWorkoutBinding | None:
+        statement = select(ExternalWorkoutBindingModel).where(
+            ExternalWorkoutBindingModel.id == binding_id.value,
+            ExternalWorkoutBindingModel.user_id == user_id.value,
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _external_workout_binding(model) if model else None
+
+    async def get_by_revision_hash(
+        self,
+        user_id: UserId,
+        provider: str,
+        revision_id: EntityId,
+        compiled_hash: str,
+    ) -> ExternalWorkoutBinding | None:
+        statement = select(ExternalWorkoutBindingModel).where(
+            ExternalWorkoutBindingModel.user_id == user_id.value,
+            ExternalWorkoutBindingModel.provider == provider,
+            ExternalWorkoutBindingModel.revision_id == revision_id.value,
+            ExternalWorkoutBindingModel.compiled_hash == compiled_hash,
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _external_workout_binding(model) if model else None
+
+    async def add(self, binding: ExternalWorkoutBinding) -> None:
+        self._session.add(
+            ExternalWorkoutBindingModel(
+                id=binding.id.value,
+                user_id=binding.user_id.value,
+                workout_id=binding.workout_id.value,
+                revision_id=binding.revision_id.value,
+                provider=binding.provider,
+                compiled_hash=binding.compiled_hash,
+                status=binding.status.value,
+                external_workout_id=binding.external_workout_id,
+                external_schedule_id=binding.external_schedule_id,
+                scheduled_date=binding.scheduled_date,
+                last_error_json_redacted=binding.last_error,
+                created_at=binding.created_at,
+                updated_at=binding.updated_at,
+                version=binding.version,
+            )
+        )
+
+    async def update(self, binding: ExternalWorkoutBinding, *, expected_version: int) -> None:
+        statement = (
+            update(ExternalWorkoutBindingModel)
+            .where(
+                ExternalWorkoutBindingModel.id == binding.id.value,
+                ExternalWorkoutBindingModel.user_id == binding.user_id.value,
+                ExternalWorkoutBindingModel.version == expected_version,
+            )
+            .values(
+                status=binding.status.value,
+                external_workout_id=binding.external_workout_id,
+                external_schedule_id=binding.external_schedule_id,
+                scheduled_date=binding.scheduled_date,
+                last_error_json_redacted=binding.last_error,
+                updated_at=binding.updated_at,
+                version=binding.version,
+            )
+            .returning(ExternalWorkoutBindingModel.version)
+        )
+        if (await self._session.scalar(statement)) is None:
+            raise RevisionConflictError(expected_version)
+
+
 class SqlAlchemyJobsRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -1539,6 +1821,31 @@ class SqlAlchemyJobsRepository:
                 JobModel.locked_by == worker_id,
             )
             .values(**values)
+            .returning(JobModel.id)
+        )
+        return (await self._session.scalar(statement)) is not None
+
+    async def mark_needs_reconciliation(
+        self, job_id: EntityId, worker_id: str, at: datetime, *, error: JsonObject
+    ) -> bool:
+        statement = (
+            update(JobModel)
+            .where(
+                JobModel.id == job_id.value,
+                JobModel.status == JobStatus.LEASED.value,
+                JobModel.locked_by == worker_id,
+            )
+            .values(
+                status=JobStatus.NEEDS_RECONCILIATION.value,
+                finished_at=at,
+                updated_at=at,
+                last_error_json_redacted=error,
+                locked_by=None,
+                locked_at=None,
+                heartbeat_at=None,
+                lease_expires_at=None,
+                version=JobModel.version + 1,
+            )
             .returning(JobModel.id)
         )
         return (await self._session.scalar(statement)) is not None
@@ -1746,6 +2053,10 @@ class SqlAlchemyUnitOfWork:
         self.workout_revisions = SqlAlchemyWorkoutRevisionsRepository(self._session)
         self.workout_schedules = SqlAlchemyWorkoutSchedulesRepository(self._session)
         self.workout_templates = SqlAlchemyWorkoutTemplatesRepository(self._session)
+        self.action_proposals = SqlAlchemyActionProposalsRepository(self._session)
+        self.action_approvals = SqlAlchemyActionApprovalsRepository(self._session)
+        self.action_executions = SqlAlchemyActionExecutionsRepository(self._session)
+        self.external_workout_bindings = SqlAlchemyExternalWorkoutBindingsRepository(self._session)
         self.jobs = SqlAlchemyJobsRepository(self._session)
         self.outbox = SqlAlchemyOutboxRepository(self._session)
         self.audit = SqlAlchemyAuditRepository(self._session)

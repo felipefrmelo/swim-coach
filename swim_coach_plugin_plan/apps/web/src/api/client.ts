@@ -13,6 +13,7 @@ import type {
   CanonicalWorkout,
   Workout,
   WorkoutValidation,
+  GarminActionProposal,
 } from "./types";
 
 export class ApiError extends Error {
@@ -140,5 +141,24 @@ export const api = {
       method: "POST",
       headers: { "If-Match": `"${workout.version}"` },
       body: JSON.stringify({ scheduled_date: scheduledDate, scheduled_start_time: startTime, timezone, pool_id: workout.pool_id }),
+    }),
+  previewGarminPublish: (workout: Workout, deviceId: string | null = null) =>
+    request<GarminActionProposal>(`/workouts/${workout.id}/garmin-proposals`, {
+      method: "POST",
+      headers: { "If-Match": `"${workout.version}"` },
+      body: JSON.stringify({ device_id: deviceId }),
+    }),
+  action: (id: string) => request<GarminActionProposal>(`/actions/${id}`),
+  approveAction: (proposal: GarminActionProposal) =>
+    request<GarminActionProposal>(`/actions/${proposal.id}/approve`, {
+      method: "POST",
+      headers: { "If-Match": `"${proposal.version}"` },
+      body: JSON.stringify({ action_hash: proposal.action_hash }),
+    }),
+  rejectAction: (proposal: GarminActionProposal) =>
+    request<GarminActionProposal>(`/actions/${proposal.id}/reject`, {
+      method: "POST",
+      headers: { "If-Match": `"${proposal.version}"` },
+      body: JSON.stringify({ action_hash: proposal.action_hash }),
     }),
 };

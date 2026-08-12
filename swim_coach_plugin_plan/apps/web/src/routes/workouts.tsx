@@ -8,18 +8,24 @@ import {
   CalendarCheck,
   CheckCircle2,
   ChevronRight,
+  Clock3,
   CopyPlus,
   Plus,
   Repeat2,
   Save,
+  Send,
+  ShieldCheck,
   TimerReset,
   Trash2,
   Waves,
+  Watch,
+  XCircle,
 } from "lucide-react";
 
 import { api } from "../api/client";
 import type {
   CanonicalWorkout,
+  GarminActionProposal,
   Workout,
   WorkoutNode,
   WorkoutPurpose,
@@ -36,7 +42,7 @@ const purposeLabels: Record<WorkoutPurpose, string> = {
 
 const statusLabels: Record<Workout["status"], string> = {
   draft: "Rascunho", approved: "Aprovado localmente", scheduled: "Agendado",
-  cancelled: "Cancelado", archived: "Arquivado",
+  published: "Publicado", completed: "Concluído", cancelled: "Cancelado", archived: "Arquivado",
 };
 
 function starterWorkout(poolLength = 20): CanonicalWorkout {
@@ -162,6 +168,7 @@ function WorkoutEditor({ poolId, initial, existing }: { poolId: string; initial:
       {save.isError && <ErrorState message="Não foi possível salvar. Recarregue se outra revisão foi criada." />}{save.isSuccess && <SavedNotice>Revisão imutável salva.</SavedNotice>}
       <button className="primary-button gap-2" type="button" disabled={save.isPending || !definition.title || definition.nodes.length === 0} onClick={() => save.mutate()}><Save className="size-4" />{save.isPending ? "Salvando…" : existing ? "Salvar nova revisão" : "Criar rascunho"}</button>
       {existing && <RevisionAndSchedule workout={existing} approve={() => approve.mutate()} approvePending={approve.isPending} scheduleDate={scheduleDate} setScheduleDate={setScheduleDate} scheduleTime={scheduleTime} setScheduleTime={setScheduleTime} schedule={() => schedule.mutate()} schedulePending={schedule.isPending} />}
+      {existing?.schedule && existing.approved_revision_id === existing.current_revision_id && <GarminPublishPanel workout={existing} />}
     </Page>
   );
 }
@@ -183,6 +190,43 @@ function RevisionAndSchedule({ workout, approve, approvePending, scheduleDate, s
   const currentApproved = workout.approved_revision_id === workout.current_revision_id;
   return <><section className="surface-card"><div className="flex items-start gap-4"><span className="icon-chip"><CopyPlus className="size-5" /></span><div><h2 className="section-title">Histórico imutável</h2><p className="mt-1 text-sm text-slate-600">{workout.revisions.length} revisões · hash {workout.current_revision.content_hash.slice(0, 12)}…</p></div></div><ol className="mt-5 grid gap-2">{workout.revisions.map((revision) => <li className="check-row" key={revision.id}><CheckCircle2 className="size-4" />Revisão {revision.revision_number} · {revision.validation.totals.distance_m.toLocaleString("pt-BR")} m</li>)}</ol>{!currentApproved && <button className="secondary-button mt-5 w-full gap-2" type="button" disabled={approvePending || !workout.current_revision.validation.valid} onClick={approve}><CheckCircle2 className="size-4" />{approvePending ? "Aprovando…" : "Aprovar esta revisão localmente"}</button>}</section><section className="surface-card form-stack"><div><p className="eyebrow">Calendário local</p><h2 className="section-title mt-1">Agendar sessão</h2></div><div className="grid grid-cols-2 gap-3"><Field label="Data"><input type="date" value={scheduleDate} onChange={(event) => setScheduleDate(event.target.value)} /></Field><Field label="Horário"><input type="time" value={scheduleTime} onChange={(event) => setScheduleTime(event.target.value)} /></Field></div><button className="primary-button gap-2" type="button" disabled={!currentApproved || schedulePending} onClick={schedule}><CalendarCheck className="size-4" />{schedulePending ? "Agendando…" : workout.schedule ? "Reagendar treino" : "Agendar treino"}</button>{!currentApproved && <p className="text-sm text-amber-700">Aprove a revisão atual antes de agendar.</p>}</section></>;
 }
+
+function GarminPublishPanel({ workout }: { workout: Workout }) {
+  const queryClient = useQueryClient();
+  const [proposalId, setProposalId] = useState<string | null>(null);
+  const action = useQuery({
+    queryKey: ["action", proposalId],
+    queryFn: () => api.action(proposalId!),
+    enabled: Boolean(proposalId),
+    refetchInterval: (query) => ["QUEUED", "EXECUTING"].includes(query.state.data?.status ?? "") ? 1500 : false,
+  });
+  const preview = useMutation({
+    mutationFn: () => api.previewGarminPublish(workout),
+    onSuccess: (proposal) => { setProposalId(proposal.id); queryClient.setQueryData(["action", proposal.id], proposal); },
+  });
+  const proposal = action.data ?? preview.data;
+  const approve = useMutation({
+    mutationFn: () => api.approveAction(proposal!),
+    onSuccess: (approved) => { queryClient.setQueryData(["action", approved.id], approved); setProposalId(approved.id); },
+  });
+  const reject = useMutation({
+    mutationFn: () => api.rejectAction(proposal!),
+    onSuccess: (rejected) => { queryClient.setQueryData(["action", rejected.id], rejected); setProposalId(rejected.id); },
+  });
+  if (!proposal) return <section className="garmin-publish-card"><div className="flex items-start gap-4"><span className="icon-chip"><Watch className="size-5" /></span><div className="min-w-0 flex-1"><p className="eyebrow">Efeito externo · P07</p><h2 className="section-title mt-1">Revisar publicação Garmin</h2><p className="mt-2 text-sm leading-6 text-slate-600">Primeiro geramos uma proposta sem chamar a Garmin. Você verá data, relógio, distância e hash antes de aprovar.</p></div></div>{preview.isError && <div className="mt-4"><ErrorState message="Não foi possível montar a proposta. Confira a conexão e os dispositivos importados." /></div>}<button className="primary-button mt-6 w-full gap-2" type="button" disabled={preview.isPending} onClick={() => preview.mutate()}><ShieldCheck className="size-4" />{preview.isPending ? "Gerando revisão…" : "Revisar antes de publicar"}</button></section>;
+  return <GarminProposalReview proposal={proposal} approve={() => approve.mutate()} reject={() => reject.mutate()} pending={approve.isPending || reject.isPending} />;
+}
+
+function GarminProposalReview({ proposal, approve, reject, pending }: { proposal: GarminActionProposal; approve: () => void; reject: () => void; pending: boolean }) {
+  const impact = proposal.impact;
+  const reviewing = proposal.status === "READY_FOR_REVIEW";
+  const distance = impact.distance_m.toLocaleString("pt-BR");
+  const statusText: Record<GarminActionProposal["status"], string> = { DRAFT: "Preparando", READY_FOR_REVIEW: "Aguardando sua decisão", APPROVED: "Aprovado", REJECTED: "Não publicado", EXPIRED: "Proposta expirada", QUEUED: "Na fila segura", EXECUTING: "Publicando e conferindo", SUCCEEDED: "Publicado e agendado", FAILED: "Publicação não concluída", NEEDS_RECONCILIATION: "Verificação manual necessária", CANCELLED: "Cancelado" };
+  return <section className="garmin-publish-card" aria-live="polite"><div className="flex items-start gap-4"><span className="icon-chip"><Send className="size-5" /></span><div className="min-w-0 flex-1"><p className="eyebrow">Revisão de impacto</p><h2 className="section-title mt-1">{statusText[proposal.status]}</h2><p className="mt-2 text-sm text-slate-600">Aprovação vinculada ao hash <code>{proposal.action_hash.slice(0, 12)}…</code></p></div><span className="badge">{distance} m</span></div><div className="impact-flow mt-6"><div><p className="impact-label">Agora</p><p className="font-semibold">Treino local aprovado</p><p className="text-sm text-slate-500">Sem alteração na Garmin</p></div><ChevronRight className="size-5 text-cyan-700" /><div><p className="impact-label">Depois</p><p className="font-semibold">Biblioteca + calendário Garmin</p><p className="text-sm text-slate-500">{new Intl.DateTimeFormat("pt-BR", { dateStyle: "long", timeZone: "UTC" }).format(new Date(`${impact.scheduled_date}T12:00:00Z`))}</p></div></div><dl className="mt-5 grid gap-3 text-sm"><div className="impact-row"><dt>Relógio</dt><dd>{impact.device.name} · {impact.device.model}</dd></div><div className="impact-row"><dt>Payload compilado</dt><dd><code>{proposal.compiled_hash.slice(0, 12)}…</code></dd></div><div className="impact-row"><dt>Efeitos</dt><dd>Criar 1 treino e adicionar 1 data</dd></div></dl>{impact.warnings.length > 0 && <div className="setup-notice mt-5"><AlertTriangle className="size-5" /><div><p className="font-semibold">Adaptações explícitas</p>{impact.warnings.map((warning) => <p className="mt-1" key={warning}>{warningLabel(warning)}</p>)}</div></div>}{reviewing && <div className="sticky-action-zone"><button className="primary-button w-full gap-2" type="button" disabled={pending || !proposal.write_enabled} onClick={approve}><CheckCircle2 className="size-4" />Aprovar publicação de {distance} m</button><button className="secondary-button w-full gap-2" type="button" disabled={pending} onClick={reject}><XCircle className="size-4" />Não publicar</button>{!proposal.write_enabled && <p className="text-center text-sm text-amber-700">O kill switch de escrita está desligado neste ambiente.</p>}</div>}{["QUEUED", "EXECUTING", "SUCCEEDED", "NEEDS_RECONCILIATION", "FAILED"].includes(proposal.status) && <ol className="execution-timeline mt-6"><TimelineStep label="Proposta aprovada" done /><TimelineStep label="Publicar sem duplicar" done={["EXECUTING", "SUCCEEDED"].includes(proposal.status)} active={proposal.status === "QUEUED"} /><TimelineStep label="Agendar e conferir" done={proposal.status === "SUCCEEDED"} active={proposal.status === "EXECUTING"} /><TimelineStep label={proposal.status === "SUCCEEDED" ? "Concluído" : proposal.status === "NEEDS_RECONCILIATION" ? "Aguardando reconciliação" : "Resultado"} done={proposal.status === "SUCCEEDED"} active={proposal.status === "NEEDS_RECONCILIATION"} /></ol>}</section>;
+}
+
+function TimelineStep({ label, done = false, active = false }: { label: string; done?: boolean; active?: boolean }) { return <li className={done ? "done" : active ? "active" : ""}><span>{done ? <CheckCircle2 /> : <Clock3 />}</span><p>{label}</p></li>; }
+function warningLabel(code: string) { return ({ RPE_TARGET_DOWNGRADED_TO_NO_TARGET: "O alvo de esforço fica nas instruções; a Garmin não recebe um alvo RPE estruturado.", PACE_TARGET_DOWNGRADED_TO_NO_TARGET: "O intervalo de ritmo não será enviado como alvo estruturado.", ZONE_TARGET_DOWNGRADED_TO_NO_TARGET: "A zona nomeada não será enviada como alvo estruturado.", DRILL_STROKE_DOWNGRADED_TO_CHOICE: "O educativo será enviado como estilo livre de escolha.", EQUIPMENT_OMITTED_FROM_GARMIN_PAYLOAD: "Os equipamentos permanecem no treino local, mas não no payload Garmin." } as Record<string, string>)[code] ?? code; }
 
 function ValidationPanel({ errors }: { errors: string[] }) { return errors.length ? <section className="validation-panel validation-error"><AlertTriangle className="size-5" /><div><h2 className="font-bold">Revise antes de aprovar</h2>{errors.map((error) => <p className="mt-1 text-sm" key={error}>{error}</p>)}</div></section> : <section className="validation-panel"><CheckCircle2 className="size-5" /><div><h2 className="font-bold">Todas as distâncias terminam na parede</h2><p className="mt-1 text-sm">O domínio fará a mesma validação ao salvar.</p></div></section>; }
 function IconButton({ label, onClick, disabled, children }: { label: string; onClick: () => void; disabled?: boolean; children: React.ReactElement }) { return <button className="icon-button" type="button" aria-label={label} disabled={disabled} onClick={onClick}>{children}</button>; }

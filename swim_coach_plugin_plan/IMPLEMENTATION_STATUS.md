@@ -15,7 +15,7 @@
 | P04 | DONE | P01 | treino válido de 20 m criado/revisado/agendado na PWA | [draft PR #4](https://github.com/felipefrmelo/swim-coach/pull/4) |
 | P05 | NOT_STARTED | P03,P04 | MCP read-only autenticado com dados reais | — |
 | P06 | NOT_STARTED | P05 | plugin/Skills instalados e evals aprovadas | — |
-| P07 | NOT_STARTED | P04 | publicação Garmin pela PWA com aprovação | — |
+| P07 | IN_PROGRESS | P04 | publicação Garmin pela PWA com aprovação | branch `p07-garmin-write-pwa` |
 | P08 | NOT_STARTED | P06,P07 | escrita MCP com scopes/hash/auditoria | — |
 | P09 | NOT_STARTED | P08 | UI MCP opcional e fallback headless | — |
 | P10 | NOT_STARTED | P03,P04,P08 | semana adaptativa explicável | — |
@@ -164,8 +164,23 @@
 
 ### P07
 
-- Estado: `NOT_STARTED`
+- Estado: `IN_PROGRESS`
+- Início: 2026-08-11T22:01:00-03:00
+- Escopo atual: P07-T01..T09 em implementação com provider fake e write real
+  fechado por feature flag; o gate externo continuará pendente até canário real.
+- Implementação local: P07-T01..T09 concluídas; gate real ainda aberto.
 - Evidências:
+  - [`docs/evidence/p07-garmin-write-pwa.md`](docs/evidence/p07-garmin-write-pwa.md)
+  - [`docs/evidence/p07-garmin-publish-mobile.png`](docs/evidence/p07-garmin-publish-mobile.png)
+  - [`docs/handoffs/p07.md`](docs/handoffs/p07.md)
+  - 50 testes unitários e 14 integrações PostgreSQL verdes.
+  - Playwright Chrome 375×812 → proposta, aprovação, publish/schedule fake e sucesso.
+  - Resultado ambíguo reconciliado sem duplicar; IDs fake estáveis entre restarts.
+  - `make check` → 75 testes Python, 2 Vitest, Ruff, mypy, TypeScript,
+    ESLint e validadores verdes; build Vite aprovado.
+  - dependency scan e secret scan (12 commits + árvore) sem achados.
+- Limite: nenhuma escrita externa real; `IN_PROGRESS` até treino descartável real
+  publicado/agendado uma vez e replay confirmado sem duplicata.
 
 ### P08
 

@@ -683,7 +683,8 @@ class PlannedWorkoutModel(Base):
     __table_args__ = (
         CheckConstraint("sport = 'POOL_SWIMMING'", name="ck_planned_workout_sport"),
         CheckConstraint(
-            "status IN ('draft','approved','scheduled','cancelled','archived')",
+            "status IN ('draft','approved','scheduled','published','completed',"
+            "'cancelled','archived')",
             name="ck_planned_workout_status",
         ),
         CheckConstraint("version >= 1", name="ck_planned_workout_version"),
@@ -741,4 +742,148 @@ class WorkoutScheduleModel(Base):
     __table_args__ = (
         UniqueConstraint("workout_id", name="uq_workout_schedule_workout"),
         Index("ix_workout_schedule_date", "scheduled_date"),
+    )
+
+
+class ActionProposalModel(Base):
+    __tablename__ = "action_proposal"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
+    )
+    action_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    target_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    target_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    target_revision_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("workout_revision.id", ondelete="RESTRICT"), nullable=False
+    )
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    impact_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    action_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "action_hash", name="uq_action_proposal_user_hash"),
+        CheckConstraint(
+            "status IN ('DRAFT','READY_FOR_REVIEW','APPROVED','REJECTED','EXPIRED',"
+            "'QUEUED','EXECUTING','SUCCEEDED','FAILED','NEEDS_RECONCILIATION','CANCELLED')",
+            name="ck_action_proposal_status",
+        ),
+        CheckConstraint("expires_at > created_at", name="ck_action_proposal_expiry"),
+        CheckConstraint("version >= 1", name="ck_action_proposal_version"),
+        Index("ix_action_proposal_user_status", "user_id", "status", "created_at"),
+        Index("ix_action_proposal_target", "target_type", "target_id"),
+    )
+
+
+class ActionApprovalModel(Base):
+    __tablename__ = "action_approval"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    proposal_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("action_proposal.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
+    )
+    action_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    decision: Mapped[str] = mapped_column(String(10), nullable=False)
+    explicit_verb: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("proposal_id", name="uq_action_approval_proposal"),
+        CheckConstraint("decision IN ('APPROVE','REJECT')", name="ck_action_approval_decision"),
+        Index("ix_action_approval_user_created", "user_id", "created_at"),
+    )
+
+
+class ActionExecutionModel(Base):
+    __tablename__ = "action_execution"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    proposal_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("action_proposal.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False)
+    result_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    error_json_redacted: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        UniqueConstraint("proposal_id", name="uq_action_execution_proposal"),
+        UniqueConstraint("idempotency_key", name="uq_action_execution_idempotency"),
+        CheckConstraint(
+            "status IN ('QUEUED','EXECUTING','SUCCEEDED','FAILED',"
+            "'NEEDS_RECONCILIATION','CANCELLED')",
+            name="ck_action_execution_status",
+        ),
+        CheckConstraint("version >= 1", name="ck_action_execution_version"),
+        Index("ix_action_execution_user_status", "user_id", "status"),
+    )
+
+
+class ExternalWorkoutBindingModel(Base):
+    __tablename__ = "external_workout_binding"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
+    )
+    workout_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("planned_workout.id", ondelete="CASCADE"), nullable=False
+    )
+    revision_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("workout_revision.id", ondelete="RESTRICT"), nullable=False
+    )
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
+    compiled_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False)
+    external_workout_id: Mapped[str | None] = mapped_column(String(255))
+    external_schedule_id: Mapped[str | None] = mapped_column(String(255))
+    scheduled_date: Mapped[date | None] = mapped_column(Date)
+    last_error_json_redacted: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "provider",
+            "workout_id",
+            "revision_id",
+            "compiled_hash",
+            name="uq_external_workout_binding_revision_hash",
+        ),
+        UniqueConstraint(
+            "user_id",
+            "provider",
+            "external_workout_id",
+            name="uq_external_workout_binding_external",
+        ),
+        CheckConstraint(
+            "status IN ('NOT_CREATED','CREATING','CREATED','SCHEDULING','SCHEDULED',"
+            "'FAILED','NEEDS_RECONCILIATION')",
+            name="ck_external_workout_binding_status",
+        ),
+        CheckConstraint("version >= 1", name="ck_external_workout_binding_version"),
+        Index("ix_external_workout_binding_user_status", "user_id", "status"),
     )
