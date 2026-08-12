@@ -47,6 +47,9 @@ make check
 
 Playwright em Google Chrome, viewport 375×812
   2 fluxos passaram, incluindo a tela Garmin sem input de password
+
+GitHub Actions run 31549934953
+  quality passou em 1m32s, incluindo checks, scans e build das imagens
 ```
 
 O teste PostgreSQL descartável aplica `upgrade head`, `downgrade base` e novo
@@ -81,3 +84,6 @@ Nenhum token, senha, e-mail real ou ID externo foi anexado a esta evidência.
 
 Captura mobile sanitizada do estado pré-conexão:
 [tela Garmin](p02-garmin-mobile.png).
+
+Publicação parcial honesta: commit `3319aa7`, draft
+[PR #3](https://github.com/felipefrmelo/swim-coach/pull/3), empilhado sobre P01.

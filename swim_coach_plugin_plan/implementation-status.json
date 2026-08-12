@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "project": "swim-coach",
   "plan_version": "1.0",
-  "updated_at": "2026-08-11T21:20:51-03:00",
+  "updated_at": "2026-08-11T21:24:04-03:00",
   "active_phase": "P02",
   "phases": [
     {
@@ -61,9 +61,11 @@
         "local:worker:rate-limit-retry-auth-terminal",
         "local:pwa:typescript-eslint-vitest-build",
         "local:playwright:chrome-mobile-garmin-no-browser-password",
-        "garmin:real-read:p00-proof-not-yet-persisted-p02"
+        "garmin:real-read:p00-proof-not-yet-persisted-p02",
+        "https://github.com/felipefrmelo/swim-coach/pull/3",
+        "https://github.com/felipefrmelo/swim-coach/actions/runs/31549934953"
       ],
-      "commit": null
+      "commit": "3319aa7f92594b0d3b45ad795c713af7a9f07e55"
     },
     {
       "id": "P03",

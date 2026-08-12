@@ -19,6 +19,8 @@
 - testes de fixture, criptografia/tamper/rotação, migration, paginação/dedupe,
   rate limit/retry e desconexão estão verdes; o gate permanece aberto até o
   smoke persistente com atividade real e replay sem duplicação.
+- publicado o delta no draft PR #3 com CI completo verde, mantendo o estado
+  `IN_PROGRESS` até a evidência Garmin persistente.
 
 ### P01 — domínio, persistência e identidade
 
