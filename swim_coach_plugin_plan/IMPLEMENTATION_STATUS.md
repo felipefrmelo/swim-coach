@@ -302,6 +302,8 @@
   - bridge mock, viewport móvel, expiração e double-click cobertos por Playwright;
   - documentação oficial OpenAI revalidada em 2026-08-12 para o protocolo e
     metadados atuais.
+  - [GitHub Actions run `31611210574`](https://github.com/felipefrmelo/swim-coach/actions/runs/31611210574)
+    → job `quality` verde em 1m33s.
 - Gate pendente: carregar os cards pela conexão real do ChatGPT, testar revisão e
   decisão em proposal descartável e salvar screenshot/transcript sanitizados.
 

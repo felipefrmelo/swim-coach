@@ -45,6 +45,8 @@ Publication: commit `48729a9`, draft PR #10, based on
 - `make build` completed the Vite and four Compose images; a separate wheel
   inspection confirmed both `ui.py` and the versioned HTML asset are packaged.
 - the rebuilt API image loaded the packaged HTML at runtime (11,481 bytes).
+- GitHub Actions run `31611210574` passed the `quality` job in 1m33s, including
+  the repository gate, dependency/secret scans and container builds.
 
 Sanitized bridge-host screenshot:
 

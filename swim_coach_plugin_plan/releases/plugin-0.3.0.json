@@ -50,8 +50,10 @@
   "publication": {
     "draft_pr": 10,
     "implementation_commit": "48729a97eaa098b6f7c22bc0c9fa6f80294d6596",
+    "verification_commit": "35477b6d1ca91a568f1c7093a4cd66662ad870ed",
+    "ci_run": 31611210574,
     "base_branch": "p08-mcp-controlled-write",
-    "quality": "local_passed_ci_pending"
+    "quality": "local_and_ci_passed"
   },
   "pending_gates": [
     "real ChatGPT host renders all five P09 resources",

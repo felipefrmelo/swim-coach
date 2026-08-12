@@ -216,6 +216,7 @@
         "local:plugin-0.3.0:6-skills:132-evals",
         "github:draft-pr:10",
         "github:commit:48729a9:optional-mcp-apps-ui",
+        "https://github.com/felipefrmelo/swim-coach/actions/runs/31611210574",
         "pending:chatgpt-real-host-card-smoke"
       ],
       "commit": "48729a97eaa098b6f7c22bc0c9fa6f80294d6596"
