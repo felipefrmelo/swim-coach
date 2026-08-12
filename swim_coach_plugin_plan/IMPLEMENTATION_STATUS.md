@@ -324,6 +324,8 @@
   - progresso da meta separado em endurance, pace, consistency e confidence;
   - plugin `0.4.0` com sete Skills e 154 evals, 22 por Skill;
   - release candidate [`releases/plugin-0.4.0.json`](releases/plugin-0.4.0.json).
+  - [GitHub Actions run `31614812787`](https://github.com/felipefrmelo/swim-coach/actions/runs/31614812787)
+    → job `quality` verde em 1m41s.
 - Gate pendente: proposta gerada de atividades reais persistidas, revisada
   humanamente no ChatGPT com decision trace e hashes sanitizados.
 

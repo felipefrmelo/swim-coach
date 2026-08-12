@@ -48,8 +48,10 @@
   "publication": {
     "draft_pr": 11,
     "implementation_commit": "543e3f9",
+    "verification_commit": "79a822c",
+    "ci_run": 31614812787,
     "base_branch": "p09-mcp-apps-ui",
-    "quality": "local_passed_ci_pending"
+    "quality": "local_and_ci_passed"
   },
   "pending_gates": [
     "real athlete-owned weekly proposal reviewed humanly in ChatGPT",

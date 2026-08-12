@@ -50,6 +50,8 @@ Publication: commit `543e3f9`, draft PR #11, based on `p09-mcp-apps-ui`.
 - `make dependency-scan` found no known Python or pnpm vulnerabilities;
 - `make secret-scan` inspected 27 commits and the final directory with no leaks;
 - `make build` completed the Vite production bundle and all four Compose images.
+- GitHub Actions run `31614812787` passed the `quality` job in 1m41s, including
+  tests, scans and container builds from a clean checkout.
 
 ## Security and privacy evidence
 

@@ -237,6 +237,7 @@
         "local:release-candidate:releases/plugin-0.4.0.json",
         "github:draft-pr:11",
         "github:commit:543e3f9:adaptive-weekly-planning",
+        "github:actions:31614812787:quality-pass",
         "pending:real-athlete-week-human-review-chatgpt"
       ],
       "commit": "543e3f9"
