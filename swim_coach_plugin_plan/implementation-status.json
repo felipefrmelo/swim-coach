@@ -3,7 +3,7 @@
   "project": "swim-coach",
   "plan_version": "1.0",
   "updated_at": "2026-08-12T12:44:37-03:00",
-  "active_phase": "P10",
+  "active_phase": "P11",
   "phases": [
     {
       "id": "P00",
@@ -244,8 +244,19 @@
     },
     {
       "id": "P11",
-      "status": "NOT_STARTED",
-      "evidence": [],
+      "status": "IN_PROGRESS",
+      "evidence": [
+        "docs/evidence/p11-automation-offline.md",
+        "docs/handoffs/p11.md",
+        "local:migration-000009:testcontainers-up-down-up",
+        "local:scheduler:timezone-dedupe-next-monday",
+        "local:activity-pipeline:automatic-replay-safe",
+        "local:pwa:workout-read-cache-controlled-actions-denied",
+        "local:feedback:indexeddb-idempotent-reconciliation",
+        "local:operations:metrics-safe-retry-notification-dedupe",
+        "local:quality:118-python:4-vitest:build-4-images",
+        "pending:personal-cycle-offline-screenshot-live-queue-metrics"
+      ],
       "commit": null
     },
     {

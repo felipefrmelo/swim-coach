@@ -9,6 +9,7 @@ from datetime import timedelta
 from swim_coach.application.ports.garmin import GarminWorkoutProvider
 from swim_coach.application.services import (
     ActivityDataService,
+    AutomationService,
     ContextService,
     GarminConnectionService,
     GarminPublishService,
@@ -52,6 +53,7 @@ class AppServices:
     mcp_read: McpReadService
     mcp_write: McpWriteService | None
     planning: PlanningService | None
+    automation: AutomationService | None
 
 
 def build_services(settings: Settings, database: Database | None = None) -> AppServices:
@@ -142,6 +144,19 @@ def build_services(settings: Settings, database: Database | None = None) -> AppS
         activity_data=activity_data,
     )
     planning = PlanningService(uow_factory) if settings.planning_enabled else None
+    automation = (
+        AutomationService(
+            uow_factory,
+            sync_hour=settings.automation_sync_hour,
+            planning_weekday=settings.automation_planning_weekday,
+            planning_hour=settings.automation_planning_hour,
+            retention_days=settings.job_retention_days,
+            sync_enabled=garmin_sync is not None,
+            planning_enabled=planning is not None,
+        )
+        if settings.automation_enabled
+        else None
+    )
     return AppServices(
         database=database,
         uow_factory=uow_factory,
@@ -157,6 +172,7 @@ def build_services(settings: Settings, database: Database | None = None) -> AppS
         activity_data=activity_data,
         mcp_read=mcp_read,
         planning=planning,
+        automation=automation,
         mcp_write=(
             McpWriteService(
                 uow_factory=uow_factory,

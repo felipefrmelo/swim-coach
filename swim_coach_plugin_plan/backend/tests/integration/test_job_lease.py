@@ -1,11 +1,11 @@
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import cast
 
 from sqlalchemy import select
 
 from swim_coach.application.ports.garmin import GarminErrorCategory, GarminProviderError
 from swim_coach.application.services import GarminSyncService, IdentityService
-from swim_coach.domain.operations import Job, JobStatus
+from swim_coach.domain.operations import Job, JobStatus, Notification
 from swim_coach.domain.shared import CorrelationId, EntityId, UserId
 from swim_coach.infrastructure.db import Database, SqlAlchemyUnitOfWorkFactory
 from swim_coach.infrastructure.db.models import JobModel
@@ -152,3 +152,59 @@ async def test_worker_retries_rate_limit_and_terminates_auth_failure(database: D
         assert stored is not None
         assert stored.status == JobStatus.FAILED_TERMINAL.value
         assert stored.finished_at is not None
+
+
+async def test_notification_dedupe_job_metrics_and_retention(database: Database) -> None:
+    uow_factory = SqlAlchemyUnitOfWorkFactory(database.session_factory)
+    identity = IdentityService(
+        uow_factory,
+        allowed_emails=frozenset({"first@example.test"}),
+        allowed_subjects=frozenset(),
+    )
+    user = await identity.ensure_identity(
+        provider="test-oidc",
+        subject="operations-user",
+        email="first@example.test",
+        display_name="Swimmer",
+        claims_snapshot={"email_verified": True},
+        correlation_id=CorrelationId.new(),
+    )
+    first = Notification(
+        id=EntityId.new(),
+        user_id=user.id,
+        notification_type="WEEK_PROPOSAL_READY",
+        dedupe_key="proposal:week:2026-08-17",
+        title="Semana pronta",
+        body="Revise antes de aprovar.",
+    )
+    replay = Notification(
+        id=EntityId.new(),
+        user_id=user.id,
+        notification_type=first.notification_type,
+        dedupe_key=first.dedupe_key,
+        title=first.title,
+        body=first.body,
+    )
+    finished = Job(
+        id=EntityId.new(),
+        user_id=user.id,
+        job_type=Worker.NOOP_JOB_TYPE,
+        payload={},
+        status=JobStatus.SUCCEEDED,
+        created_at=datetime(2026, 6, 1, tzinfo=UTC),
+        updated_at=datetime(2026, 6, 1, tzinfo=UTC),
+        finished_at=datetime(2026, 6, 1, tzinfo=UTC),
+    )
+    async with uow_factory() as uow:
+        inserted = await uow.notifications.add_idempotent(first)
+        repeated = await uow.notifications.add_idempotent(replay)
+        await uow.jobs.add(finished)
+        await uow.commit()
+    assert inserted.id == repeated.id
+
+    async with uow_factory() as uow:
+        assert len(await uow.notifications.list_recent(user.id)) == 1
+        metrics = await uow.jobs.metrics(user.id, datetime(2026, 8, 17, tzinfo=UTC))
+        assert metrics["counts"] == {"SUCCEEDED": 1}
+        assert await uow.jobs.purge_finished(datetime(2026, 7, 1, tzinfo=UTC)) == 1
+        await uow.commit()

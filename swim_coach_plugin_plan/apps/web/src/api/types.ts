@@ -155,6 +155,38 @@ export interface GarminSyncJob {
   status: "QUEUED" | "LEASED" | "RUNNING" | "SUCCEEDED" | "RETRY_SCHEDULED" | "FAILED_TERMINAL" | "NEEDS_RECONCILIATION";
 }
 
+export interface OperationsJob {
+  id: string;
+  job_type: string;
+  status: GarminSyncJob["status"];
+  attempts: number;
+  max_attempts: number;
+  created_at: string;
+  updated_at: string;
+  finished_at: string | null;
+  error_code: string | null;
+  retryable: boolean;
+}
+
+export interface OperationsSnapshot {
+  jobs: OperationsJob[];
+  metrics: {
+    counts: Record<string, number>;
+    oldest_active_age_seconds: number;
+    dead_count: number;
+  };
+}
+
+export interface AppNotification {
+  id: string;
+  notification_type: string;
+  title: string;
+  body: string;
+  link: string | null;
+  read_at: string | null;
+  created_at: string;
+}
+
 export type WorkoutPurpose = "TECHNIQUE" | "BASE" | "ENDURANCE" | "THRESHOLD" | "SPEED" | "RECOVERY" | "TEST" | "MIXED";
 export type WorkoutRole = "WARMUP" | "WORK" | "RECOVERY" | "REST" | "COOLDOWN" | "DRILL" | "OTHER";
 

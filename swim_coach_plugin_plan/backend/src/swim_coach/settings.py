@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     mcp_write_enabled: bool = False
     mcp_ui_enabled: bool = False
     planning_enabled: bool = False
+    automation_enabled: bool = False
+    automation_sync_hour: int = Field(default=6, ge=0, le=23)
+    automation_planning_weekday: int = Field(default=6, ge=0, le=6)
+    automation_planning_hour: int = Field(default=18, ge=0, le=23)
+    job_retention_days: int = Field(default=30, ge=7, le=365)
     pwa_base_url: HttpUrl = HttpUrl("http://127.0.0.1:14173")
     oidc_issuer: HttpUrl | None = None
     oidc_client_id: str | None = None

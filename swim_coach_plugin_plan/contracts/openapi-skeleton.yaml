@@ -117,6 +117,34 @@ paths:
         - {$ref: "#/components/parameters/IdempotencyKey"}
       responses:
         "200": {description: Feedback stored}
+        "409": {description: Idempotency or feedback version conflict}
+  /operations:
+    get:
+      operationId: getOperations
+      responses:
+        "200": {description: User-owned recent jobs and redacted queue metrics}
+  /operations/jobs/{job_id}/retry:
+    post:
+      operationId: retryFailedJob
+      parameters:
+        - {in: path, name: job_id, required: true, schema: {type: string, format: uuid}}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "200": {description: A terminal safe job was scheduled for retry}
+        "404": {$ref: "#/components/responses/Problem"}
+  /operations/notifications:
+    get:
+      operationId: listNotifications
+      responses:
+        "200": {description: User-owned deduplicated notification inbox}
+  /operations/notifications/{notification_id}/read:
+    post:
+      operationId: markNotificationRead
+      parameters:
+        - {in: path, name: notification_id, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200": {description: Notification marked as read}
+        "404": {$ref: "#/components/responses/Problem"}
   /workouts:
     get: {operationId: listWorkouts, responses: {"200": {description: Workout page}}}
     post:

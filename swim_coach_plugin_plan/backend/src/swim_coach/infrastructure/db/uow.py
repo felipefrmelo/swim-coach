@@ -67,6 +67,7 @@ from swim_coach.domain.operations import (
     Job,
     JobStatus,
     McpToolInvocation,
+    Notification,
     OutboxEvent,
 )
 from swim_coach.domain.planning import (
@@ -121,6 +122,7 @@ from swim_coach.infrastructure.db.models import (
     GoalMilestoneModel,
     JobModel,
     McpToolInvocationModel,
+    NotificationModel,
     OidcLoginAttemptModel,
     OutboxEventModel,
     PlannedWorkoutModel,
@@ -366,6 +368,20 @@ def _job(model: JobModel) -> Job:
         updated_at=model.updated_at,
         finished_at=model.finished_at,
         version=model.version,
+    )
+
+
+def _notification(model: NotificationModel) -> Notification:
+    return Notification(
+        id=EntityId(model.id),
+        user_id=UserId(model.user_id),
+        notification_type=model.notification_type,
+        dedupe_key=model.dedupe_key,
+        title=model.title,
+        body=model.body,
+        link=model.link,
+        read_at=model.read_at,
+        created_at=model.created_at,
     )
 
 
@@ -667,6 +683,10 @@ class SqlAlchemyUsersRepository:
         )
         if (await self._session.scalar(statement)) is None:
             raise RevisionConflictError(expected_version)
+
+    async def list_active(self) -> Sequence[AppUser]:
+        statement = select(AppUserModel).where(AppUserModel.status == UserStatus.ACTIVE.value)
+        return [_user(model) for model in await self._session.scalars(statement)]
 
 
 class SqlAlchemyIdentitiesRepository:
@@ -1657,6 +1677,17 @@ class SqlAlchemyActivityDataRepository:
         )
         model = (await self._session.scalars(statement)).one_or_none()
         return _feedback(model) if model else None
+
+    async def list_feedbacks(
+        self, user_id: UserId, activity_ids: Sequence[EntityId]
+    ) -> Sequence[SessionFeedback]:
+        if not activity_ids:
+            return []
+        statement = select(SessionFeedbackModel).where(
+            SessionFeedbackModel.user_id == user_id.value,
+            SessionFeedbackModel.activity_id.in_([item.value for item in activity_ids]),
+        )
+        return [_feedback(model) for model in await self._session.scalars(statement)]
 
     async def upsert_feedback(
         self, feedback: SessionFeedback, *, expected_version: int | None
@@ -2668,6 +2699,105 @@ class SqlAlchemyJobsRepository:
         )
         return (await self._session.scalar(statement)) is not None
 
+    async def list_recent(self, user_id: UserId, *, limit: int = 50) -> Sequence[Job]:
+        statement = (
+            select(JobModel)
+            .where(JobModel.user_id == user_id.value)
+            .order_by(JobModel.created_at.desc())
+            .limit(limit)
+        )
+        return [_job(model) for model in await self._session.scalars(statement)]
+
+    async def metrics(self, user_id: UserId, now: datetime) -> JsonObject:
+        statement = select(JobModel).where(JobModel.user_id == user_id.value)
+        models = list(await self._session.scalars(statement))
+        counts: dict[str, int] = {}
+        active_created: list[datetime] = []
+        active = {JobStatus.QUEUED.value, JobStatus.RETRY_SCHEDULED.value, JobStatus.LEASED.value}
+        for model in models:
+            counts[model.status] = counts.get(model.status, 0) + 1
+            if model.status in active:
+                active_created.append(model.created_at)
+        oldest_age = (
+            max(0, int((now - min(active_created)).total_seconds())) if active_created else 0
+        )
+        return cast(
+            JsonObject,
+            {
+                "counts": counts,
+                "oldest_active_age_seconds": oldest_age,
+                "dead_count": counts.get(JobStatus.FAILED_TERMINAL.value, 0)
+                + counts.get(JobStatus.NEEDS_RECONCILIATION.value, 0),
+            },
+        )
+
+    async def purge_finished(self, before: datetime) -> int:
+        statement = (
+            delete(JobModel)
+            .where(JobModel.finished_at.is_not(None), JobModel.finished_at < before)
+            .returning(JobModel.id)
+        )
+        result = await self._session.execute(statement)
+        return len(result.scalars().all())
+
+
+class SqlAlchemyNotificationsRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add_idempotent(self, notification: Notification) -> Notification:
+        statement = (
+            insert(NotificationModel)
+            .values(
+                id=notification.id.value,
+                user_id=notification.user_id.value,
+                notification_type=notification.notification_type,
+                dedupe_key=notification.dedupe_key,
+                title=notification.title,
+                body=notification.body,
+                link=notification.link,
+                read_at=notification.read_at,
+                created_at=notification.created_at,
+            )
+            .on_conflict_do_nothing(constraint="uq_notification_user_dedupe")
+            .returning(NotificationModel.id)
+        )
+        if await self._session.scalar(statement) is not None:
+            return notification
+        existing = (
+            await self._session.scalars(
+                select(NotificationModel).where(
+                    NotificationModel.user_id == notification.user_id.value,
+                    NotificationModel.dedupe_key == notification.dedupe_key,
+                )
+            )
+        ).one()
+        return _notification(existing)
+
+    async def list_recent(self, user_id: UserId, *, limit: int = 50) -> Sequence[Notification]:
+        statement = (
+            select(NotificationModel)
+            .where(NotificationModel.user_id == user_id.value)
+            .order_by(NotificationModel.created_at.desc())
+            .limit(limit)
+        )
+        return [_notification(model) for model in await self._session.scalars(statement)]
+
+    async def mark_read(
+        self, user_id: UserId, notification_id: EntityId, at: datetime
+    ) -> Notification | None:
+        statement = (
+            update(NotificationModel)
+            .where(
+                NotificationModel.id == notification_id.value,
+                NotificationModel.user_id == user_id.value,
+            )
+            .values(read_at=at)
+            .returning(NotificationModel)
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _notification(model) if model is not None else None
+
 
 class SqlAlchemyOutboxRepository:
     def __init__(self, session: AsyncSession) -> None:
@@ -2904,6 +3034,7 @@ class SqlAlchemyUnitOfWork:
         self.training_decisions = SqlAlchemyTrainingDecisionsRepository(self._session)
         self.external_workout_bindings = SqlAlchemyExternalWorkoutBindingsRepository(self._session)
         self.jobs = SqlAlchemyJobsRepository(self._session)
+        self.notifications = SqlAlchemyNotificationsRepository(self._session)
         self.outbox = SqlAlchemyOutboxRepository(self._session)
         self.audit = SqlAlchemyAuditRepository(self._session)
         self.mcp_tool_invocations = SqlAlchemyMcpToolInvocationsRepository(self._session)

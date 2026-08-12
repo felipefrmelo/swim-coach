@@ -6,6 +6,7 @@ from swim_coach.domain.operations.entities import (
     Job,
     JobStatus,
     McpToolInvocation,
+    Notification,
     OutboxEvent,
 )
 
@@ -15,5 +16,6 @@ __all__ = [
     "Job",
     "JobStatus",
     "McpToolInvocation",
+    "Notification",
     "OutboxEvent",
 ]

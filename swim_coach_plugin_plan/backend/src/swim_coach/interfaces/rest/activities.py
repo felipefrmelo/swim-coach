@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from datetime import datetime
 from decimal import Decimal
 from typing import Annotated
@@ -222,10 +223,14 @@ async def process_activity(
 async def put_feedback(
     activity_id: UUID,
     payload: FeedbackRequest,
+    idempotency_key: IdempotencyHeader,
     authenticated: CsrfAuthenticated,
     services: Services,
     correlation_id: RequestCorrelationId,
 ) -> FeedbackResponse:
+    request_hash = hashlib.sha256(
+        json.dumps(payload.model_dump(mode="json"), sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
     feedback = await services.activity_data.record_feedback(
         authenticated.user.id,
         EntityId(activity_id),
@@ -240,6 +245,8 @@ async def put_feedback(
         expected_version=payload.version,
         actor_id=str(authenticated.user.id),
         correlation_id=correlation_id,
+        idempotency_key=idempotency_key,
+        request_hash=request_hash,
     )
     return FeedbackResponse.from_domain(feedback)
 

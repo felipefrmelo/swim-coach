@@ -15,6 +15,9 @@ import type {
   Workout,
   WorkoutValidation,
   GarminActionProposal,
+  OperationsSnapshot,
+  OperationsJob,
+  AppNotification,
 } from "./types";
 
 export class ApiError extends Error {
@@ -113,6 +116,7 @@ export const api = {
     }),
   saveFeedback: (
     id: string,
+    idempotencyKey: string,
     payload: {
       rpe: number;
       technique_rating: number | null;
@@ -126,6 +130,7 @@ export const api = {
     },
   ) => request<SwimActivityDetail["feedback"]>(`/activities/${id}/feedback`, {
     method: "PUT",
+    headers: { "Idempotency-Key": idempotencyKey },
     body: JSON.stringify(payload),
   }),
   garminSyncRuns: () => request<GarminSyncRun[]>("/integrations/garmin/sync-runs"),
@@ -134,6 +139,13 @@ export const api = {
       method: "POST",
       headers: { "Idempotency-Key": crypto.randomUUID() },
     }),
+  operations: () => request<OperationsSnapshot>("/operations"),
+  retryJob: (id: string) => request<OperationsJob>(`/operations/jobs/${id}/retry`, {
+    method: "POST",
+    headers: { "Idempotency-Key": crypto.randomUUID() },
+  }),
+  notifications: () => request<AppNotification[]>("/operations/notifications"),
+  readNotification: (id: string) => request<AppNotification>(`/operations/notifications/${id}/read`, { method: "POST" }),
   disconnectGarmin: () =>
     request<GarminConnection>("/integrations/garmin", { method: "DELETE" }),
   workouts: () => request<Workout[]>("/workouts"),

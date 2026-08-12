@@ -12,7 +12,12 @@ from swim_coach.application.ports.garmin import (
     GarminWorkoutProvider,
 )
 from swim_coach.application.ports.repositories import UnitOfWorkFactory
-from swim_coach.application.services import ActivityDataService, GarminSyncService
+from swim_coach.application.services import (
+    ActivityDataService,
+    AutomationService,
+    GarminSyncService,
+    PlanningService,
+)
 from swim_coach.bootstrap.container import build_services
 from swim_coach.domain.actions import (
     ActionExecution,
@@ -22,10 +27,11 @@ from swim_coach.domain.actions import (
     ExternalWorkoutBinding,
     ExternalWorkoutBindingStatus,
 )
-from swim_coach.domain.operations import Job
+from swim_coach.domain.operations import Job, Notification
+from swim_coach.domain.planning import PlanningPreferences
 from swim_coach.domain.shared.errors import DomainError, ResourceNotFoundError
 from swim_coach.domain.shared.types import JsonObject
-from swim_coach.domain.shared.value_objects import EntityId, UserId
+from swim_coach.domain.shared.value_objects import CorrelationId, EntityId, UserId
 from swim_coach.domain.workouts import PlannedWorkoutStatus
 from swim_coach.infrastructure.db import Database
 from swim_coach.settings import get_settings
@@ -42,6 +48,7 @@ class Worker:
     GARMIN_PUBLISH_JOB_TYPE = "workout.publish_garmin"
     GARMIN_SCHEDULE_JOB_TYPE = "workout.schedule_garmin"
     ACTIVITY_FETCH_FILE_JOB_TYPE = "activity.fetch_file"
+    PLANNING_JOB_TYPE = "planning.generate_week"
 
     def __init__(
         self,
@@ -51,6 +58,8 @@ class Worker:
         garmin_write_enabled: bool = False,
         *,
         activity_data: ActivityDataService | None = None,
+        automation: AutomationService | None = None,
+        planning: PlanningService | None = None,
         worker_id: str = "worker-p01",
         poll_interval: float = 1.0,
     ) -> None:
@@ -59,12 +68,16 @@ class Worker:
         self._garmin_writer = garmin_writer
         self._garmin_write_enabled = garmin_write_enabled
         self._activity_data = activity_data
+        self._automation = automation
+        self._planning = planning
         self._worker_id = worker_id
         self._poll_interval = poll_interval
 
     async def run_once(self) -> bool:
         if self._uow_factory is None:
             return False
+        if self._automation is not None:
+            await self._automation.tick()
         job_types = {self.NOOP_JOB_TYPE}
         if self._garmin_sync is not None:
             job_types.add(self.GARMIN_SYNC_JOB_TYPE)
@@ -72,6 +85,8 @@ class Worker:
             job_types.update({self.GARMIN_PUBLISH_JOB_TYPE, self.GARMIN_SCHEDULE_JOB_TYPE})
         if self._activity_data is not None:
             job_types.add(self.ACTIVITY_FETCH_FILE_JOB_TYPE)
+        if self._planning is not None:
+            job_types.add(self.PLANNING_JOB_TYPE)
         async with self._uow_factory() as uow:
             job = await uow.jobs.lease_next(
                 self._worker_id,
@@ -89,12 +104,55 @@ class Worker:
             return await self._run_garmin_schedule(job)
         if job.job_type == self.ACTIVITY_FETCH_FILE_JOB_TYPE:
             return await self._run_activity_fetch_file(job)
+        if job.job_type == self.PLANNING_JOB_TYPE:
+            return await self._run_planning(job)
         async with self._uow_factory() as uow:
             succeeded = await uow.jobs.mark_succeeded(job.id, self._worker_id, datetime.now(UTC))
             await uow.commit()
         if not succeeded:
             logger.warning("job_lease_lost", extra={"job_id": str(job.id)})
         return succeeded
+
+    async def _run_planning(self, job: Job) -> bool:
+        if self._uow_factory is None or self._planning is None or job.user_id is None:
+            return await self._finish_failure(job, "PLANNING_JOB_INVALID", retryable=False)
+        raw_week_start = job.payload.get("week_start")
+        try:
+            week_start = (
+                date.fromisoformat(raw_week_start) if isinstance(raw_week_start, str) else None
+            )
+        except ValueError:
+            week_start = None
+        if week_start is None:
+            return await self._finish_failure(job, "PLANNING_JOB_INVALID", retryable=False)
+        try:
+            _run, proposal, _replayed = await self._planning.propose_week(
+                job.user_id,
+                actor_id="automation:p11",
+                week_start=week_start,
+                preferences=PlanningPreferences(),
+                user_notes_present=False,
+                correlation_id=CorrelationId.new(),
+            )
+        except DomainError as exc:
+            return await self._finish_failure(job, exc.code, retryable=False)
+        async with self._uow_factory() as uow:
+            await uow.notifications.add_idempotent(
+                Notification(
+                    id=EntityId.new(),
+                    user_id=job.user_id,
+                    notification_type="WEEK_PROPOSAL_READY",
+                    dedupe_key=f"planning-ready:{proposal.id}",
+                    title="Sua próxima semana está pronta para revisão",
+                    body=(
+                        "A proposta é apenas um rascunho: revise antes de aprovar qualquer treino."
+                    ),
+                    link=f"/actions/{proposal.id}",
+                )
+            )
+            finished = await uow.jobs.mark_succeeded(job.id, self._worker_id, datetime.now(UTC))
+            await uow.commit()
+        return finished
 
     async def _run_activity_fetch_file(self, job: Job) -> bool:
         if self._uow_factory is None or self._activity_data is None or job.user_id is None:
@@ -191,6 +249,18 @@ class Worker:
                 error={"code": code, "retryable": can_retry},
                 retry_at=retry_at,
             )
+            if job.user_id is not None and retry_at is None:
+                await uow.notifications.add_idempotent(
+                    Notification(
+                        id=EntityId.new(),
+                        user_id=job.user_id,
+                        notification_type="AUTOMATION_FAILED",
+                        dedupe_key=f"job-failed:{job.id}",
+                        title="Uma automação precisa de atenção",
+                        body=f"A tarefa {job.job_type} parou com o código {code}.",
+                        link="/operations",
+                    )
+                )
             await uow.commit()
         return finished
 
@@ -577,6 +647,8 @@ async def run_worker() -> None:
             services.garmin_writer,
             garmin_write_enabled=settings.garmin_write_enabled,
             activity_data=services.activity_data,
+            automation=services.automation,
+            planning=services.planning,
         ).run(stop_event)
     finally:
         await database.dispose()

@@ -9,10 +9,13 @@ import {
   NotebookPen,
   Watch,
   Waves,
+  WifiOff,
+  Bell,
   type LucideIcon,
 } from "lucide-react";
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 
 import { api } from "../api/client";
 import type { Me } from "../api/types";
@@ -32,12 +35,34 @@ const navigation: NavigationItem[] = [
   { to: "/availability", label: "Agenda", icon: CalendarDays },
   { to: "/goals", label: "Meta", icon: Goal },
   { to: "/garmin", label: "Garmin", icon: Watch },
+  { to: "/operations", label: "Automações", icon: Bell },
   { to: "/profile", label: "Perfil", icon: CircleUserRound },
 ];
 
 export function AppShell({ me }: { me: Me }) {
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const [offline, setOffline] = useState(!navigator.onLine);
+  const [stale, setStale] = useState(false);
+  const [feedbackConflict, setFeedbackConflict] = useState(false);
+  useEffect(() => {
+    const online = () => { setOffline(false); setStale(false); };
+    const offlineNow = () => setOffline(true);
+    const feedbackNeedsReview = () => setFeedbackConflict(true);
+    const message = (event: MessageEvent<{ type?: string }>) => {
+      if (event.data?.type === "SWIM_COACH_STALE_DATA") setStale(true);
+    };
+    window.addEventListener("online", online);
+    window.addEventListener("offline", offlineNow);
+    window.addEventListener("swim-coach:feedback-conflict", feedbackNeedsReview);
+    navigator.serviceWorker?.addEventListener("message", message);
+    return () => {
+      window.removeEventListener("online", online);
+      window.removeEventListener("offline", offlineNow);
+      window.removeEventListener("swim-coach:feedback-conflict", feedbackNeedsReview);
+      navigator.serviceWorker?.removeEventListener("message", message);
+    };
+  }, []);
   const logout = useMutation({
     mutationFn: api.logout,
     onSuccess: async () => {
@@ -62,6 +87,7 @@ export function AppShell({ me }: { me: Me }) {
       </aside>
 
       <div className="mx-auto min-h-dvh max-w-5xl pb-28 lg:ml-64 lg:pb-8">
+        {(offline || stale || feedbackConflict) && <div className="flex items-center justify-center gap-2 bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-950" role="status"><WifiOff className="size-4" />{feedbackConflict ? "Um feedback offline precisa ser revisado antes de sincronizar." : stale ? "Dados offline podem estar desatualizados. Ações sensíveis exigem conexão." : "Você está offline. Feedbacks serão enviados quando a conexão voltar."}</div>}
         <header className="flex items-center justify-between px-5 pb-4 pt-6 sm:px-8 lg:px-12 lg:pt-10">
           <div className="lg:hidden"><Brand /></div>
           <div className="ml-auto text-right">

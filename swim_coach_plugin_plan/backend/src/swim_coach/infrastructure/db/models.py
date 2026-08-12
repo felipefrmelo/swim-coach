@@ -311,6 +311,27 @@ class JobModel(Base):
     )
 
 
+class NotificationModel(Base):
+    __tablename__ = "notification"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
+    )
+    notification_type: Mapped[str] = mapped_column(String(60), nullable=False)
+    dedupe_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    title: Mapped[str] = mapped_column(String(160), nullable=False)
+    body: Mapped[str] = mapped_column(String(500), nullable=False)
+    link: Mapped[str | None] = mapped_column(String(500))
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "dedupe_key", name="uq_notification_user_dedupe"),
+        Index("ix_notification_user_created", "user_id", "created_at"),
+    )
+
+
 class OutboxEventModel(Base):
     __tablename__ = "outbox_event"
 

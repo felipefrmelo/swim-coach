@@ -5,6 +5,7 @@ import type { Me } from "../api/types";
 import { AvailabilityPage, DashboardPage, GarminPage, GoalsPage, PoolsPage, ProfilePage } from "./pages";
 import { CalendarPage, NewWorkoutPage, WorkoutDetailPage, WorkoutsPage } from "./workouts";
 import { ActivitiesPage, ActivityDetailPage } from "./activities";
+import { OperationsPage } from "./operations";
 
 let authenticatedMe: Me;
 
@@ -21,8 +22,9 @@ const workoutDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: 
 const calendarRoute = createRoute({ getParentRoute: () => rootRoute, path: "/calendar", component: CalendarPage });
 const activitiesRoute = createRoute({ getParentRoute: () => rootRoute, path: "/activities", component: ActivitiesPage });
 const activityDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: "/activities/$activityId", component: ActivityDetailPage });
+const operationsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/operations", component: OperationsPage });
 
-const routeTree = rootRoute.addChildren([indexRoute, profileRoute, poolsRoute, availabilityRoute, goalsRoute, garminRoute, workoutsRoute, newWorkoutRoute, workoutDetailRoute, calendarRoute, activitiesRoute, activityDetailRoute]);
+const routeTree = rootRoute.addChildren([indexRoute, profileRoute, poolsRoute, availabilityRoute, goalsRoute, garminRoute, workoutsRoute, newWorkoutRoute, workoutDetailRoute, calendarRoute, activitiesRoute, activityDetailRoute, operationsRoute]);
 export const router = createRouter({ routeTree });
 
 export function setAuthenticatedMe(me: Me) { authenticatedMe = me; }

@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### P11 — automações recuperáveis e PWA offline segura (provas pessoais pendentes)
+
+- adicionado scheduler por fuso com dedupe para sync, proposta semanal somente
+  revisável, lembretes de treino/feedback e retenção de jobs concluídos;
+- criado inbox de notificações deduplicadas e tela de operações com queue age,
+  estados terminais e retry apenas quando seguro, user-scoped e idempotente;
+- entregue cache offline estreito para shell e leitura de treino, indicador stale
+  e exclusão explícita de proposals/aprovação/publicação/agendamento;
+- feedback offline usa IndexedDB, idempotency key estável, estado visual pendente
+  e reconciliação ao recuperar a rede;
+- migration `000009`, OpenAPI, runbook e testes de fuso/replay/dedupe/retention/
+  política offline acompanham a implementação;
+- fase permanece `IN_PROGRESS` até ciclo automático pessoal, screenshot offline
+  no iPhone e métricas reais da fila serem capturados sem dados sensíveis.
+
 ### P10 — planejamento semanal adaptativo e plugin `0.4.0` (revisão real pendente)
 
 - adicionados rulesets imutáveis/versionados, snapshots canônicos, planning runs

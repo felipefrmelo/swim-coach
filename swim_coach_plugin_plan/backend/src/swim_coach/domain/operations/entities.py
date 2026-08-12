@@ -23,6 +23,27 @@ class JobStatus(StrEnum):
 
 
 @dataclass(slots=True)
+class Notification:
+    """A deduplicated, user-owned in-app notification."""
+
+    id: EntityId
+    user_id: UserId
+    notification_type: str
+    dedupe_key: str
+    title: str
+    body: str
+    link: str | None = None
+    read_at: datetime | None = None
+    created_at: datetime = field(default_factory=utc_now)
+
+    def __post_init__(self) -> None:
+        if not self.notification_type.strip() or not self.dedupe_key.strip():
+            raise DomainValidationError("notification type and dedupe key are required")
+        if not self.title.strip() or not self.body.strip():
+            raise DomainValidationError("notification title and body are required")
+
+
+@dataclass(slots=True)
 class Job:
     id: EntityId
     job_type: str
