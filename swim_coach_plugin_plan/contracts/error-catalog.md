@@ -26,6 +26,12 @@ Todos os erros públicos têm `code`, `message`, `correlation_id`, `retryable`, 
 | `PROVIDER_RATE_LIMITED` | Garmin | sim | retry_after se seguro |
 | `PROVIDER_SCHEMA_CHANGED` | Garmin | não automático | abrir incidente |
 | `PROVIDER_AMBIGUOUS_RESULT` | Garmin | reconcile | não reenviar cegamente |
+| `GARMIN_AUTH_REQUIRED` | Garmin/read | não | marcar conexão para reautenticação |
+| `GARMIN_RATE_LIMITED` | Garmin/read | sim | backoff; não repetir em loop apertado |
+| `GARMIN_NETWORK_ERROR` | Garmin/read | sim | backoff exponencial limitado |
+| `GARMIN_NOT_FOUND` | Garmin/read | não | preservar cursor e diagnosticar |
+| `GARMIN_SCHEMA_CHANGED` | Garmin/read | não automático | preservar payload sanitizado e corrigir adapter |
+| `GARMIN_UNKNOWN_ERROR` | Garmin/read | não automático | somente código sanitizado e correlation id |
 | `FIT_FILE_UNAVAILABLE` | data | sim/partial | activity id |
 | `FIT_PARSE_FAILED` | data | após parser fix | checksum/parser version |
 | `DATA_INCOMPLETE` | data | partial | campos ausentes |

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Self
@@ -90,6 +90,23 @@ class IdempotencyKey:
 
     def __str__(self) -> str:
         return self.value
+
+
+@dataclass(frozen=True, slots=True)
+class EncryptedSecret:
+    """Opaque AEAD output that is safe to persist, but never to serialize publicly."""
+
+    ciphertext: bytes = field(repr=False)
+    nonce: bytes = field(repr=False)
+    key_version: str
+
+    def __post_init__(self) -> None:
+        if len(self.ciphertext) < 16:
+            raise DomainValidationError("encrypted secret ciphertext is invalid")
+        if len(self.nonce) != 12:
+            raise DomainValidationError("encrypted secret nonce must contain 12 bytes")
+        if not self.key_version.strip() or len(self.key_version) > 64:
+            raise DomainValidationError("encrypted secret key version is invalid")
 
 
 @dataclass(frozen=True, slots=True)

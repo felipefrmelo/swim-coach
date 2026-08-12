@@ -76,7 +76,8 @@ GarminProvider
 
 Fluxo recomendado:
 
-1. Executar `scripts/garmin_bootstrap.py` de forma interativa.
+1. Executar `python -m swim_coach.interfaces.cli.garmin connect --user-email <conta>`
+   no container/host do backend.
 2. Solicitar e-mail e senha sem eco.
 3. Solicitar código MFA quando necessário.
 4. Autenticar diretamente com a Garmin por HTTPS.
@@ -97,10 +98,11 @@ Opção recomendada:
 - chave mestra em secret do ambiente;
 - versão de chave registrada;
 - decriptar apenas dentro do worker;
-- materializar temporariamente em `tmpfs` caso a biblioteca exija arquivo;
+- passar o bundle serializado diretamente à biblioteca; a implementação P02
+  não materializa token em arquivo;
 - ler tokens atualizados após a chamada;
 - recriptografar na mesma operação;
-- apagar arquivo temporário.
+- não criar arquivo temporário de token.
 
 Nunca registrar:
 
@@ -235,12 +237,12 @@ A migração precisa de:
 
 ## 12. Bootstrap seguro
 
-1. executar CLI local interativa;
+1. executar a CLI interativa no backend;
 2. login e MFA acontecem no terminal do usuário;
-3. biblioteca grava token bundle em diretório temporário protegido;
-4. comando cifra o bundle com a chave do ambiente alvo;
-5. importação autenticada associa o segredo ao `GarminConnection`;
-6. arquivo temporário é destruído;
+3. biblioteca devolve o token bundle em memória, sem token store em disco;
+4. comando cifra imediatamente o bundle com AES-256-GCM e AAD user-scoped;
+5. o ciphertext, nonce e key version são associados ao `GarminConnection`;
+6. password e referências ao plaintext são descartados no `finally`;
 7. senha nunca chega ao banco, MCP, PWA, logs ou host.
 
 ## 13. Estratégia de escrita
@@ -265,3 +267,19 @@ O provider pessoal pode quebrar quando a Garmin alterar endpoints. Mitigações:
 - payload bruto/erro sanitizado para diagnóstico;
 - interface compatível com futura API oficial;
 - PWA permite exportar treino mesmo quando publicação estiver indisponível.
+
+## 15. Operação P02 implementada
+
+- segredos: `SWIM_COACH_GARMIN_MASTER_KEYS=v1:<base64url-32-bytes>` e
+  `SWIM_COACH_GARMIN_ACTIVE_KEY_VERSION=v1`;
+- conexão: CLI interativa, nunca pela PWA;
+- status: `python -m swim_coach.interfaces.cli.garmin status --user-email <conta>`;
+- smoke direto: `python -m swim_coach.interfaces.cli.garmin sync-once --user-email <conta>`;
+- desconexão: CLI ou `DELETE /api/v1/integrations/garmin`, removendo localmente
+  ciphertext, nonce e versão da chave;
+- worker: job `garmin.sync_activities`, cinco tentativas máximas, backoff
+  exponencial e tratamento específico para 429;
+- concorrência: advisory lock PostgreSQL por usuário durante toda a execução e
+  lock separado durante cada refresh de token;
+- cursor: watermark com sobreposição configurável; só avança após todas as
+  páginas, dispositivos e imports obrigatórios concluírem.

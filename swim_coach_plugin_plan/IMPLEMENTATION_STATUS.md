@@ -9,7 +9,7 @@
 |---:|---|---|---|---|
 | P00 | DONE | — | Garmin read, OAuth resource binding, tunnel/ChatGPT e CI reais | [PR #1](https://github.com/felipefrmelo/swim-coach/pull/1) |
 | P01 | DONE | P00 | migrações + testes de domínio + PWA shell | [PR #2](https://github.com/felipefrmelo/swim-coach/pull/2) |
-| P02 | NOT_STARTED | P01 | import real Garmin sem duplicata | — |
+| P02 | IN_PROGRESS | P01 | import real Garmin sem duplicata | branch `p02-garmin-import` |
 | P03 | NOT_STARTED | P02 | FIT normalizado e analytics reproduzíveis | — |
 | P04 | NOT_STARTED | P01 | treino válido de 20 m criado na PWA | — |
 | P05 | NOT_STARTED | P03,P04 | MCP read-only autenticado com dados reais | — |
@@ -103,8 +103,23 @@
 
 ### P02
 
-- Estado: `NOT_STARTED`
+- Estado: `IN_PROGRESS`
+- Início: 2026-08-11T20:41:41-03:00
+- Implementação local: P02-T01 até P02-T07 concluídas; P02-T08 aguarda smoke
+  persistente com credenciais reais e replay.
 - Evidências:
+  - [`docs/evidence/p02-garmin-read-sync.md`](docs/evidence/p02-garmin-read-sync.md)
+  - `make check` → 49 testes Python, 2 Vitest, Ruff, mypy, ESLint,
+    TypeScript e validadores passaram.
+  - integração PostgreSQL/Testcontainers → migration `000002`, AEAD persistido,
+    paginação/replay, disconnect e worker retry/rate-limit passaram.
+  - TypeScript, ESLint, 2 Vitest e build Vite passaram para a PWA Garmin.
+  - Playwright/Chrome 375×812 → dois fluxos passaram; screenshot P02 sanitizado.
+  - probe Garmin real anterior → 20 atividades, 6 pool swims e 2 devices sem
+    escrita externa; ainda não conta como gate persistente P02.
+- Próxima ação exata: configurar a chave mestra somente no ambiente local,
+  executar CLI `connect`, rodar `sync-once` duas vezes e anexar somente contagens
+  sanitizadas comprovando `created=0` no replay.
 
 ### P03
 

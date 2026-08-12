@@ -9,6 +9,7 @@ from types import TracebackType
 from typing import Any, Self, cast
 
 from sqlalchemy import and_, delete, or_, select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from swim_coach.application.ports.repositories import UnitOfWork
@@ -19,6 +20,17 @@ from swim_coach.domain.athlete import (
     ConstraintType,
     Device,
     Pool,
+)
+from swim_coach.domain.garmin import (
+    Activity,
+    ActivityImport,
+    ActivityImportStatus,
+    GarminConnection,
+    GarminConnectionStatus,
+    RawProviderPayload,
+    SyncCursor,
+    SyncRun,
+    SyncRunStatus,
 )
 from swim_coach.domain.goals import GoalMilestone, GoalStatus, TrainingGoal
 from swim_coach.domain.identity import (
@@ -40,12 +52,15 @@ from swim_coach.domain.shared.types import JsonObject
 from swim_coach.domain.shared.value_objects import (
     Distance,
     Duration,
+    EncryptedSecret,
     EntityId,
     Pace,
     PoolLength,
     UserId,
 )
 from swim_coach.infrastructure.db.models import (
+    ActivityImportModel,
+    ActivityModel,
     ApiIdempotencyRecordModel,
     AppUserModel,
     AthleteConstraintModel,
@@ -54,11 +69,15 @@ from swim_coach.infrastructure.db.models import (
     AuthIdentityModel,
     AvailabilityRuleModel,
     DeviceModel,
+    GarminConnectionModel,
     GoalMilestoneModel,
     JobModel,
     OidcLoginAttemptModel,
     OutboxEventModel,
     PoolModel,
+    RawProviderPayloadModel,
+    SyncCursorModel,
+    SyncRunModel,
     TrainingGoalModel,
     WebSessionModel,
 )
@@ -209,6 +228,104 @@ def _job(model: JobModel) -> Job:
         created_at=model.created_at,
         updated_at=model.updated_at,
         finished_at=model.finished_at,
+        version=model.version,
+    )
+
+
+def _garmin_connection(model: GarminConnectionModel) -> GarminConnection:
+    secret = None
+    if model.encrypted_token_bundle is not None:
+        secret = EncryptedSecret(
+            ciphertext=model.encrypted_token_bundle,
+            nonce=cast(bytes, model.token_nonce),
+            key_version=cast(str, model.token_key_version),
+        )
+    return GarminConnection(
+        user_id=UserId(model.user_id),
+        status=GarminConnectionStatus(model.status),
+        account_label_masked=model.account_label_masked,
+        encrypted_token=secret,
+        provider_library_version=model.provider_library_version,
+        authenticated_at=model.authenticated_at,
+        last_refresh_at=model.last_refresh_at,
+        last_success_at=model.last_success_at,
+        last_error_code=model.last_error_code,
+        last_error_message_redacted=model.last_error_message_redacted,
+        created_at=model.created_at,
+        updated_at=model.updated_at,
+        version=model.version,
+    )
+
+
+def _sync_cursor(model: SyncCursorModel) -> SyncCursor:
+    return SyncCursor(
+        id=EntityId(model.id),
+        user_id=UserId(model.user_id),
+        provider=model.provider,
+        entity_type=model.entity_type,
+        cursor=_json(model.cursor_json),
+        watermark_at=model.watermark_at,
+        last_success_at=model.last_success_at,
+        overlap_seconds=model.overlap_seconds,
+        created_at=model.created_at,
+        updated_at=model.updated_at,
+        version=model.version,
+    )
+
+
+def _sync_run(model: SyncRunModel) -> SyncRun:
+    return SyncRun(
+        id=EntityId(model.id),
+        user_id=UserId(model.user_id),
+        provider=model.provider,
+        sync_type=model.sync_type,
+        trigger=model.trigger,
+        status=SyncRunStatus(model.status),
+        listed=model.listed,
+        created=model.created,
+        updated=model.updated,
+        skipped=model.skipped,
+        failed=model.failed,
+        cursor_before=_json(model.cursor_before_json),
+        cursor_after=_json(model.cursor_after_json),
+        error=_json(model.error_json_redacted) if model.error_json_redacted else None,
+        started_at=model.started_at,
+        finished_at=model.finished_at,
+        version=model.version,
+    )
+
+
+def _activity(model: ActivityModel) -> Activity:
+    return Activity(
+        id=EntityId(model.id),
+        user_id=UserId(model.user_id),
+        provider=model.provider,
+        external_activity_id=model.external_activity_id,
+        name=model.name,
+        sport=model.sport,
+        subtype=model.subtype,
+        start_time_utc=model.start_time_utc,
+        timezone=model.timezone,
+        distance=Distance(model.distance_m),
+        elapsed=Duration(Decimal(model.elapsed_seconds)),
+        timer=Duration(Decimal(model.timer_seconds)),
+        moving=Duration(Decimal(model.moving_seconds)),
+        pool_length=PoolLength(model.pool_length_m) if model.pool_length_m else None,
+        length_count=model.length_count,
+        calories=model.calories,
+        avg_hr=model.avg_hr,
+        max_hr=model.max_hr,
+        avg_pace_seconds_per_100m=model.avg_pace_seconds_per_100m,
+        avg_stroke_rate=model.avg_stroke_rate,
+        avg_strokes_per_length=model.avg_strokes_per_length,
+        avg_swolf=model.avg_swolf,
+        source_updated_at=model.source_updated_at,
+        normalization_version=model.normalization_version,
+        raw_summary_id=EntityId(model.raw_summary_id),
+        raw_fit_id=EntityId(model.raw_fit_id) if model.raw_fit_id else None,
+        summary_checksum=model.summary_checksum,
+        created_at=model.created_at,
+        updated_at=model.updated_at,
         version=model.version,
     )
 
@@ -501,6 +618,359 @@ class SqlAlchemyDevicesRepository:
             )
         )
 
+    async def upsert(self, device: Device) -> None:
+        statement = insert(DeviceModel).values(
+            id=device.id.value,
+            user_id=device.user_id.value,
+            provider=device.provider,
+            external_device_id=device.external_device_id,
+            model=device.model,
+            name=device.name,
+            serial_hash=device.serial_hash,
+            is_primary=device.is_primary,
+            capabilities_json=device.capabilities,
+            last_seen_at=device.last_seen_at,
+            created_at=device.created_at,
+            updated_at=device.updated_at,
+            version=device.version,
+        )
+        await self._session.execute(
+            statement.on_conflict_do_update(
+                constraint="uq_device_provider_external",
+                set_={
+                    "user_id": statement.excluded.user_id,
+                    "model": statement.excluded.model,
+                    "name": statement.excluded.name,
+                    "serial_hash": statement.excluded.serial_hash,
+                    "is_primary": statement.excluded.is_primary,
+                    "capabilities_json": statement.excluded.capabilities_json,
+                    "last_seen_at": statement.excluded.last_seen_at,
+                    "updated_at": statement.excluded.updated_at,
+                    "version": DeviceModel.version + 1,
+                },
+            )
+        )
+
+
+class SqlAlchemyGarminConnectionsRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get(self, user_id: UserId) -> GarminConnection | None:
+        model = await self._session.get(GarminConnectionModel, user_id.value)
+        return _garmin_connection(model) if model else None
+
+    async def upsert(self, connection: GarminConnection) -> None:
+        secret = connection.encrypted_token
+        statement = insert(GarminConnectionModel).values(
+            user_id=connection.user_id.value,
+            status=connection.status.value,
+            account_label_masked=connection.account_label_masked,
+            encrypted_token_bundle=secret.ciphertext if secret else None,
+            token_nonce=secret.nonce if secret else None,
+            token_key_version=secret.key_version if secret else None,
+            provider_library_version=connection.provider_library_version,
+            authenticated_at=connection.authenticated_at,
+            last_refresh_at=connection.last_refresh_at,
+            last_success_at=connection.last_success_at,
+            last_error_code=connection.last_error_code,
+            last_error_message_redacted=connection.last_error_message_redacted,
+            created_at=connection.created_at,
+            updated_at=connection.updated_at,
+            version=connection.version,
+        )
+        await self._session.execute(
+            statement.on_conflict_do_update(
+                index_elements=[GarminConnectionModel.user_id],
+                set_={
+                    "status": statement.excluded.status,
+                    "account_label_masked": statement.excluded.account_label_masked,
+                    "encrypted_token_bundle": statement.excluded.encrypted_token_bundle,
+                    "token_nonce": statement.excluded.token_nonce,
+                    "token_key_version": statement.excluded.token_key_version,
+                    "provider_library_version": statement.excluded.provider_library_version,
+                    "authenticated_at": statement.excluded.authenticated_at,
+                    "last_refresh_at": statement.excluded.last_refresh_at,
+                    "last_success_at": statement.excluded.last_success_at,
+                    "last_error_code": statement.excluded.last_error_code,
+                    "last_error_message_redacted": statement.excluded.last_error_message_redacted,
+                    "updated_at": statement.excluded.updated_at,
+                    "version": GarminConnectionModel.version + 1,
+                },
+            )
+        )
+
+    async def update(self, connection: GarminConnection, *, expected_version: int) -> None:
+        secret = connection.encrypted_token
+        statement = (
+            update(GarminConnectionModel)
+            .where(
+                GarminConnectionModel.user_id == connection.user_id.value,
+                GarminConnectionModel.version == expected_version,
+            )
+            .values(
+                status=connection.status.value,
+                account_label_masked=connection.account_label_masked,
+                encrypted_token_bundle=secret.ciphertext if secret else None,
+                token_nonce=secret.nonce if secret else None,
+                token_key_version=secret.key_version if secret else None,
+                provider_library_version=connection.provider_library_version,
+                authenticated_at=connection.authenticated_at,
+                last_refresh_at=connection.last_refresh_at,
+                last_success_at=connection.last_success_at,
+                last_error_code=connection.last_error_code,
+                last_error_message_redacted=connection.last_error_message_redacted,
+                updated_at=connection.updated_at,
+                version=connection.version,
+            )
+            .returning(GarminConnectionModel.version)
+        )
+        if (await self._session.scalar(statement)) is None:
+            raise RevisionConflictError(expected_version)
+
+
+class SqlAlchemySyncCursorsRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get(self, user_id: UserId, provider: str, entity_type: str) -> SyncCursor | None:
+        statement = select(SyncCursorModel).where(
+            SyncCursorModel.user_id == user_id.value,
+            SyncCursorModel.provider == provider,
+            SyncCursorModel.entity_type == entity_type,
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _sync_cursor(model) if model else None
+
+    async def upsert(self, cursor: SyncCursor) -> None:
+        statement = insert(SyncCursorModel).values(
+            id=cursor.id.value,
+            user_id=cursor.user_id.value,
+            provider=cursor.provider,
+            entity_type=cursor.entity_type,
+            cursor_json=cursor.cursor,
+            watermark_at=cursor.watermark_at,
+            last_success_at=cursor.last_success_at,
+            overlap_seconds=cursor.overlap_seconds,
+            created_at=cursor.created_at,
+            updated_at=cursor.updated_at,
+            version=cursor.version,
+        )
+        await self._session.execute(
+            statement.on_conflict_do_update(
+                constraint="uq_sync_cursor_user_provider_entity",
+                set_={
+                    "cursor_json": statement.excluded.cursor_json,
+                    "watermark_at": statement.excluded.watermark_at,
+                    "last_success_at": statement.excluded.last_success_at,
+                    "overlap_seconds": statement.excluded.overlap_seconds,
+                    "updated_at": statement.excluded.updated_at,
+                    "version": SyncCursorModel.version + 1,
+                },
+            )
+        )
+
+
+class SqlAlchemySyncRunsRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, run: SyncRun) -> None:
+        self._session.add(
+            SyncRunModel(
+                id=run.id.value,
+                user_id=run.user_id.value,
+                provider=run.provider,
+                sync_type=run.sync_type,
+                trigger=run.trigger,
+                status=run.status.value,
+                listed=run.listed,
+                created=run.created,
+                updated=run.updated,
+                skipped=run.skipped,
+                failed=run.failed,
+                cursor_before_json=run.cursor_before,
+                cursor_after_json=run.cursor_after,
+                error_json_redacted=run.error,
+                started_at=run.started_at,
+                finished_at=run.finished_at,
+                version=run.version,
+            )
+        )
+
+    async def update(self, run: SyncRun, *, expected_version: int) -> None:
+        statement = (
+            update(SyncRunModel)
+            .where(SyncRunModel.id == run.id.value, SyncRunModel.version == expected_version)
+            .values(
+                status=run.status.value,
+                listed=run.listed,
+                created=run.created,
+                updated=run.updated,
+                skipped=run.skipped,
+                failed=run.failed,
+                cursor_after_json=run.cursor_after,
+                error_json_redacted=run.error,
+                finished_at=run.finished_at,
+                version=run.version,
+            )
+            .returning(SyncRunModel.version)
+        )
+        if (await self._session.scalar(statement)) is None:
+            raise RevisionConflictError(expected_version)
+
+    async def list_recent(self, user_id: UserId, *, limit: int = 20) -> Sequence[SyncRun]:
+        statement = (
+            select(SyncRunModel)
+            .where(SyncRunModel.user_id == user_id.value)
+            .order_by(SyncRunModel.started_at.desc())
+            .limit(limit)
+        )
+        return [_sync_run(model) for model in await self._session.scalars(statement)]
+
+
+class SqlAlchemyRawProviderPayloadsRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add_if_absent(self, payload: RawProviderPayload) -> EntityId:
+        statement = (
+            insert(RawProviderPayloadModel)
+            .values(
+                id=payload.id.value,
+                user_id=payload.user_id.value,
+                provider=payload.provider,
+                entity_type=payload.entity_type,
+                external_id=payload.external_id,
+                content_type=payload.content_type,
+                json_payload=payload.payload,
+                checksum=payload.checksum,
+                provider_updated_at=payload.provider_updated_at,
+                received_at=payload.received_at,
+            )
+            .on_conflict_do_nothing(constraint="uq_raw_payload_identity_checksum")
+            .returning(RawProviderPayloadModel.id)
+        )
+        inserted_id = await self._session.scalar(statement)
+        if inserted_id is not None:
+            return EntityId(inserted_id)
+        existing_id = await self._session.scalar(
+            select(RawProviderPayloadModel.id).where(
+                RawProviderPayloadModel.user_id == payload.user_id.value,
+                RawProviderPayloadModel.provider == payload.provider,
+                RawProviderPayloadModel.entity_type == payload.entity_type,
+                RawProviderPayloadModel.external_id == payload.external_id,
+                RawProviderPayloadModel.checksum == payload.checksum,
+            )
+        )
+        if existing_id is None:
+            raise RuntimeError("raw payload conflict could not be resolved")
+        return EntityId(existing_id)
+
+
+class SqlAlchemyActivitiesRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_by_external_id(
+        self, user_id: UserId, provider: str, external_activity_id: str
+    ) -> Activity | None:
+        statement = select(ActivityModel).where(
+            ActivityModel.user_id == user_id.value,
+            ActivityModel.provider == provider,
+            ActivityModel.external_activity_id == external_activity_id,
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _activity(model) if model else None
+
+    async def upsert(self, activity: Activity) -> tuple[ActivityImportStatus, EntityId]:
+        statement = (
+            select(ActivityModel)
+            .where(
+                ActivityModel.user_id == activity.user_id.value,
+                ActivityModel.provider == activity.provider,
+                ActivityModel.external_activity_id == activity.external_activity_id,
+            )
+            .with_for_update()
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        if model is not None and model.summary_checksum == activity.summary_checksum:
+            return ActivityImportStatus.SKIPPED, EntityId(model.id)
+        values = {
+            "name": activity.name,
+            "sport": activity.sport,
+            "subtype": activity.subtype,
+            "start_time_utc": activity.start_time_utc,
+            "timezone": activity.timezone,
+            "distance_m": activity.distance.meters,
+            "elapsed_seconds": activity.elapsed.seconds,
+            "timer_seconds": activity.timer.seconds,
+            "moving_seconds": activity.moving.seconds,
+            "pool_length_m": activity.pool_length.meters if activity.pool_length else None,
+            "length_count": activity.length_count,
+            "calories": activity.calories,
+            "avg_hr": activity.avg_hr,
+            "max_hr": activity.max_hr,
+            "avg_pace_seconds_per_100m": activity.avg_pace_seconds_per_100m,
+            "avg_stroke_rate": activity.avg_stroke_rate,
+            "avg_strokes_per_length": activity.avg_strokes_per_length,
+            "avg_swolf": activity.avg_swolf,
+            "source_updated_at": activity.source_updated_at,
+            "normalization_version": activity.normalization_version,
+            "raw_summary_id": activity.raw_summary_id.value,
+            "raw_fit_id": activity.raw_fit_id.value if activity.raw_fit_id else None,
+            "summary_checksum": activity.summary_checksum,
+            "updated_at": activity.updated_at,
+        }
+        if model is None:
+            self._session.add(
+                ActivityModel(
+                    id=activity.id.value,
+                    user_id=activity.user_id.value,
+                    provider=activity.provider,
+                    external_activity_id=activity.external_activity_id,
+                    created_at=activity.created_at,
+                    version=activity.version,
+                    **values,
+                )
+            )
+            return ActivityImportStatus.CREATED, activity.id
+        for key, value in values.items():
+            setattr(model, key, value)
+        model.version += 1
+        return ActivityImportStatus.UPDATED, EntityId(model.id)
+
+    async def list_recent(self, user_id: UserId, *, limit: int = 50) -> Sequence[Activity]:
+        statement = (
+            select(ActivityModel)
+            .where(ActivityModel.user_id == user_id.value)
+            .order_by(ActivityModel.start_time_utc.desc())
+            .limit(limit)
+        )
+        return [_activity(model) for model in await self._session.scalars(statement)]
+
+
+class SqlAlchemyActivityImportsRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, activity_import: ActivityImport) -> None:
+        self._session.add(
+            ActivityImportModel(
+                id=activity_import.id.value,
+                user_id=activity_import.user_id.value,
+                sync_run_id=activity_import.sync_run_id.value,
+                activity_id=(
+                    activity_import.activity_id.value if activity_import.activity_id else None
+                ),
+                external_activity_id=activity_import.external_activity_id,
+                status=activity_import.status.value,
+                checksum=activity_import.checksum,
+                error_code=activity_import.error_code,
+                created_at=activity_import.created_at,
+            )
+        )
+
 
 class SqlAlchemyGoalsRepository:
     def __init__(self, session: AsyncSession) -> None:
@@ -646,6 +1116,48 @@ class SqlAlchemyJobsRepository:
             )
         )
 
+    async def get_by_idempotency_key(self, idempotency_key: str) -> Job | None:
+        statement = select(JobModel).where(JobModel.idempotency_key == idempotency_key)
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _job(model) if model else None
+
+    async def add_idempotent(self, job: Job) -> Job:
+        if job.idempotency_key is None:
+            raise ValueError("idempotent job requires an idempotency key")
+        statement = (
+            insert(JobModel)
+            .values(
+                id=job.id.value,
+                user_id=job.user_id.value if job.user_id else None,
+                job_type=job.job_type,
+                payload_json=job.payload,
+                status=job.status.value,
+                priority=job.priority,
+                available_at=job.available_at,
+                attempts=job.attempts,
+                max_attempts=job.max_attempts,
+                idempotency_key=job.idempotency_key,
+                locked_by=job.locked_by,
+                locked_at=job.locked_at,
+                heartbeat_at=job.heartbeat_at,
+                lease_expires_at=job.lease_expires_at,
+                last_error_json_redacted=job.last_error,
+                created_at=job.created_at,
+                updated_at=job.updated_at,
+                finished_at=job.finished_at,
+                version=job.version,
+            )
+            .on_conflict_do_nothing(index_elements=[JobModel.idempotency_key])
+            .returning(JobModel.id)
+        )
+        inserted_id = await self._session.scalar(statement)
+        if inserted_id is not None:
+            return job
+        existing = await self.get_by_idempotency_key(job.idempotency_key)
+        if existing is None:
+            raise RuntimeError("idempotent job conflict could not be resolved")
+        return existing
+
     async def lease_next(
         self, worker_id: str, *, ttl: timedelta, job_types: frozenset[str]
     ) -> Job | None:
@@ -707,6 +1219,44 @@ class SqlAlchemyJobsRepository:
                 lease_expires_at=None,
                 version=JobModel.version + 1,
             )
+            .returning(JobModel.id)
+        )
+        return (await self._session.scalar(statement)) is not None
+
+    async def mark_failed(
+        self,
+        job_id: EntityId,
+        worker_id: str,
+        at: datetime,
+        *,
+        error: JsonObject,
+        retry_at: datetime | None,
+    ) -> bool:
+        values: dict[str, Any] = {
+            "status": (
+                JobStatus.RETRY_SCHEDULED.value
+                if retry_at is not None
+                else JobStatus.FAILED_TERMINAL.value
+            ),
+            "updated_at": at,
+            "finished_at": None if retry_at is not None else at,
+            "last_error_json_redacted": error,
+            "locked_by": None,
+            "locked_at": None,
+            "heartbeat_at": None,
+            "lease_expires_at": None,
+            "version": JobModel.version + 1,
+        }
+        if retry_at is not None:
+            values["available_at"] = retry_at
+        statement = (
+            update(JobModel)
+            .where(
+                JobModel.id == job_id.value,
+                JobModel.status == JobStatus.LEASED.value,
+                JobModel.locked_by == worker_id,
+            )
+            .values(**values)
             .returning(JobModel.id)
         )
         return (await self._session.scalar(statement)) is not None
@@ -902,6 +1452,12 @@ class SqlAlchemyUnitOfWork:
         self.availability = SqlAlchemyAvailabilityRepository(self._session)
         self.constraints = SqlAlchemyConstraintsRepository(self._session)
         self.devices = SqlAlchemyDevicesRepository(self._session)
+        self.garmin_connections = SqlAlchemyGarminConnectionsRepository(self._session)
+        self.sync_cursors = SqlAlchemySyncCursorsRepository(self._session)
+        self.sync_runs = SqlAlchemySyncRunsRepository(self._session)
+        self.raw_provider_payloads = SqlAlchemyRawProviderPayloadsRepository(self._session)
+        self.activities = SqlAlchemyActivitiesRepository(self._session)
+        self.activity_imports = SqlAlchemyActivityImportsRepository(self._session)
         self.goals = SqlAlchemyGoalsRepository(self._session)
         self.goal_milestones = SqlAlchemyGoalMilestonesRepository(self._session)
         self.jobs = SqlAlchemyJobsRepository(self._session)

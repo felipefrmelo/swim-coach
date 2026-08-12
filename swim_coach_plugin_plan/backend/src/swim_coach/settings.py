@@ -1,5 +1,7 @@
 """Validated application configuration."""
 
+import base64
+import binascii
 from functools import lru_cache
 from typing import Literal
 
@@ -36,6 +38,10 @@ class Settings(BaseSettings):
     dev_auth_enabled: bool = False
     dev_auth_email: str = "local-swimmer@example.test"
     session_lifetime_hours: int = Field(default=8, ge=1, le=24)
+    garmin_master_keys: SecretStr | None = None
+    garmin_active_key_version: str | None = None
+    garmin_sync_lookback_days: int = Field(default=90, ge=1, le=365)
+    garmin_sync_overlap_seconds: int = Field(default=172_800, ge=0, le=604_800)
 
     @model_validator(mode="after")
     def validate_oauth_metadata(self) -> "Settings":
@@ -67,6 +73,14 @@ class Settings(BaseSettings):
                 raise ValueError("pwa_base_url must use HTTPS in production")
         if self.dev_auth_enabled and self.dev_auth_email.casefold() not in self.allowed_emails:
             raise ValueError("dev_auth_email must be explicitly allowlisted")
+        if (self.garmin_master_keys is None) != (self.garmin_active_key_version is None):
+            raise ValueError(
+                "garmin_master_keys and garmin_active_key_version must be configured together"
+            )
+        if self.garmin_master_keys is not None:
+            keyring = self.garmin_keyring
+            if self.garmin_active_key_version not in keyring:
+                raise ValueError("garmin_active_key_version is not present in garmin_master_keys")
         if (self.dev_auth_enabled or self.oidc_issuer is not None) and not (
             self.allowed_emails or self.allowed_subjects
         ):
@@ -90,6 +104,25 @@ class Settings(BaseSettings):
     @property
     def oidc_redirect_uri(self) -> str:
         return f"{str(self.pwa_base_url).rstrip('/')}/api/v1/auth/callback"
+
+    @property
+    def garmin_keyring(self) -> dict[str, bytes]:
+        if self.garmin_master_keys is None:
+            return {}
+        result: dict[str, bytes] = {}
+        for entry in self.garmin_master_keys.get_secret_value().split(","):
+            version, separator, encoded = entry.strip().partition(":")
+            if not separator or not version or version in result:
+                raise ValueError("garmin_master_keys entries must use unique version:base64 values")
+            try:
+                padding = "=" * (-len(encoded) % 4)
+                key = base64.urlsafe_b64decode(encoded + padding)
+            except (ValueError, binascii.Error) as exc:
+                raise ValueError("garmin_master_keys contains invalid base64") from exc
+            if len(key) != 32:
+                raise ValueError("each Garmin master key must contain exactly 32 bytes")
+            result[version] = key
+        return result
 
 
 @lru_cache

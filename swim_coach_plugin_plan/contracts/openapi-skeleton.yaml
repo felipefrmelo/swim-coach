@@ -147,10 +147,32 @@ paths:
         - {in: path, name: proposal_id, required: true, schema: {type: string, format: uuid}}
         - {$ref: "#/components/parameters/IdempotencyKey"}
       responses: {"202": {description: Job queued}, "409": {$ref: "#/components/responses/Problem"}}
-  /sync/garmin/activities:
+  /integrations/garmin:
+    get:
+      operationId: getGarminConnection
+      responses: {"200": {description: Sanitized connection status; never returns a token}}
+    delete:
+      operationId: disconnectGarmin
+      parameters: [{$ref: "#/components/parameters/CsrfToken"}]
+      responses: {"200": {description: Local encrypted token revoked}}
+  /integrations/garmin/devices:
+    get:
+      operationId: listGarminDevices
+      responses: {"200": {description: User-owned Garmin devices without raw identifiers}}
+  /integrations/garmin/activities:
+    get:
+      operationId: listGarminActivities
+      responses: {"200": {description: User-owned pool swimming activity summaries}}
+  /integrations/garmin/sync-runs:
+    get:
+      operationId: listGarminSyncRuns
+      responses: {"200": {description: Sanitized incremental sync history}}
+  /integrations/garmin/sync:
     post:
       operationId: syncGarminActivities
-      parameters: [{$ref: "#/components/parameters/IdempotencyKey"}]
+      parameters:
+        - {$ref: "#/components/parameters/CsrfToken"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
       responses: {"202": {description: Sync job queued}}
   /jobs/{job_id}:
     get:

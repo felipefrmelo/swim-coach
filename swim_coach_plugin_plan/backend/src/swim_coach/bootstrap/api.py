@@ -12,6 +12,7 @@ from swim_coach.infrastructure.db import Database
 from swim_coach.interfaces.mcp.server import create_mcp_server
 from swim_coach.interfaces.rest.auth import router as auth_router
 from swim_coach.interfaces.rest.context import router as context_router
+from swim_coach.interfaces.rest.garmin import router as garmin_router
 from swim_coach.interfaces.rest.health import router as health_router
 from swim_coach.interfaces.rest.oauth import router as oauth_router
 from swim_coach.interfaces.rest.problem import install_problem_handlers
@@ -62,6 +63,7 @@ def create_app(
     app.include_router(oauth_router)
     app.include_router(auth_router)
     app.include_router(context_router)
+    app.include_router(garmin_router)
     app.mount("/mcp", mcp_app)
     return app
 

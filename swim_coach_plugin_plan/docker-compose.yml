@@ -37,6 +37,10 @@ services:
       SWIM_COACH_AUTH_ALLOWED_SUBJECTS: ${SWIM_COACH_AUTH_ALLOWED_SUBJECTS:-}
       SWIM_COACH_DEV_AUTH_ENABLED: ${SWIM_COACH_DEV_AUTH_ENABLED:-true}
       SWIM_COACH_DEV_AUTH_EMAIL: ${SWIM_COACH_DEV_AUTH_EMAIL:-local-swimmer@example.test}
+      SWIM_COACH_GARMIN_MASTER_KEYS: ${SWIM_COACH_GARMIN_MASTER_KEYS:-}
+      SWIM_COACH_GARMIN_ACTIVE_KEY_VERSION: ${SWIM_COACH_GARMIN_ACTIVE_KEY_VERSION:-}
+      SWIM_COACH_GARMIN_SYNC_LOOKBACK_DAYS: ${SWIM_COACH_GARMIN_SYNC_LOOKBACK_DAYS:-90}
+      SWIM_COACH_GARMIN_SYNC_OVERLAP_SECONDS: ${SWIM_COACH_GARMIN_SYNC_OVERLAP_SECONDS:-172800}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -63,6 +67,8 @@ services:
     environment:
       SWIM_COACH_ENVIRONMENT: development
       SWIM_COACH_DATABASE_URL: postgresql://swim_coach:local_only@postgres:5432/swim_coach
+      SWIM_COACH_GARMIN_MASTER_KEYS: ${SWIM_COACH_GARMIN_MASTER_KEYS:-}
+      SWIM_COACH_GARMIN_ACTIVE_KEY_VERSION: ${SWIM_COACH_GARMIN_ACTIVE_KEY_VERSION:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -76,6 +82,10 @@ services:
     environment:
       SWIM_COACH_ENVIRONMENT: development
       SWIM_COACH_DATABASE_URL: postgresql://swim_coach:local_only@postgres:5432/swim_coach
+      SWIM_COACH_GARMIN_MASTER_KEYS: ${SWIM_COACH_GARMIN_MASTER_KEYS:-}
+      SWIM_COACH_GARMIN_ACTIVE_KEY_VERSION: ${SWIM_COACH_GARMIN_ACTIVE_KEY_VERSION:-}
+      SWIM_COACH_GARMIN_SYNC_LOOKBACK_DAYS: ${SWIM_COACH_GARMIN_SYNC_LOOKBACK_DAYS:-90}
+      SWIM_COACH_GARMIN_SYNC_OVERLAP_SECONDS: ${SWIM_COACH_GARMIN_SYNC_OVERLAP_SECONDS:-172800}
     depends_on:
       migrate:
         condition: service_completed_successfully

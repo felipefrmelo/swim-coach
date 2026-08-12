@@ -25,6 +25,12 @@ async def test_migration_up_down_up_and_constraints(
         "api_idempotency_record",
         "web_session",
         "oidc_login_attempt",
+        "garmin_connection",
+        "sync_cursor",
+        "sync_run",
+        "raw_provider_payload",
+        "activity",
+        "activity_import",
     }
     assert expected_tables <= round_trip.tables_after_upgrade
     assert expected_tables.isdisjoint(round_trip.tables_after_downgrade)
@@ -41,7 +47,7 @@ async def test_migration_up_down_up_and_constraints(
     finally:
         await database.dispose()
 
-    assert revision == "000001"
+    assert revision == "000002"
     assert {item["name"] for item in constraints} >= {
         "ck_pool_length_positive",
         "ck_pool_version",

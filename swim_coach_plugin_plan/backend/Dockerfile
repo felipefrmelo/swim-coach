@@ -14,7 +14,7 @@ WORKDIR /app
 COPY --from=uv /uv /usr/local/bin/uv
 COPY pyproject.toml uv.lock README.md ./
 COPY backend/src ./backend/src
-RUN uv sync --frozen --no-dev --no-group spikes
+RUN uv sync --frozen --no-dev
 COPY backend/alembic.ini ./backend/alembic.ini
 COPY backend/alembic ./backend/alembic
 

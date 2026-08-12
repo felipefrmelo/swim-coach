@@ -2,9 +2,14 @@ import type {
   AuthConfig,
   AvailabilityRule,
   Goal,
+  GarminConnection,
+  GarminDevice,
+  GarminSyncJob,
+  GarminSyncRun,
   Me,
   Pool,
   ProblemDetail,
+  SwimActivity,
 } from "./types";
 
 export class ApiError extends Error {
@@ -91,4 +96,15 @@ export const api = {
         version: goal.version,
       }),
     }),
+  garminConnection: () => request<GarminConnection>("/integrations/garmin"),
+  garminDevices: () => request<GarminDevice[]>("/integrations/garmin/devices"),
+  garminActivities: () => request<SwimActivity[]>("/integrations/garmin/activities"),
+  garminSyncRuns: () => request<GarminSyncRun[]>("/integrations/garmin/sync-runs"),
+  requestGarminSync: () =>
+    request<GarminSyncJob>("/integrations/garmin/sync", {
+      method: "POST",
+      headers: { "Idempotency-Key": crypto.randomUUID() },
+    }),
+  disconnectGarmin: () =>
+    request<GarminConnection>("/integrations/garmin", { method: "DELETE" }),
 };

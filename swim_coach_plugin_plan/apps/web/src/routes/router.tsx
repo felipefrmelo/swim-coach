@@ -2,7 +2,7 @@ import { createRootRoute, createRoute, createRouter } from "@tanstack/react-rout
 
 import { AppShell } from "../components/AppShell";
 import type { Me } from "../api/types";
-import { AvailabilityPage, DashboardPage, GoalsPage, PoolsPage, ProfilePage } from "./pages";
+import { AvailabilityPage, DashboardPage, GarminPage, GoalsPage, PoolsPage, ProfilePage } from "./pages";
 
 let authenticatedMe: Me;
 
@@ -12,8 +12,9 @@ const profileRoute = createRoute({ getParentRoute: () => rootRoute, path: "/prof
 const poolsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/pools", component: PoolsPage });
 const availabilityRoute = createRoute({ getParentRoute: () => rootRoute, path: "/availability", component: AvailabilityPage });
 const goalsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/goals", component: GoalsPage });
+const garminRoute = createRoute({ getParentRoute: () => rootRoute, path: "/garmin", component: GarminPage });
 
-const routeTree = rootRoute.addChildren([indexRoute, profileRoute, poolsRoute, availabilityRoute, goalsRoute]);
+const routeTree = rootRoute.addChildren([indexRoute, profileRoute, poolsRoute, availabilityRoute, goalsRoute, garminRoute]);
 export const router = createRouter({ routeTree });
 
 export function setAuthenticatedMe(me: Me) { authenticatedMe = me; }

@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+### P02 — Garmin somente leitura (em validação real)
+
+- implementados provider Garmin isolado, DTOs internos e classificação
+  sanitizada de autenticação, rede, rate limit, not found e schema drift;
+- adicionados AES-256-GCM user-scoped com key version/rotação, bootstrap CLI
+  com MFA sem token store em disco e revogação local auditada;
+- criada migration Alembic `000002` para conexão, cursor, runs, payloads,
+  imports e atividades, com repositories e ownership por usuário;
+- implementados sync incremental paginado, janela de sobreposição, filtro de
+  pool swimming, checksum SHA-256, replay idempotente e cursor fail-closed;
+- adicionado job `garmin.sync_activities` com advisory lock, retry/backoff e
+  tratamento explícito de 429 e reautenticação;
+- adicionadas API autenticada e tela PWA mobile-first para status, dispositivos,
+  sincronização e linha do tempo, sem campo de senha Garmin no navegador;
+- testes de fixture, criptografia/tamper/rotação, migration, paginação/dedupe,
+  rate limit/retry e desconexão estão verdes; o gate permanece aberto até o
+  smoke persistente com atividade real e replay sem duplicação.
+
 ### P01 — domínio, persistência e identidade
 
 - implementados value objects tipados, entidades e serviços transacionais para

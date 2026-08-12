@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarPlus, Check, Goal as GoalIcon, MapPin, Sparkles, Waves } from "lucide-react";
+import { Activity, CalendarPlus, Check, Goal as GoalIcon, Link2Off, MapPin, RefreshCw, ShieldCheck, Sparkles, Watch, Waves } from "lucide-react";
 
 import { api } from "../api/client";
 import type { Goal, Me } from "../api/types";
@@ -90,6 +90,61 @@ export function GoalsPage() {
   if (goals.data.length === 0) return <Page title="Meta" eyebrow="Direção do treino"><section className="empty-card"><GoalIcon className="size-7" /><div><h2 className="section-title">Defina sua primeira meta</h2><p className="mt-2 text-sm text-slate-600">Distância e tempo geram um ritmo-alvo explícito.</p></div></section></Page>;
   return <GoalEditor goal={goals.data[0]} onSaved={async () => queryClient.invalidateQueries({ queryKey: ["goals"] })} />;
 }
+
+export function GarminPage() {
+  const queryClient = useQueryClient();
+  const connection = useQuery({ queryKey: ["garmin-connection"], queryFn: api.garminConnection, refetchInterval: 10_000 });
+  const devices = useQuery({ queryKey: ["garmin-devices"], queryFn: api.garminDevices, enabled: connection.data?.status === "active" || connection.data?.status === "degraded" });
+  const activities = useQuery({ queryKey: ["garmin-activities"], queryFn: api.garminActivities, enabled: Boolean(connection.data), refetchInterval: 10_000 });
+  const runs = useQuery({ queryKey: ["garmin-sync-runs"], queryFn: api.garminSyncRuns, enabled: Boolean(connection.data), refetchInterval: 10_000 });
+  const sync = useMutation({
+    mutationFn: api.requestGarminSync,
+    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ["garmin-sync-runs"] }),
+  });
+  const disconnect = useMutation({
+    mutationFn: api.disconnectGarmin,
+    onSuccess: async () => queryClient.invalidateQueries(),
+  });
+  if (connection.isLoading) return <LoadingState label="Consultando a Garmin…" />;
+  if (!connection.data) return <ErrorState message="Não foi possível consultar a conexão Garmin." />;
+  const connected = connection.data.status === "active" || connection.data.status === "degraded";
+  const latestRun = runs.data?.[0];
+  return (
+    <Page title="Garmin" eyebrow="Importação somente leitura · P02">
+      <section className={`surface-card garmin-status ${connected ? "garmin-status-connected" : ""}`}>
+        <div className="flex items-start gap-4">
+          <span className="icon-chip"><Watch className="size-5" /></span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2"><h2 className="section-title">{connected ? "Garmin conectada" : "Conexão pendente"}</h2><span className="badge">{connectionStatusLabel(connection.data.status)}</span></div>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{connected ? `${connection.data.account_label_masked} · credencial protegida no servidor` : "A senha não é digitada nem armazenada neste navegador."}</p>
+          </div>
+        </div>
+        {!connection.data.configured && <div className="setup-notice mt-5"><ShieldCheck className="size-5" /><div><p className="font-semibold">Configuração segura necessária</p><p className="mt-1">A chave de criptografia Garmin ainda não foi configurada no servidor.</p></div></div>}
+        {!connected && connection.data.configured && <div className="mt-5 rounded-2xl bg-slate-950 p-4 text-sm leading-6 text-slate-100"><p className="font-semibold">Conecte pelo terminal seguro do servidor</p><code className="mt-2 block overflow-x-auto text-xs text-cyan-200">uv run python -m swim_coach.interfaces.cli.garmin connect --user-email SEU_EMAIL</code></div>}
+        {connected && <div className="mt-6 flex flex-col gap-3 sm:flex-row"><button className="primary-button flex-1 gap-2" type="button" disabled={sync.isPending} onClick={() => sync.mutate()}><RefreshCw className={`size-4 ${sync.isPending ? "animate-spin" : ""}`} />{sync.isPending ? "Enfileirando…" : "Sincronizar agora"}</button><button className="secondary-button gap-2" type="button" disabled={disconnect.isPending} onClick={() => window.confirm("Revogar o token Garmin armazenado neste servidor?") && disconnect.mutate()}><Link2Off className="size-4" />Desconectar</button></div>}
+        {sync.isSuccess && <div className="mt-4"><SavedNotice>Sincronização enfileirada. A tela atualiza automaticamente.</SavedNotice></div>}
+        {sync.isError && <div className="mt-4"><ErrorState message="A sincronização não pôde ser enfileirada." /></div>}
+      </section>
+
+      <section className="grid gap-4 sm:grid-cols-2" aria-label="Resumo Garmin">
+        <article className="metric-card"><Watch className="size-6 text-cyan-700" /><div><p className="metric-value">{devices.data?.length ?? 0}</p><p className="metric-label">Dispositivos detectados</p></div></article>
+        <article className="metric-card"><Activity className="size-6 text-orange-600" /><div><p className="metric-value">{activities.data?.length ?? 0}</p><p className="metric-label">Natações importadas</p></div></article>
+      </section>
+
+      {latestRun && <section className="surface-card"><p className="eyebrow">Última sincronização</p><div className="mt-3 flex flex-wrap items-end justify-between gap-4"><div><h2 className="section-title">{syncStatusLabel(latestRun.status)}</h2><p className="mt-1 text-sm text-slate-600">{formatDate(latestRun.started_at)}</p></div><p className="text-sm text-slate-600">{latestRun.created} novas · {latestRun.updated} atualizadas · {latestRun.skipped} iguais</p></div></section>}
+
+      <section>
+        <div className="mb-4 flex items-center gap-3"><ShieldCheck className="size-5 text-cyan-800" /><h2 className="section-title">Linha do tempo verificada</h2></div>
+        {activities.isLoading ? <LoadingState label="Carregando atividades…" /> : activities.data?.length ? <div className="grid gap-3">{activities.data.map((item) => <article className="surface-card activity-row" key={item.id}><div><p className="font-semibold text-slate-900">{item.name}</p><p className="mt-1 text-sm text-slate-500">{formatDate(item.start_time_utc)} · {item.pool_length_m ? `piscina de ${item.pool_length_m} m` : "piscina"}</p></div><div className="text-left sm:text-right"><p className="text-xl font-bold tracking-tight text-cyan-950">{item.distance_m.toLocaleString("pt-BR")} m</p><p className="text-sm text-slate-500">{formatDuration(item.elapsed_seconds)}</p></div></article>)}</div> : <section className="empty-card"><Waves className="size-7 text-cyan-800" /><div><h2 className="section-title">Nenhuma natação importada</h2><p className="mt-2 text-sm leading-6 text-slate-600">Depois da primeira sincronização, suas atividades de piscina aparecem aqui.</p></div></section>}
+      </section>
+    </Page>
+  );
+}
+
+function formatDate(value: string) { return new Intl.DateTimeFormat("pt-BR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)); }
+function formatDuration(value: string) { const seconds = Number(value); const minutes = Math.floor(seconds / 60); return `${minutes} min ${Math.round(seconds % 60)} s`; }
+function syncStatusLabel(status: string) { return ({ running: "Em andamento", succeeded: "Concluída", partial: "Concluída parcialmente", failed: "Falhou", cancelled: "Cancelada" } as Record<string, string>)[status] ?? status; }
+function connectionStatusLabel(status: string) { return ({ not_connected: "não conectada", disconnected: "desconectada", active: "ativa", degraded: "atenção", reauth_required: "reautenticação", disabled: "desativada" } as Record<string, string>)[status] ?? status; }
 
 function GoalEditor({ goal, onSaved }: { goal: Goal; onSaved: () => Promise<unknown> }) {
   const [distance, setDistance] = useState(goal.target_distance_m);

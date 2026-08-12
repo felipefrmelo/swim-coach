@@ -5,6 +5,7 @@ import {
   Home,
   LogOut,
   MapPin,
+  Watch,
   Waves,
   type LucideIcon,
 } from "lucide-react";
@@ -25,6 +26,7 @@ const navigation: NavigationItem[] = [
   { to: "/pools", label: "Piscinas", icon: MapPin },
   { to: "/availability", label: "Agenda", icon: CalendarDays },
   { to: "/goals", label: "Meta", icon: Goal },
+  { to: "/garmin", label: "Garmin", icon: Watch },
   { to: "/profile", label: "Perfil", icon: CircleUserRound },
 ];
 
@@ -65,7 +67,7 @@ export function AppShell({ me }: { me: Me }) {
         <main className="px-5 sm:px-8 lg:px-12"><Outlet /></main>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-slate-200 bg-white/95 px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 shadow-[0_-12px_32px_rgba(8,47,73,0.08)] backdrop-blur lg:hidden" aria-label="Navegação principal">
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-slate-200 bg-white/95 px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 shadow-[0_-12px_32px_rgba(8,47,73,0.08)] backdrop-blur lg:hidden" aria-label="Navegação principal">
         {navigation.map((item) => (
           <NavItem key={item.to} item={item} active={pathname === item.to} compact />
         ))}

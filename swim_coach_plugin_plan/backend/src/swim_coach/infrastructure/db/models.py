@@ -15,6 +15,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     Numeric,
     String,
     Text,
@@ -422,4 +423,218 @@ class OidcLoginAttemptModel(Base):
             "expires_at",
             postgresql_where=text("consumed_at IS NULL"),
         ),
+    )
+
+
+class GarminConnectionModel(Base):
+    __tablename__ = "garmin_connection"
+
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE"), primary_key=True
+    )
+    status: Mapped[str] = mapped_column(String(30), nullable=False)
+    account_label_masked: Mapped[str] = mapped_column(String(320), nullable=False)
+    encrypted_token_bundle: Mapped[bytes | None] = mapped_column(LargeBinary)
+    token_nonce: Mapped[bytes | None] = mapped_column(LargeBinary)
+    token_key_version: Mapped[str | None] = mapped_column(String(64))
+    provider_library_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    authenticated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_refresh_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error_code: Mapped[str | None] = mapped_column(String(80))
+    last_error_message_redacted: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('disconnected','active','degraded','reauth_required','disabled')",
+            name="ck_garmin_connection_status",
+        ),
+        CheckConstraint(
+            "(encrypted_token_bundle IS NULL AND token_nonce IS NULL AND "
+            "token_key_version IS NULL) OR (encrypted_token_bundle IS NOT NULL AND "
+            "token_nonce IS NOT NULL AND token_key_version IS NOT NULL)",
+            name="ck_garmin_connection_secret_complete",
+        ),
+        CheckConstraint("version >= 1", name="ck_garmin_connection_version"),
+    )
+
+
+class SyncCursorModel(Base):
+    __tablename__ = "sync_cursor"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
+    )
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
+    entity_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    cursor_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    watermark_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    overlap_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "provider", "entity_type", name="uq_sync_cursor_user_provider_entity"
+        ),
+        CheckConstraint("overlap_seconds >= 0", name="ck_sync_cursor_overlap"),
+        CheckConstraint("version >= 1", name="ck_sync_cursor_version"),
+    )
+
+
+class SyncRunModel(Base):
+    __tablename__ = "sync_run"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
+    )
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
+    sync_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    trigger: Mapped[str] = mapped_column(String(30), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    listed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    skipped: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cursor_before_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    cursor_after_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    error_json_redacted: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('running','succeeded','partial','failed','cancelled')",
+            name="ck_sync_run_status",
+        ),
+        CheckConstraint(
+            "listed >= 0 AND created >= 0 AND updated >= 0 AND skipped >= 0 AND failed >= 0",
+            name="ck_sync_run_counters",
+        ),
+        Index("ix_sync_run_user_started", "user_id", text("started_at DESC")),
+    )
+
+
+class RawProviderPayloadModel(Base):
+    __tablename__ = "raw_provider_payload"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
+    )
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
+    entity_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    external_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    json_payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    checksum: Mapped[str] = mapped_column(String(64), nullable=False)
+    provider_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "provider",
+            "entity_type",
+            "external_id",
+            "checksum",
+            name="uq_raw_payload_identity_checksum",
+        ),
+        Index("ix_raw_payload_user_received", "user_id", text("received_at DESC")),
+    )
+
+
+class ActivityModel(Base):
+    __tablename__ = "activity"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
+    )
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
+    external_activity_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    sport: Mapped[str] = mapped_column(String(50), nullable=False)
+    subtype: Mapped[str] = mapped_column(String(50), nullable=False)
+    start_time_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    timezone: Mapped[str] = mapped_column(String(100), nullable=False)
+    distance_m: Mapped[int] = mapped_column(Integer, nullable=False)
+    elapsed_seconds: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
+    timer_seconds: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
+    moving_seconds: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
+    pool_length_m: Mapped[int | None] = mapped_column(Integer)
+    length_count: Mapped[int | None] = mapped_column(Integer)
+    calories: Mapped[int | None] = mapped_column(Integer)
+    avg_hr: Mapped[int | None] = mapped_column(Integer)
+    max_hr: Mapped[int | None] = mapped_column(Integer)
+    avg_pace_seconds_per_100m: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    avg_stroke_rate: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    avg_strokes_per_length: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    avg_swolf: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    source_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    normalization_version: Mapped[str | None] = mapped_column(String(64))
+    raw_summary_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("raw_provider_payload.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    raw_fit_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("raw_provider_payload.id", ondelete="SET NULL")
+    )
+    summary_checksum: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "provider", "external_activity_id", name="uq_activity_user_external"
+        ),
+        CheckConstraint(
+            "distance_m >= 0 AND elapsed_seconds >= 0 AND timer_seconds >= 0 "
+            "AND moving_seconds >= 0",
+            name="ck_activity_non_negative_totals",
+        ),
+        CheckConstraint("pool_length_m IS NULL OR pool_length_m > 0", name="ck_activity_pool"),
+        Index("ix_activity_user_start", "user_id", text("start_time_utc DESC")),
+    )
+
+
+class ActivityImportModel(Base):
+    __tablename__ = "activity_import"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
+    )
+    sync_run_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("sync_run.id", ondelete="CASCADE"), nullable=False
+    )
+    activity_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("activity.id", ondelete="SET NULL")
+    )
+    external_activity_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    checksum: Mapped[str] = mapped_column(String(64), nullable=False)
+    error_code: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "sync_run_id", "external_activity_id", name="uq_activity_import_run_external"
+        ),
+        CheckConstraint(
+            "status IN ('created','updated','skipped','failed')",
+            name="ck_activity_import_status",
+        ),
+        Index("ix_activity_import_user_created", "user_id", text("created_at DESC")),
     )

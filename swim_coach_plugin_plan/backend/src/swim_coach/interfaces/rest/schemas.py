@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, time
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Literal
 from uuid import UUID
@@ -10,8 +10,10 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from swim_coach.domain.athlete import AthleteProfile, AvailabilityRule, Pool
+from swim_coach.domain.garmin import Activity, GarminConnection, SyncRun
 from swim_coach.domain.goals import GoalStatus, TrainingGoal
 from swim_coach.domain.identity import AppUser
+from swim_coach.domain.operations import JobStatus
 
 
 class StrictModel(BaseModel):
@@ -179,3 +181,100 @@ class GoalCreateRequest(StrictModel):
 class GoalUpdateRequest(GoalCreateRequest):
     status: GoalStatus
     version: int = Field(ge=1)
+
+
+class GarminConnectionResponse(StrictModel):
+    configured: bool
+    status: str
+    account_label_masked: str
+    provider_library_version: str | None
+    authenticated_at: datetime | None
+    last_success_at: datetime | None
+    last_error_code: str | None
+    connection_method: Literal["server_bootstrap"] = "server_bootstrap"
+
+    @classmethod
+    def from_domain(
+        cls, connection: GarminConnection | None, *, configured: bool
+    ) -> GarminConnectionResponse:
+        return cls(
+            configured=configured,
+            status=connection.status.value if connection else "not_connected",
+            account_label_masked=connection.account_label_masked if connection else "***",
+            provider_library_version=(connection.provider_library_version if connection else None),
+            authenticated_at=connection.authenticated_at if connection else None,
+            last_success_at=connection.last_success_at if connection else None,
+            last_error_code=connection.last_error_code if connection else None,
+        )
+
+
+class GarminDeviceResponse(StrictModel):
+    id: UUID
+    model: str
+    name: str
+    is_primary: bool
+    last_seen_at: datetime | None
+
+
+class ActivityResponse(StrictModel):
+    id: UUID
+    name: str
+    subtype: str
+    start_time_utc: datetime
+    distance_m: int
+    elapsed_seconds: Decimal
+    pool_length_m: int | None
+    length_count: int | None
+    avg_hr: int | None
+    avg_swolf: Decimal | None
+
+    @classmethod
+    def from_domain(cls, activity: Activity) -> ActivityResponse:
+        return cls(
+            id=activity.id.value,
+            name=activity.name,
+            subtype=activity.subtype,
+            start_time_utc=activity.start_time_utc,
+            distance_m=activity.distance.meters,
+            elapsed_seconds=activity.elapsed.seconds,
+            pool_length_m=activity.pool_length.meters if activity.pool_length else None,
+            length_count=activity.length_count,
+            avg_hr=activity.avg_hr,
+            avg_swolf=activity.avg_swolf,
+        )
+
+
+class SyncRunResponse(StrictModel):
+    id: UUID
+    status: str
+    trigger: str
+    listed: int
+    created: int
+    updated: int
+    skipped: int
+    failed: int
+    started_at: datetime
+    finished_at: datetime | None
+    error_code: str | None
+
+    @classmethod
+    def from_domain(cls, run: SyncRun) -> SyncRunResponse:
+        error_code = run.error.get("code") if run.error else None
+        return cls(
+            id=run.id.value,
+            status=run.status.value,
+            trigger=run.trigger,
+            listed=run.listed,
+            created=run.created,
+            updated=run.updated,
+            skipped=run.skipped,
+            failed=run.failed,
+            started_at=run.started_at,
+            finished_at=run.finished_at,
+            error_code=error_code if isinstance(error_code, str) else None,
+        )
+
+
+class SyncJobResponse(StrictModel):
+    id: UUID
+    status: JobStatus

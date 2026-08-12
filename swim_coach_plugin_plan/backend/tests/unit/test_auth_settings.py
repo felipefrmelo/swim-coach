@@ -1,3 +1,5 @@
+import base64
+
 import pytest
 from pydantic import ValidationError
 
@@ -37,3 +39,20 @@ def test_oidc_requires_issuer_client_and_allowlist() -> None:
         auth_allowed_subjects="auth0|allowed",
     )
     assert settings.oidc_redirect_uri == "http://127.0.0.1:14173/api/v1/auth/callback"
+
+
+def test_garmin_keyring_requires_32_byte_active_key() -> None:
+    encoded = base64.urlsafe_b64encode(b"k" * 32).decode().rstrip("=")
+    settings = Settings(
+        _env_file=None,
+        garmin_master_keys=f"v1:{encoded}",
+        garmin_active_key_version="v1",
+    )
+    assert settings.garmin_keyring == {"v1": b"k" * 32}
+
+    with pytest.raises(ValidationError):
+        Settings(
+            _env_file=None,
+            garmin_master_keys=f"v1:{encoded}",
+            garmin_active_key_version="v2",
+        )

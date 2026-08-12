@@ -14,6 +14,15 @@ from swim_coach.domain.athlete import (
     Device,
     Pool,
 )
+from swim_coach.domain.garmin import (
+    Activity,
+    ActivityImport,
+    ActivityImportStatus,
+    GarminConnection,
+    RawProviderPayload,
+    SyncCursor,
+    SyncRun,
+)
 from swim_coach.domain.goals import GoalMilestone, TrainingGoal
 from swim_coach.domain.identity import (
     AppUser,
@@ -22,6 +31,7 @@ from swim_coach.domain.identity import (
     WebSession,
 )
 from swim_coach.domain.operations import ApiIdempotencyRecord, AuditEvent, Job, OutboxEvent
+from swim_coach.domain.shared.types import JsonObject
 from swim_coach.domain.shared.value_objects import EntityId, UserId
 
 
@@ -64,6 +74,40 @@ class ConstraintsRepository(Protocol):
 class DevicesRepository(Protocol):
     async def list(self, user_id: UserId) -> Sequence[Device]: ...
     async def add(self, device: Device) -> None: ...
+    async def upsert(self, device: Device) -> None: ...
+
+
+class GarminConnectionsRepository(Protocol):
+    async def get(self, user_id: UserId) -> GarminConnection | None: ...
+    async def upsert(self, connection: GarminConnection) -> None: ...
+    async def update(self, connection: GarminConnection, *, expected_version: int) -> None: ...
+
+
+class SyncCursorsRepository(Protocol):
+    async def get(self, user_id: UserId, provider: str, entity_type: str) -> SyncCursor | None: ...
+    async def upsert(self, cursor: SyncCursor) -> None: ...
+
+
+class SyncRunsRepository(Protocol):
+    async def add(self, run: SyncRun) -> None: ...
+    async def update(self, run: SyncRun, *, expected_version: int) -> None: ...
+    async def list_recent(self, user_id: UserId, *, limit: int = 20) -> Sequence[SyncRun]: ...
+
+
+class RawProviderPayloadsRepository(Protocol):
+    async def add_if_absent(self, payload: RawProviderPayload) -> EntityId: ...
+
+
+class ActivitiesRepository(Protocol):
+    async def get_by_external_id(
+        self, user_id: UserId, provider: str, external_activity_id: str
+    ) -> Activity | None: ...
+    async def upsert(self, activity: Activity) -> tuple[ActivityImportStatus, EntityId]: ...
+    async def list_recent(self, user_id: UserId, *, limit: int = 50) -> Sequence[Activity]: ...
+
+
+class ActivityImportsRepository(Protocol):
+    async def add(self, activity_import: ActivityImport) -> None: ...
 
 
 class GoalsRepository(Protocol):
@@ -80,10 +124,21 @@ class GoalMilestonesRepository(Protocol):
 
 class JobsRepository(Protocol):
     async def add(self, job: Job) -> None: ...
+    async def add_idempotent(self, job: Job) -> Job: ...
+    async def get_by_idempotency_key(self, idempotency_key: str) -> Job | None: ...
     async def lease_next(
         self, worker_id: str, *, ttl: timedelta, job_types: frozenset[str]
     ) -> Job | None: ...
     async def mark_succeeded(self, job_id: EntityId, worker_id: str, at: datetime) -> bool: ...
+    async def mark_failed(
+        self,
+        job_id: EntityId,
+        worker_id: str,
+        at: datetime,
+        *,
+        error: JsonObject,
+        retry_at: datetime | None,
+    ) -> bool: ...
 
 
 class OutboxRepository(Protocol):
@@ -127,6 +182,18 @@ class UnitOfWork(Protocol):
     def constraints(self) -> ConstraintsRepository: ...
     @property
     def devices(self) -> DevicesRepository: ...
+    @property
+    def garmin_connections(self) -> GarminConnectionsRepository: ...
+    @property
+    def sync_cursors(self) -> SyncCursorsRepository: ...
+    @property
+    def sync_runs(self) -> SyncRunsRepository: ...
+    @property
+    def raw_provider_payloads(self) -> RawProviderPayloadsRepository: ...
+    @property
+    def activities(self) -> ActivitiesRepository: ...
+    @property
+    def activity_imports(self) -> ActivityImportsRepository: ...
     @property
     def goals(self) -> GoalsRepository: ...
 
