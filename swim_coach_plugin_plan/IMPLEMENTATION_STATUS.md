@@ -22,7 +22,7 @@
 | P09 | IN_PROGRESS | P08 | UI MCP opcional e fallback headless | [draft PR #10](https://github.com/felipefrmelo/swim-coach/pull/10) |
 | P10 | IN_PROGRESS | P03,P04,P08 | semana adaptativa explicável | [draft PR #11](https://github.com/felipefrmelo/swim-coach/pull/11) |
 | P11 | IN_PROGRESS | P10 | automações recuperáveis e PWA offline | [draft PR #12](https://github.com/felipefrmelo/swim-coach/pull/12) |
-| P12 | IN_PROGRESS | P11 | restore testado e release pessoal | branch `p12-production-hardening` |
+| P12 | IN_PROGRESS | P11 | restore testado e release pessoal | [draft PR #13](https://github.com/felipefrmelo/swim-coach/pull/13) |
 
 ## Evidências por fase
 
@@ -353,6 +353,7 @@
 
 - Estado: `IN_PROGRESS`
 - Implementação: P12-T01..T10 concluídas; gate automatizado/integrado aprovado.
+- Commit/PR: [`aa98d80`](https://github.com/felipefrmelo/swim-coach/commit/aa98d80) / [draft PR #13](https://github.com/felipefrmelo/swim-coach/pull/13), baseado em `p11-automation-offline`.
 - Evidências:
   - [`docs/evidence/p12-production-hardening-release.md`](docs/evidence/p12-production-hardening-release.md)
   - [`docs/handoffs/p12.md`](docs/handoffs/p12.md)

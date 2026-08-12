@@ -277,9 +277,11 @@
         "local:sbom:744-components",
         "local:release-candidate:releases/plugin-1.0.0.json",
         "local:plugin-personal:1.0.0+codex.20260812170215:enabled",
+        "github:draft-pr:13",
+        "github:commit:aa98d80:personal-release-hardening",
         "pending:new-thread-plugin-smoke-and-earlier-real-gates"
       ],
-      "commit": null
+      "commit": "aa98d80"
     }
   ]
 }

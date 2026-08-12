@@ -60,6 +60,11 @@
     "validation": "passed",
     "enabled": true
   },
+  "publication": {
+    "draft_pr": 13,
+    "implementation_commit": "aa98d80",
+    "base_branch": "p11-automation-offline"
+  },
   "pending_gates": [
     "P11 personal automation/offline/queue evidence",
     "new Codex/ChatGPT thread smoke with the installed 1.0.0 skill set",

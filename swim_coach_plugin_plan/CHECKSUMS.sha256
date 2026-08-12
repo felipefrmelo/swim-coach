@@ -8,7 +8,7 @@ dd2f96d4c60cdaf2ed752a91333872a95b5eb42f9a2bed2ff4d1258963fa8b2f  ./.editorconfi
 d671dc70659b25a23e74c2d218754722299f641e4db6604b3d55b4faabe2635d  ./AGENTS.md
 5f049d4249a4f7593f75fbe37fe212de3fc4fe2e7758d8c12d40c4e1a025becb  ./CHANGELOG.md
 93630130c3f63d66a7cead1e76689d8b2ceb0526510f7d012606058325ad8055  ./FILE_INDEX.md
-112d18121929b1e1a065abede76c2a5d309b86088b3b5b9e69d97b1f98b424be  ./IMPLEMENTATION_STATUS.md
+e8597eeea3207a452e184566019f6ee61e32cd4b47c8c49136f961e06d1659b4  ./IMPLEMENTATION_STATUS.md
 d527a9882dedf6a1b4d79c593a910aeb37475c3286d55cdc533aa6f1656cb046  ./LLM_START_HERE.md
 bd92538a91bf6779f5bc5fc0c62c751bdad18112e642dfcd14643af099650000  ./MASTER_PLAN.md
 16fe3b54498903c041f7939be1c4387c89f0e4632bf7f464a345c69cc52b92d6  ./Makefile
@@ -273,7 +273,7 @@ d8aff3b42bec06ef12c92b85c688105dd4215a8264706a9e53ab33461f09de25  ./docs/evidenc
 a0a5c43a387756d785575efb2096ffaf6c4a5dbd60235e0eb954e3f7f70f10dc  ./docs/evidence/p09-mcp-apps-ui.png
 c9cb63383000d1f882846398ab0d6bf979d03f38336bc7778d71d7bb70575e9f  ./docs/evidence/p10-adaptive-planning.md
 563b509973b09164e3b12bef2f9286a03dc4e49c5ac9e65a41576b25d59b3ae9  ./docs/evidence/p11-automation-offline.md
-007be65f2a45acf6113a69da633b4253929a68d3d04d4dc8a84d6e0e09928e85  ./docs/evidence/p12-production-hardening-release.md
+9d46d1de46cebc114698216be74616d5c0964c8ce5bc2d96cdb6be7012c61d19  ./docs/evidence/p12-production-hardening-release.md
 9b78955f5b9075c71ae85ef36eab7ad881d51ab7545e7008ca5a32d150b75b8c  ./docs/handoffs/p00.md
 74c7bacc55937c5efd212a91dcb7a92d1cf0fea4a51b07e4ed8c4465f68bdfb1  ./docs/handoffs/p01.md
 444ef1407ed7b452fe4b72a6c7e7158e8b4af841dba82d664eab90ce8b939466  ./docs/handoffs/p03.md
@@ -285,7 +285,7 @@ b18672ac72b05a2dc78b35815c4be3e1091f6caed78f2d62e831f7bf98c50548  ./docs/handoff
 4ee8365da2400309f5e0f69975284130e21a0a95de5935842f4942b11cdf5006  ./docs/handoffs/p09.md
 32f6634e48c8643d073c0fae56391faf5b1e81357f3e77fe7df5967fcccdc0d3  ./docs/handoffs/p10.md
 a8f9a4a0ca51674d8a5cf142c13bd6f08d17eddebafae68aeaae4a7fed4fdda6  ./docs/handoffs/p11.md
-2393f596811b4abb40a1582d894e10ba28d888513bf8299607dd5fb9617a7b71  ./docs/handoffs/p12.md
+644777dc914999823789bae82f9007acdd283477dde633f24fcb6645a46dbf24  ./docs/handoffs/p12.md
 4dde286597b0d595be2b16cfdf4cf9acd820187e377dd59fa84c3cc38244ecc9  ./docs/operations/p07-garmin-write-reconciliation.md
 0a1a2645d606014699bcc8a1d0069b5fdfcb122801818c5057431954396a61db  ./docs/public-readiness.md
 d05f02f734d7d30ede82b5996a5460303e637afe27d94e692e5eb5c5d9106532  ./docs/runbooks/p11-job-operations.md
@@ -317,7 +317,7 @@ d4a0cc48f4a9c5bf9390021dcfa9165bceb60ee87a46cf35ea73990841b68579  ./examples/wor
 589ad673add619fe6874b596fb2765ad19cc2fb3cf1761c04f3beeea47db286a  ./examples/workouts/speed-1000m.json
 5eb974921e2ba72d3e80583885321a1597b2b87040641fb394f3b03d6fc5414a  ./examples/workouts/technique-800m.json
 7cc081768d2c785adf13e2e3807eeab4e2881d315a247c7abebb4ce5e07fdf21  ./examples/workouts/test-1200m.json
-7e71b699ac6601a3edec6db041d9b65cf44be4756e244f326037efa27ab2e8a4  ./implementation-status.json
+4630d024c6a6bc674075a6be02093230d6c3cd9748ae3027407b859eabc0f67f  ./implementation-status.json
 8e4b95311b3b6355f5be380dfd357c631d6856ce88c5e6550c69386b58d338bc  ./ops/alerts.yaml
 ea58f087bddd5ab9bcdeb75d7227a038be43a8d57a2c598d8d98e656914d5613  ./package.json
 baabfa99c45f3041617bec8a088622eae460d1e36de20dd590e6e5670a4ddefa  ./phases/README.md
@@ -386,7 +386,7 @@ bf32a5c7a9fd24755bfb1581170c92a7fafdc6439a7f15ccbfbda0c6295a15fa  ./prompts/p11.
 5776a8e6932ee895191588f986a302b2819d7c9065fea070cc652aa56f29e267  ./releases/plugin-0.2.0.json
 86f71c5feb80eb124b71ae14a4dd819f35eedf894a54abad43be6f4f4df76cbb  ./releases/plugin-0.3.0.json
 725e7ef0c8365eb754db8a44d767ce9f7a3ad69445218ad8d91fe97adfec1948  ./releases/plugin-0.4.0.json
-c74e2bbd075ccdc952b8e4690b937803370cec72a5a82c8e65dbea8b0e0a2231  ./releases/plugin-1.0.0.json
+62319c71d4ba9a3d01bf671af7f2f7e33ab86f22063e921852bd5eb0f566b1af  ./releases/plugin-1.0.0.json
 c490bba5daf387fdd7de6c401adfcad8dce223a1bd06dc81dabc35fb592a7a9a  ./tests/e2e/p01-auth-context.spec.ts
 0e6d45cdaab3a105f54a66b17f2328f8a500e71fc08d037e54a46326dae60d98  ./tests/e2e/p02-garmin-status.spec.ts
 69ab8f5d0354a5559a620b94bbecffdd46959cdc9223392865e59dac9387940f  ./tests/e2e/p03-activity-detail.spec.ts

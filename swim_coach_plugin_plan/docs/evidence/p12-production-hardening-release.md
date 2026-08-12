@@ -3,6 +3,9 @@
 State: implementation and automated/integration gate complete; phase remains
 `IN_PROGRESS` because P11 and earlier real-data gates are still open.
 
+Publication: commit `aa98d80`, draft PR #13, based on
+`p11-automation-offline`.
+
 ## Delivered by task
 
 - **P12-T01:** API/worker/migrate run as UID 10001 and web as UID 101; production
