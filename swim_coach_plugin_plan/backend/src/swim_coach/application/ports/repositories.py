@@ -43,7 +43,13 @@ from swim_coach.domain.identity import (
     OidcLoginAttempt,
     WebSession,
 )
-from swim_coach.domain.operations import ApiIdempotencyRecord, AuditEvent, Job, OutboxEvent
+from swim_coach.domain.operations import (
+    ApiIdempotencyRecord,
+    AuditEvent,
+    Job,
+    McpToolInvocation,
+    OutboxEvent,
+)
 from swim_coach.domain.shared.types import JsonObject
 from swim_coach.domain.shared.value_objects import EntityId, UserId
 from swim_coach.domain.workouts import (
@@ -123,7 +129,9 @@ class ActivitiesRepository(Protocol):
         self, user_id: UserId, provider: str, external_activity_id: str
     ) -> Activity | None: ...
     async def upsert(self, activity: Activity) -> tuple[ActivityImportStatus, EntityId]: ...
-    async def list_recent(self, user_id: UserId, *, limit: int = 50) -> Sequence[Activity]: ...
+    async def list_recent(
+        self, user_id: UserId, *, limit: int = 50, before: datetime | None = None
+    ) -> Sequence[Activity]: ...
 
 
 class ActivityDataRepository(Protocol):
@@ -151,6 +159,9 @@ class ActivityDataRepository(Protocol):
     async def get_analysis(
         self, user_id: UserId, activity_id: EntityId
     ) -> ActivityAnalysis | None: ...
+    async def list_analyses(
+        self, user_id: UserId, activity_ids: Sequence[EntityId]
+    ) -> Sequence[ActivityAnalysis]: ...
     async def add_analysis(self, analysis: ActivityAnalysis) -> None: ...
     async def get_match(
         self, user_id: UserId, activity_id: EntityId
@@ -193,11 +204,17 @@ class WorkoutsRepository(Protocol):
 class WorkoutRevisionsRepository(Protocol):
     async def list(self, user_id: UserId, workout_id: EntityId) -> Sequence[WorkoutRevision]: ...
     async def get(self, user_id: UserId, revision_id: EntityId) -> WorkoutRevision | None: ...
+    async def list_many(
+        self, user_id: UserId, workout_ids: Sequence[EntityId]
+    ) -> Sequence[WorkoutRevision]: ...
     async def add(self, revision: WorkoutRevision) -> None: ...
 
 
 class WorkoutSchedulesRepository(Protocol):
     async def get(self, user_id: UserId, workout_id: EntityId) -> WorkoutSchedule | None: ...
+    async def list(
+        self, user_id: UserId, workout_ids: Sequence[EntityId]
+    ) -> Sequence[WorkoutSchedule]: ...
     async def upsert(self, schedule: WorkoutSchedule) -> None: ...
 
 
@@ -269,6 +286,10 @@ class OutboxRepository(Protocol):
 
 class AuditRepository(Protocol):
     async def add(self, event: AuditEvent) -> None: ...
+
+
+class McpToolInvocationsRepository(Protocol):
+    async def add(self, invocation: McpToolInvocation) -> None: ...
 
 
 class IdempotencyRepository(Protocol):
@@ -345,6 +366,8 @@ class UnitOfWork(Protocol):
     def outbox(self) -> OutboxRepository: ...
     @property
     def audit(self) -> AuditRepository: ...
+    @property
+    def mcp_tool_invocations(self) -> McpToolInvocationsRepository: ...
     @property
     def idempotency(self) -> IdempotencyRepository: ...
     @property

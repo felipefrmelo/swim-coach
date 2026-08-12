@@ -2,6 +2,7 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
+from swim_coach.application.services.mcp_read import MCP_READ_SCOPES
 from swim_coach.bootstrap.api import create_app
 from swim_coach.settings import Settings, get_settings
 
@@ -46,7 +47,7 @@ async def test_protected_resource_metadata_uses_configured_https_urls(
     expected = {
         "resource": "https://swim.example.com/mcp",
         "authorization_servers": ["https://tenant.example.com"],
-        "scopes_supported": [],
+        "scopes_supported": list(MCP_READ_SCOPES),
     }
     assert root_response.status_code == 200
     assert root_response.json() == expected

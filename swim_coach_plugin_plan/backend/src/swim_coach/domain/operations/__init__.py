@@ -5,7 +5,15 @@ from swim_coach.domain.operations.entities import (
     AuditEvent,
     Job,
     JobStatus,
+    McpToolInvocation,
     OutboxEvent,
 )
 
-__all__ = ["ApiIdempotencyRecord", "AuditEvent", "Job", "JobStatus", "OutboxEvent"]
+__all__ = [
+    "ApiIdempotencyRecord",
+    "AuditEvent",
+    "Job",
+    "JobStatus",
+    "McpToolInvocation",
+    "OutboxEvent",
+]

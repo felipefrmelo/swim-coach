@@ -49,11 +49,18 @@ class WorkoutService:
     async def list_workouts(self, user_id: UserId) -> Sequence[WorkoutDetail]:
         async with self._uow_factory() as uow:
             workouts = await uow.workouts.list(user_id)
+            workout_ids = [item.id for item in workouts]
+            revisions = await uow.workout_revisions.list_many(user_id, workout_ids)
+            schedules = await uow.workout_schedules.list(user_id, workout_ids)
+            revisions_by_workout: dict[EntityId, list[WorkoutRevision]] = {}
+            for revision in revisions:
+                revisions_by_workout.setdefault(revision.workout_id, []).append(revision)
+            schedules_by_workout = {item.workout_id: item for item in schedules}
             return [
                 WorkoutDetail(
                     workout=workout,
-                    revisions=await uow.workout_revisions.list(user_id, workout.id),
-                    schedule=await uow.workout_schedules.get(user_id, workout.id),
+                    revisions=revisions_by_workout.get(workout.id, []),
+                    schedule=schedules_by_workout.get(workout.id),
                 )
                 for workout in workouts
             ]

@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 from swim_coach import __version__
 from swim_coach.bootstrap.container import build_services
+from swim_coach.infrastructure.auth import McpJwtVerifier
 from swim_coach.infrastructure.db import Database
 from swim_coach.interfaces.mcp.server import create_mcp_server
 from swim_coach.interfaces.rest.actions import router as actions_router
@@ -37,7 +38,22 @@ def create_app(
         parsed = urlparse(public_url)
         allowed_hosts = [parsed.netloc]
         allowed_origins = [public_url]
+    oauth_issuer = str(settings.oauth_issuer).rstrip("/") if settings.oauth_issuer else None
+    oauth_resource = str(settings.oauth_resource).rstrip("/") if settings.oauth_resource else None
+    token_verifier = (
+        McpJwtVerifier(
+            issuer=oauth_issuer,
+            resource=oauth_resource,
+            cache_ttl_seconds=settings.oauth_jwks_cache_seconds,
+        )
+        if oauth_issuer and oauth_resource
+        else None
+    )
     mcp_server = create_mcp_server(
+        read_service=services.mcp_read,
+        token_verifier=token_verifier,
+        oauth_issuer=oauth_issuer,
+        oauth_resource=oauth_resource,
         allowed_hosts=allowed_hosts,
         allowed_origins=allowed_origins,
     )

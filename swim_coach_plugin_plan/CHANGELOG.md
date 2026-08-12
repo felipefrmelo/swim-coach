@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+### P05 — MCP autenticado somente leitura (gate de host real pendente)
+
+- implementado resource server OAuth com discovery OIDC, JWKS em cache/rotação,
+  JWT RS256, issuer, audience/resource, validade, tipo, subject e scopes por tool;
+- adicionadas oito tools MCP user-scoped para contexto, treinos, atividades,
+  progresso e sync status, sem tool de write, sync remoto ou chamada Garmin;
+- criados DTOs mínimos, paginação/limites, truncamento, sanitização de texto,
+  envelope/erros estáveis e server instructions read-only;
+- adicionada migration `000006` para invocation sanitizada com hash dos argumentos,
+  outcome e latência, sem bearer, FIT, e-mail ou texto livre;
+- schemas fechados e annotations são comparados ao contrato versionado; cliente
+  MCP cobre auth, scope, subject mapping, IDOR, invalid input e headless output;
+- removidos N+1 de activities/analysis e workouts/schedules; reads medidos com
+  duas queries para swims e até cinco para semana, p95 local abaixo de 500 ms;
+- comprovados 91 testes Python, 2 Vitest e gate estático completo; a fase continua
+  `IN_PROGRESS` até MCP Inspector e ChatGPT/Codex consultarem dados Garmin reais
+  com token Auth0 user-scoped.
+
 ### P03 — FIT, normalização e analytics (comparação real pendente)
 
 - adicionado storage privado atômico e deduplicado para artefatos FIT, com

@@ -3,6 +3,7 @@
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, ConfigDict
 
+from swim_coach.application.services.mcp_read import MCP_READ_SCOPES
 from swim_coach.settings import get_settings
 
 router = APIRouter(tags=["oauth"])
@@ -36,5 +37,5 @@ async def protected_resource_metadata() -> ProtectedResourceMetadata:
     return ProtectedResourceMetadata(
         resource=str(settings.oauth_resource).rstrip("/"),
         authorization_servers=[str(settings.oauth_issuer).rstrip("/")],
-        scopes_supported=[],
+        scopes_supported=list(MCP_READ_SCOPES),
     )

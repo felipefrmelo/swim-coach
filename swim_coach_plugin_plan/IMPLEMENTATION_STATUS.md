@@ -13,9 +13,9 @@
 | P00 | DONE | — | Garmin read, OAuth resource binding, tunnel/ChatGPT e CI reais | [PR #1](https://github.com/felipefrmelo/swim-coach/pull/1) |
 | P01 | DONE | P00 | migrações + testes de domínio + PWA shell | [PR #2](https://github.com/felipefrmelo/swim-coach/pull/2) |
 | P02 | IN_PROGRESS | P01 | import real Garmin sem duplicata | [draft PR #3](https://github.com/felipefrmelo/swim-coach/pull/3) |
-| P03 | IN_PROGRESS | P02 | FIT normalizado e analytics reproduzíveis | branch `p03-fit-normalization-analytics` |
+| P03 | IN_PROGRESS | P02 | FIT normalizado e analytics reproduzíveis | [draft PR #6](https://github.com/felipefrmelo/swim-coach/pull/6) |
 | P04 | DONE | P01 | treino válido de 20 m criado/revisado/agendado na PWA | [draft PR #4](https://github.com/felipefrmelo/swim-coach/pull/4) |
-| P05 | NOT_STARTED | P03,P04 | MCP read-only autenticado com dados reais | — |
+| P05 | IN_PROGRESS | P03,P04 | MCP read-only autenticado com dados reais | branch `p05-mcp-read-only` |
 | P06 | NOT_STARTED | P05 | plugin/Skills instalados e evals aprovadas | — |
 | P07 | IN_PROGRESS | P04 | publicação Garmin pela PWA com aprovação | [draft PR #5](https://github.com/felipefrmelo/swim-coach/pull/5) |
 | P08 | NOT_STARTED | P06,P07 | escrita MCP com scopes/hash/auditoria | — |
@@ -176,8 +176,29 @@
 
 ### P05
 
-- Estado: `NOT_STARTED`
+- Estado: `IN_PROGRESS`
+- Início: 2026-08-12T09:53:04-03:00
+- Implementação local: P05-T01..T06 e P05-T09 concluídas; P05-T07 automatizada
+  mas aguarda MCP Inspector; P05-T08/host real pendente.
 - Evidências:
+  - [`docs/evidence/p05-mcp-read-only.md`](docs/evidence/p05-mcp-read-only.md)
+  - [`docs/handoffs/p05.md`](docs/handoffs/p05.md)
+  - documentação oficial OpenAI de autenticação MCP revalidada em 2026-08-12;
+  - JWT/JWKS/issuer/audience/expiry/scopes e redaction cobertos por testes;
+  - migration `000006` em `up/down/up` para invocation sanitizada por args hash;
+  - oito tools read-only comparadas com `contracts/mcp-tools.yaml`; zero write tool;
+  - cliente MCP Streamable HTTP → auth ausente, scope, subject mapping, IDOR,
+    inputs inválidos, resultados empty/partial/normalizados e headless aprovados;
+  - performance local: duas queries fixas para swims+analysis, até cinco para
+    semana e p95 de 30 reads abaixo do limite de 500 ms;
+  - `make check` → 91 testes Python, 2 Vitest, Ruff, mypy, ESLint, TypeScript e
+    validadores verdes.
+  - Compose rebuild/up → API, worker, web e PostgreSQL saudáveis, migration
+    `000006`; runtime sem OAuth segue fail-closed no tool P00.
+  - dependency scan e gitleaks (15 commits + worktree) sem achados.
+- Gate pendente: consulta no host com token real user-scoped, scopes mínimos e
+  dados Garmin reais persistidos; fixture e cobertura automatizada não substituem
+  essa prova.
 
 ### P06
 

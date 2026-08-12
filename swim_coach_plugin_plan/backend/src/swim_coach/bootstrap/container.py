@@ -14,6 +14,7 @@ from swim_coach.application.services import (
     GarminPublishService,
     GarminSyncService,
     IdentityService,
+    McpReadService,
     SessionService,
     WorkoutService,
 )
@@ -46,6 +47,7 @@ class AppServices:
     garmin_writer: GarminWorkoutProvider | None
     workouts: WorkoutService
     activity_data: ActivityDataService
+    mcp_read: McpReadService
 
 
 def build_services(settings: Settings, database: Database | None = None) -> AppServices:
@@ -110,10 +112,18 @@ def build_services(settings: Settings, database: Database | None = None) -> AppS
             garmin_writer = provider
     if settings.garmin_write_enabled and settings.garmin_write_mode == "fake":
         garmin_writer = FakeGarminWorkoutProvider()
+    context = ContextService(uow_factory)
+    workouts = WorkoutService(uow_factory)
+    activity_data = ActivityDataService(
+        uow_factory,
+        garmin_reader,
+        FilesystemObjectStorage(settings.activity_storage_path),
+        GarminFitActivityParser(),
+    )
     return AppServices(
         database=database,
         uow_factory=uow_factory,
-        context=ContextService(uow_factory),
+        context=context,
         identity=identity,
         sessions=sessions,
         oidc_login=oidc_login,
@@ -130,11 +140,13 @@ def build_services(settings: Settings, database: Database | None = None) -> AppS
             ),
         ),
         garmin_writer=garmin_writer,
-        workouts=WorkoutService(uow_factory),
-        activity_data=ActivityDataService(
-            uow_factory,
-            garmin_reader,
-            FilesystemObjectStorage(settings.activity_storage_path),
-            GarminFitActivityParser(),
+        workouts=workouts,
+        activity_data=activity_data,
+        mcp_read=McpReadService(
+            uow_factory=uow_factory,
+            identity=identity,
+            context=context,
+            workouts=workouts,
+            activity_data=activity_data,
         ),
     )

@@ -66,6 +66,7 @@ from swim_coach.domain.operations import (
     AuditEvent,
     Job,
     JobStatus,
+    McpToolInvocation,
     OutboxEvent,
 )
 from swim_coach.domain.shared.errors import RevisionConflictError
@@ -112,6 +113,7 @@ from swim_coach.infrastructure.db.models import (
     GarminConnectionModel,
     GoalMilestoneModel,
     JobModel,
+    McpToolInvocationModel,
     OidcLoginAttemptModel,
     OutboxEventModel,
     PlannedWorkoutModel,
@@ -294,6 +296,39 @@ def _workout_revision(model: WorkoutRevisionModel) -> WorkoutRevision:
         change_reason=model.change_reason,
         created_by_type=model.created_by_type,
         created_by_id=model.created_by_id,
+        created_at=model.created_at,
+    )
+
+
+def _workout_schedule(model: WorkoutScheduleModel) -> WorkoutSchedule:
+    return WorkoutSchedule(
+        id=EntityId(model.id),
+        workout_id=EntityId(model.workout_id),
+        scheduled_date=model.scheduled_date,
+        scheduled_start_time=model.scheduled_start_time,
+        timezone=model.timezone,
+        pool_id=EntityId(model.pool_id),
+        created_at=model.created_at,
+    )
+
+
+def _analysis(model: ActivityAnalysisModel) -> ActivityAnalysis:
+    return ActivityAnalysis(
+        id=EntityId(model.id),
+        user_id=UserId(model.user_id),
+        activity_id=EntityId(model.activity_id),
+        normalization_id=EntityId(model.normalization_id),
+        analysis_version=model.analysis_version,
+        parser_version=model.parser_version,
+        input_checksum=model.input_checksum,
+        pool_length_m=model.pool_length_m,
+        metrics=_json(model.metrics_json),
+        flags=tuple(model.flags_json),
+        quality=DataQuality(model.quality),
+        summary=_json(model.summary_json),
+        planned_workout_id=(
+            EntityId(model.planned_workout_id) if model.planned_workout_id else None
+        ),
         created_at=model.created_at,
     )
 
@@ -1138,13 +1173,13 @@ class SqlAlchemyActivitiesRepository:
         model.version += 1
         return ActivityImportStatus.UPDATED, EntityId(model.id)
 
-    async def list_recent(self, user_id: UserId, *, limit: int = 50) -> Sequence[Activity]:
-        statement = (
-            select(ActivityModel)
-            .where(ActivityModel.user_id == user_id.value)
-            .order_by(ActivityModel.start_time_utc.desc())
-            .limit(limit)
-        )
+    async def list_recent(
+        self, user_id: UserId, *, limit: int = 50, before: datetime | None = None
+    ) -> Sequence[Activity]:
+        statement = select(ActivityModel).where(ActivityModel.user_id == user_id.value)
+        if before is not None:
+            statement = statement.where(ActivityModel.start_time_utc < before)
+        statement = statement.order_by(ActivityModel.start_time_utc.desc()).limit(limit)
         return [_activity(model) for model in await self._session.scalars(statement)]
 
 
@@ -1437,24 +1472,23 @@ class SqlAlchemyActivityDataRepository:
         model = (await self._session.scalars(statement)).one_or_none()
         if model is None:
             return None
-        return ActivityAnalysis(
-            id=EntityId(model.id),
-            user_id=UserId(model.user_id),
-            activity_id=EntityId(model.activity_id),
-            normalization_id=EntityId(model.normalization_id),
-            analysis_version=model.analysis_version,
-            parser_version=model.parser_version,
-            input_checksum=model.input_checksum,
-            pool_length_m=model.pool_length_m,
-            metrics=_json(model.metrics_json),
-            flags=tuple(model.flags_json),
-            quality=DataQuality(model.quality),
-            summary=_json(model.summary_json),
-            planned_workout_id=(
-                EntityId(model.planned_workout_id) if model.planned_workout_id else None
-            ),
-            created_at=model.created_at,
+        return _analysis(model)
+
+    async def list_analyses(
+        self, user_id: UserId, activity_ids: Sequence[EntityId]
+    ) -> Sequence[ActivityAnalysis]:
+        if not activity_ids:
+            return []
+        statement = (
+            select(ActivityAnalysisModel)
+            .where(
+                ActivityAnalysisModel.user_id == user_id.value,
+                ActivityAnalysisModel.activity_id.in_([item.value for item in activity_ids]),
+            )
+            .distinct(ActivityAnalysisModel.activity_id)
+            .order_by(ActivityAnalysisModel.activity_id, ActivityAnalysisModel.created_at.desc())
         )
+        return [_analysis(model) for model in await self._session.scalars(statement)]
 
     async def add_analysis(self, analysis: ActivityAnalysis) -> None:
         self._session.add(
@@ -1843,6 +1877,25 @@ class SqlAlchemyWorkoutRevisionsRepository:
         model = (await self._session.scalars(statement)).one_or_none()
         return _workout_revision(model) if model else None
 
+    async def list_many(
+        self, user_id: UserId, workout_ids: Sequence[EntityId]
+    ) -> Sequence[WorkoutRevision]:
+        if not workout_ids:
+            return []
+        statement = (
+            select(WorkoutRevisionModel)
+            .join(PlannedWorkoutModel, PlannedWorkoutModel.id == WorkoutRevisionModel.workout_id)
+            .where(
+                WorkoutRevisionModel.workout_id.in_([item.value for item in workout_ids]),
+                PlannedWorkoutModel.user_id == user_id.value,
+            )
+            .order_by(
+                WorkoutRevisionModel.workout_id,
+                WorkoutRevisionModel.revision_number.desc(),
+            )
+        )
+        return [_workout_revision(model) for model in await self._session.scalars(statement)]
+
     async def add(self, revision: WorkoutRevision) -> None:
         totals = revision.totals
         self._session.add(
@@ -1882,17 +1935,22 @@ class SqlAlchemyWorkoutSchedulesRepository:
             )
         )
         model = (await self._session.scalars(statement)).one_or_none()
-        if not model:
-            return None
-        return WorkoutSchedule(
-            id=EntityId(model.id),
-            workout_id=EntityId(model.workout_id),
-            scheduled_date=model.scheduled_date,
-            scheduled_start_time=model.scheduled_start_time,
-            timezone=model.timezone,
-            pool_id=EntityId(model.pool_id),
-            created_at=model.created_at,
+        return _workout_schedule(model) if model else None
+
+    async def list(
+        self, user_id: UserId, workout_ids: Sequence[EntityId]
+    ) -> Sequence[WorkoutSchedule]:
+        if not workout_ids:
+            return []
+        statement = (
+            select(WorkoutScheduleModel)
+            .join(PlannedWorkoutModel, PlannedWorkoutModel.id == WorkoutScheduleModel.workout_id)
+            .where(
+                WorkoutScheduleModel.workout_id.in_([item.value for item in workout_ids]),
+                PlannedWorkoutModel.user_id == user_id.value,
+            )
         )
+        return [_workout_schedule(model) for model in await self._session.scalars(statement)]
 
     async def upsert(self, schedule: WorkoutSchedule) -> None:
         statement = insert(WorkoutScheduleModel).values(
@@ -2427,6 +2485,26 @@ class SqlAlchemyAuditRepository:
         )
 
 
+class SqlAlchemyMcpToolInvocationsRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, invocation: McpToolInvocation) -> None:
+        self._session.add(
+            McpToolInvocationModel(
+                id=invocation.id.value,
+                user_id=invocation.user_id.value,
+                tool_name=invocation.tool_name,
+                request_id=invocation.request_id,
+                args_hash=invocation.args_hash,
+                outcome=invocation.outcome,
+                latency_ms=invocation.latency_ms,
+                error_code=invocation.error_code,
+                created_at=invocation.created_at,
+            )
+        )
+
+
 class SqlAlchemyIdempotencyRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -2589,6 +2667,7 @@ class SqlAlchemyUnitOfWork:
         self.jobs = SqlAlchemyJobsRepository(self._session)
         self.outbox = SqlAlchemyOutboxRepository(self._session)
         self.audit = SqlAlchemyAuditRepository(self._session)
+        self.mcp_tool_invocations = SqlAlchemyMcpToolInvocationsRepository(self._session)
         self.idempotency = SqlAlchemyIdempotencyRepository(self._session)
         self.sessions = SqlAlchemySessionsRepository(self._session)
         self.oidc_login_attempts = SqlAlchemyOidcLoginAttemptsRepository(self._session)

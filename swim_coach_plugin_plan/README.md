@@ -2,7 +2,7 @@
 
 > **Versão do plano:** 1.0
 > **Data-base:** 11 de agosto de 2026
-> **Estado:** P00 e P01 concluídas; P02 é a próxima fase elegível
+> **Estado:** P05 em implementação; gates reais P02/P03/P05 e canário P07 pendentes
 > **Uso inicial:** pessoal
 > **Atleta inicial:** Felipe
 > **Dispositivo:** Garmin Forerunner 265
@@ -100,8 +100,11 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/google-chrome make e2e
 A API fica em `http://127.0.0.1:18000`, a PWA em
 `http://127.0.0.1:14173` e o PostgreSQL em `127.0.0.1:55432`. As portas
 podem ser sobrescritas pelas variáveis documentadas em [`.env.example`](.env.example).
-O único tool MCP liberado continua sendo `get_capabilities`; ele não acessa
-dados pessoais nem produz efeitos externos. A PWA P01 usa BFF/cookie opaco,
+Sem `SWIM_COACH_OAUTH_ISSUER`/`SWIM_COACH_OAUTH_RESOURCE`, o MCP falha fechado e
+libera somente `get_capabilities`, sem dados pessoais. Com OAuth configurado, a
+P05 registra oito tools autenticadas estritamente read-only para contexto,
+treinos, atividades, meta e status de sync; nenhuma chama Garmin nem altera
+estado de negócio. A PWA P01 usa BFF/cookie opaco,
 allowlist e ownership em todos os endpoints de contexto.
 
 O Git root contém `../.codex/config.toml`, uma configuração

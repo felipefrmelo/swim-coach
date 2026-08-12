@@ -36,6 +36,20 @@ class IdentityService:
     def _is_allowed(self, email: str, subject: str) -> bool:
         return email.casefold() in self._allowed_emails or subject in self._allowed_subjects
 
+    async def resolve_identity(self, *, provider: str, subject: str) -> AppUser:
+        """Resolve an existing active identity without creating or updating state."""
+
+        async with self._uow_factory() as uow:
+            identity = await uow.identities.get(provider, subject)
+            if identity is None:
+                raise DomainError("ACCOUNT_DISABLED", "This identity is not linked.")
+            user = await uow.users.get(identity.user_id)
+            if user is None or user.status is not UserStatus.ACTIVE:
+                raise DomainError("ACCOUNT_DISABLED", "This account is not active.")
+            if not self._is_allowed(user.email, subject):
+                raise DomainError("ACCOUNT_DISABLED", "This identity is not allowed.")
+            return user
+
     async def ensure_identity(
         self,
         *,

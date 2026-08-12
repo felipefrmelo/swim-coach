@@ -2,8 +2,8 @@
   "schema_version": "1.0",
   "project": "swim-coach",
   "plan_version": "1.0",
-  "updated_at": "2026-08-12T09:31:44-03:00",
-  "active_phase": "P03",
+  "updated_at": "2026-08-12T10:19:02-03:00",
+  "active_phase": "P05",
   "phases": [
     {
       "id": "P00",
@@ -86,7 +86,7 @@
         "local:secret-scan-clean",
         "pending:p02-persistent-real-activity-manual-comparison"
       ],
-      "commit": null
+      "commit": "e6a8df73efd45ab9bd8eb5b48c95a3d41e9af6c9"
     },
     {
       "id": "P04",
@@ -109,8 +109,24 @@
     },
     {
       "id": "P05",
-      "status": "NOT_STARTED",
-      "evidence": [],
+      "status": "IN_PROGRESS",
+      "evidence": [
+        "docs/evidence/p05-mcp-read-only.md",
+        "docs/handoffs/p05.md",
+        "official-openai:mcp-plugin-authentication:revalidated-2026-08-12",
+        "local:branch:p05-mcp-read-only",
+        "local:oauth-jwt-jwks-issuer-audience-expiry-scopes-redaction",
+        "local:testcontainers:migration-000006-up-down-up",
+        "local:mcp-client:8-read-tools-auth-scope-idor-contract",
+        "local:mcp-minimization:no-fit-token-email-storage-key-input-checksum",
+        "local:mcp-performance:2-query-swims:5-query-week:p95-under-500ms",
+        "local:make-check:91-python:2-web",
+        "local:compose:healthy:migration-000006:oauth-unconfigured-fail-closed",
+        "local:dependency-scan-clean",
+        "local:secret-scan-clean:15-commits-worktree",
+        "pending:mcp-inspector-real-oauth",
+        "pending:host-real-auth-scoped-read-only-query"
+      ],
       "commit": null
     },
     {

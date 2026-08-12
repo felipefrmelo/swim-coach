@@ -364,6 +364,32 @@ class AuditEventModel(Base):
     )
 
 
+class McpToolInvocationModel(Base):
+    __tablename__ = "mcp_tool_invocation"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
+    )
+    tool_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    request_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    args_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    outcome: Mapped[str] = mapped_column(String(20), nullable=False)
+    latency_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    error_code: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint("latency_ms >= 0", name="ck_mcp_invocation_latency"),
+        CheckConstraint(
+            "outcome IN ('OK','NOT_FOUND','PARTIAL','FAILED')",
+            name="ck_mcp_invocation_outcome",
+        ),
+        Index("ix_mcp_invocation_user_created", "user_id", text("created_at DESC")),
+        Index("ix_mcp_invocation_tool_created", "tool_name", text("created_at DESC")),
+    )
+
+
 class ApiIdempotencyRecordModel(Base):
     __tablename__ = "api_idempotency_record"
 

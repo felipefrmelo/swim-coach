@@ -115,3 +115,28 @@ class ApiIdempotencyRecord:
     def __post_init__(self) -> None:
         if self.created_at >= self.expires_at:
             raise DomainValidationError("idempotency expiry must be after creation")
+
+
+@dataclass(frozen=True, slots=True)
+class McpToolInvocation:
+    """Sanitized observability record; arguments are retained only as a digest."""
+
+    id: EntityId
+    user_id: UserId
+    tool_name: str
+    request_id: str
+    args_hash: str
+    outcome: str
+    latency_ms: int
+    error_code: str | None = None
+    created_at: datetime = field(default_factory=utc_now)
+
+    def __post_init__(self) -> None:
+        if not self.tool_name.strip() or not self.request_id.strip():
+            raise DomainValidationError("MCP invocation identity is required")
+        if len(self.args_hash) != 64:
+            raise DomainValidationError("MCP invocation arguments require a SHA-256 digest")
+        if self.outcome not in {"OK", "NOT_FOUND", "PARTIAL", "FAILED"}:
+            raise DomainValidationError("MCP invocation outcome is invalid")
+        if self.latency_ms < 0:
+            raise DomainValidationError("MCP invocation latency cannot be negative")

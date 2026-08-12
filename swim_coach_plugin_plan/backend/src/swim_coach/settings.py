@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     public_base_url: HttpUrl | None = None
     oauth_issuer: HttpUrl | None = None
     oauth_resource: HttpUrl | None = None
+    oauth_jwks_cache_seconds: int = Field(default=300, ge=30, le=3_600)
     pwa_base_url: HttpUrl = HttpUrl("http://127.0.0.1:14173")
     oidc_issuer: HttpUrl | None = None
     oidc_client_id: str | None = None
