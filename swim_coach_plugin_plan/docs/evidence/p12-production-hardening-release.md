@@ -50,6 +50,8 @@ Publication: commit `aa98d80`, draft PR #13, based on
   `449a3f29efa2e54037786d82c6cf6a69492c1a46ac3f76dac7ea09a46b56b97d`.
 - canonical repository tests: **126 Python** and **4 Vitest** passed, plus Ruff,
   mypy, ESLint and TypeScript.
+- GitHub Actions run `31621402450` passed the complete `quality` job, including
+  static checks, tests, dependency/secret scans and all four container builds.
 - personal Codex plugin was upgraded from `0.0.0-spike` to validated/enabled
   `1.0.0+codex.20260812170215`; the previous copy is recoverable at
   `/tmp/swim-coach-plugin-pre-p12`.

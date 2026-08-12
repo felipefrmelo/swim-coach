@@ -210,8 +210,8 @@
 - Commit/PR: [`4528e59`](https://github.com/felipefrmelo/swim-coach/commit/4528e593c26594b915e4d12baf26e350b0f3ae9e) / [draft PR #8](https://github.com/felipefrmelo/swim-coach/pull/8)
 - Escopo: P06-T01..T08; implementação independente iniciada enquanto o gate
   externo P05 permanece pendente.
-- Implementação local: P06-T01..T04 e P06-T06 concluídas; P06-T05/T07/T08
-  aguardam upgrade da cópia pessoal e smoke em conversa nova.
+- Implementação local: P06-T01..T06 e P06-T08 concluídas; a cópia pessoal foi
+  atualizada pela P12 para 1.0.0. P06-T07 aguarda smoke em conversa nova.
 - Evidências:
   - [`docs/evidence/p06-plugin-read-only.md`](docs/evidence/p06-plugin-read-only.md)
   - [`docs/handoffs/p06.md`](docs/handoffs/p06.md)
@@ -232,9 +232,10 @@
     → `quality` aprovado em 1m33s.
   - release candidate [`releases/plugin-0.1.0.json`](releases/plugin-0.1.0.json)
     registra hashes de manifesto, app mapping e Skills.
-- Gate pendente: duas tentativas de mover a cópia pessoal para backup expiraram
-  na aprovação externa sem alterar a instalação; ela permanece em `0.0.0-spike`.
-  Depois do upgrade, falta smoke em conversa nova e host OAuth P05 com dado real.
+- Upgrade pessoal concluído pela P12: pacote validado, instalado e habilitado em
+  `1.0.0+codex.20260812170215`, com backup anterior em
+  `/tmp/swim-coach-plugin-pre-p12`. Ainda faltam o smoke em conversa nova e o
+  host OAuth P05 com dado real.
 
 ### P07
 
@@ -365,5 +366,7 @@
     HIGH/CRITICAL nas quatro imagens non-root;
   - release manifest [`releases/plugin-1.0.0.json`](releases/plugin-1.0.0.json);
   - plugin pessoal instalado/enabled em `1.0.0+codex.20260812170215`.
+  - GitHub Actions [run 31621402450](https://github.com/felipefrmelo/swim-coach/actions/runs/31621402450)
+    → quality verde, incluindo checks, testes, scans e build das quatro imagens.
 - Gate pendente: conversa nova com as sete Skills e fechamento dos gates reais
   P11/anteriores. O release permanece candidate e não está pronto para público.

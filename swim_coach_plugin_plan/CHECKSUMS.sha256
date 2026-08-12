@@ -6,14 +6,14 @@ dd2f96d4c60cdaf2ed752a91333872a95b5eb42f9a2bed2ff4d1258963fa8b2f  ./.editorconfi
 68ca3fba3b7e864770cb61aeb306d4bd4354b68ab4dd38450860c5d823e42a53  ./.node-version
 7b55f8e67b5623c4bef3fa691288da9437d79d3aba156de48d481db32ac7d16d  ./.python-version
 d671dc70659b25a23e74c2d218754722299f641e4db6604b3d55b4faabe2635d  ./AGENTS.md
-5f049d4249a4f7593f75fbe37fe212de3fc4fe2e7758d8c12d40c4e1a025becb  ./CHANGELOG.md
+e099630a94ebae331342a4877c97226a715c829ec35ea0c44d1f48be5ae84213  ./CHANGELOG.md
 93630130c3f63d66a7cead1e76689d8b2ceb0526510f7d012606058325ad8055  ./FILE_INDEX.md
-e8597eeea3207a452e184566019f6ee61e32cd4b47c8c49136f961e06d1659b4  ./IMPLEMENTATION_STATUS.md
+25b1f06db61a4f3052a4712094a4c4191d3b67d689c314dade783c421dc63c97  ./IMPLEMENTATION_STATUS.md
 d527a9882dedf6a1b4d79c593a910aeb37475c3286d55cdc533aa6f1656cb046  ./LLM_START_HERE.md
 bd92538a91bf6779f5bc5fc0c62c751bdad18112e642dfcd14643af099650000  ./MASTER_PLAN.md
 16fe3b54498903c041f7939be1c4387c89f0e4632bf7f464a345c69cc52b92d6  ./Makefile
 356d68cd2e54f938e0cb5b122f8d34e421a70d4306901099d3ad6fc7c6db1f6a  ./PLAN_VALIDATION_REPORT.md
-e109852ccafd84b9ad3339feef6cbcf9efb4f95dd075837f8217240a27d64c8f  ./README.md
+a64d38a1d431ade5bcf56a4fadec91592045710d80f58a46f47427847886e78d  ./README.md
 cf2695ed4bdc1d997ef871f30bfaeea1af185d45251fd9fc60de90e4a3754666  ./TASK_INDEX.md
 727561659b620ddf0ed4ce18e0a39537afe3de441ab861781528761053a1db37  ./adrs/ADR-0001-plugin-first.md
 0f634be2b98216f34bf941049e70f537fccc5ca2a9364d92127770d62d7759bc  ./adrs/ADR-0002-modular-monolith.md
@@ -273,7 +273,7 @@ d8aff3b42bec06ef12c92b85c688105dd4215a8264706a9e53ab33461f09de25  ./docs/evidenc
 a0a5c43a387756d785575efb2096ffaf6c4a5dbd60235e0eb954e3f7f70f10dc  ./docs/evidence/p09-mcp-apps-ui.png
 c9cb63383000d1f882846398ab0d6bf979d03f38336bc7778d71d7bb70575e9f  ./docs/evidence/p10-adaptive-planning.md
 563b509973b09164e3b12bef2f9286a03dc4e49c5ac9e65a41576b25d59b3ae9  ./docs/evidence/p11-automation-offline.md
-9d46d1de46cebc114698216be74616d5c0964c8ce5bc2d96cdb6be7012c61d19  ./docs/evidence/p12-production-hardening-release.md
+7bc0d7c70c0b532dc874ba3110604ae14343e85eb91c6cda20750fee9e760150  ./docs/evidence/p12-production-hardening-release.md
 9b78955f5b9075c71ae85ef36eab7ad881d51ab7545e7008ca5a32d150b75b8c  ./docs/handoffs/p00.md
 74c7bacc55937c5efd212a91dcb7a92d1cf0fea4a51b07e4ed8c4465f68bdfb1  ./docs/handoffs/p01.md
 444ef1407ed7b452fe4b72a6c7e7158e8b4af841dba82d664eab90ce8b939466  ./docs/handoffs/p03.md
@@ -285,7 +285,7 @@ b18672ac72b05a2dc78b35815c4be3e1091f6caed78f2d62e831f7bf98c50548  ./docs/handoff
 4ee8365da2400309f5e0f69975284130e21a0a95de5935842f4942b11cdf5006  ./docs/handoffs/p09.md
 32f6634e48c8643d073c0fae56391faf5b1e81357f3e77fe7df5967fcccdc0d3  ./docs/handoffs/p10.md
 a8f9a4a0ca51674d8a5cf142c13bd6f08d17eddebafae68aeaae4a7fed4fdda6  ./docs/handoffs/p11.md
-644777dc914999823789bae82f9007acdd283477dde633f24fcb6645a46dbf24  ./docs/handoffs/p12.md
+05c860a3adafe21e47a8ce5d7ba698b97579d45ad37886f4db8d487cfa562d34  ./docs/handoffs/p12.md
 4dde286597b0d595be2b16cfdf4cf9acd820187e377dd59fa84c3cc38244ecc9  ./docs/operations/p07-garmin-write-reconciliation.md
 0a1a2645d606014699bcc8a1d0069b5fdfcb122801818c5057431954396a61db  ./docs/public-readiness.md
 d05f02f734d7d30ede82b5996a5460303e637afe27d94e692e5eb5c5d9106532  ./docs/runbooks/p11-job-operations.md
@@ -317,7 +317,7 @@ d4a0cc48f4a9c5bf9390021dcfa9165bceb60ee87a46cf35ea73990841b68579  ./examples/wor
 589ad673add619fe6874b596fb2765ad19cc2fb3cf1761c04f3beeea47db286a  ./examples/workouts/speed-1000m.json
 5eb974921e2ba72d3e80583885321a1597b2b87040641fb394f3b03d6fc5414a  ./examples/workouts/technique-800m.json
 7cc081768d2c785adf13e2e3807eeab4e2881d315a247c7abebb4ce5e07fdf21  ./examples/workouts/test-1200m.json
-4630d024c6a6bc674075a6be02093230d6c3cd9748ae3027407b859eabc0f67f  ./implementation-status.json
+bbe7366b35f92e886e1ec2d972776f0bfd86cab47e59dc909b9dd630ee1ec2e5  ./implementation-status.json
 8e4b95311b3b6355f5be380dfd357c631d6856ce88c5e6550c69386b58d338bc  ./ops/alerts.yaml
 ea58f087bddd5ab9bcdeb75d7227a038be43a8d57a2c598d8d98e656914d5613  ./package.json
 baabfa99c45f3041617bec8a088622eae460d1e36de20dd590e6e5670a4ddefa  ./phases/README.md

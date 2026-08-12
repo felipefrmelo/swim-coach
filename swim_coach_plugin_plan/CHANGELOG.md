@@ -15,6 +15,8 @@
 - backend/PWA/plugin elevados a `1.0.0`; manifesto verificável, SBOM e quatro
   imagens Trivy zero HIGH/CRITICAL acompanham 126 testes Python e 4 web;
 - plugin pessoal validado e atualizado para `1.0.0+codex.20260812170215`;
+- reconciliado o checkpoint do README com P12/1.0.0 e registrado o CI final
+  `31621402450` verde antes da integração da pilha na `main`;
 - fase permanece `IN_PROGRESS` até o smoke em conversa nova e os gates reais P11
   e anteriores fecharem; `1.0.0` continua release candidate pessoal.
 

@@ -150,7 +150,7 @@
         "github:draft-pr:8",
         "github:commit:dfd68b3:aes-gcm-tamper-test-deterministic",
         "github:actions:31603753428:quality-pass",
-        "pending:personal-marketplace-upgrade:approval-timeout",
+        "local:personal-marketplace-upgraded-by-p12:1.0.0+codex.20260812170215",
         "pending:fresh-conversation-skill-smoke",
         "pending:p05-authenticated-real-data-host-gate"
       ],

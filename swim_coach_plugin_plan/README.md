@@ -2,7 +2,7 @@
 
 > **Versão do plano:** 1.0
 > **Data-base:** 11 de agosto de 2026
-> **Estado:** P09 em implementação; gates reais P02/P03/P05/P06 e canários P07/P08/P09 pendentes
+> **Estado:** implementação P00–P12 entregue; release pessoal 1.0 em validação operacional
 > **Uso inicial:** pessoal
 > **Atleta inicial:** Felipe
 > **Dispositivo:** Garmin Forerunner 265
@@ -11,10 +11,11 @@
 
 Este diretório contém a especificação inicial de implementação do Swim Coach, organizada em documentos menores, contratos, fases e gates executáveis por LLMs. A arquitetura definida para o produto é **Plugin-first**.
 
-> **Checkpoint:** P00, P01 e P04 estão `DONE`; P09 adiciona cinco cards MCP Apps
-> opcionais sobre a superfície P08, mantendo os seis Skills, 132 evals e todos
-> os fluxos headless. Os gates com atividade Garmin persistida, host OAuth,
-> instalação em conversa nova, cards no host e canário real continuam pendentes. Veja
+> **Checkpoint:** P00, P01 e P04 estão `DONE`; as implementações P02–P12 e seus
+> gates automatizados/integrados estão entregues. O plugin pessoal 1.0 reúne sete
+> Skills, 154 evals, UI MCP opcional, planejamento, automação recuperável e
+> hardening operacional. Os gates com atividade Garmin persistida, host OAuth,
+> conversa nova, cards no host, canário real e ciclo offline continuam pendentes. Veja
 > [`IMPLEMENTATION_STATUS.md`](IMPLEMENTATION_STATUS.md).
 
 ```text
@@ -71,7 +72,7 @@ O MVP **não terá um chat próprio nem chamará a OpenAI Responses API**. A con
 | `contracts/` | schemas e contratos de API/MCP/domínio |
 | `adrs/` | decisões arquiteturais imutáveis ou versionadas |
 | `plugin-blueprint/` | esqueleto do plugin, Skills e instruções de registro |
-| `plugins/swim-coach/` | release candidate P09 `0.3.0`, com UI opcional, seis Skills e app mapping real |
+| `plugins/swim-coach/` | release candidate pessoal P12 `1.0.0`, com sete Skills, UI opcional e app mapping real |
 | `backend/` | API/MCP, worker, probes e testes da fundação P00 |
 | `apps/web/` | shell PWA operacional, sem chat próprio |
 | `examples/` | fixtures de referência e payloads válidos |
@@ -84,7 +85,7 @@ O MVP **não terá um chat próprio nem chamará a OpenAI Responses API**. A con
 
 A primeira prova de conceito do plugin acontece já na **P00**, com ferramentas sem dados pessoais. A primeira fatia útil com dados reais chega na **P05/P06**. Escritas no Garmin via plugin só entram depois do fluxo de proposta, aprovação, escopos e idempotência.
 
-## Executar a fundação P00/P01
+## Executar o stack pessoal 1.0
 
 Requer Python 3.12, Node 24 com Corepack, `uv`, Docker e Docker Compose.
 
@@ -108,8 +109,8 @@ estado de negócio. `SWIM_COACH_MCP_WRITE_ENABLED=true` libera a superfície P08
 somente com OAuth completo; Garmin externo continua dependente do kill switch
 separado. `SWIM_COACH_MCP_UI_ENABLED=true` acrescenta os cinco render tools e
 resources P09 somente quando OAuth e escrita MCP também estão habilitados; com a
-flag desligada, a superfície P08 permanece idêntica. O pacote `0.3.0` mantém seis
-Skills e 132 evals em `tests/evals/`. A PWA
+flag desligada, a superfície P08 permanece idêntica. O pacote `1.0.0` mantém sete
+Skills e 154 evals em `tests/evals/`. A PWA
 P01 usa BFF/cookie opaco,
 allowlist e ownership em todos os endpoints de contexto.
 
@@ -139,7 +140,8 @@ codex mcp get swim_coach_p00
 - [Relatório de validação do pacote](PLAN_VALIDATION_REPORT.md)
 - [Evidências da P00](docs/evidence/p00-foundation-evidence.md)
 - [Evidências da P01](docs/evidence/p01-domain-persistence-identity.md)
-- [Handoff atual da P01](docs/handoffs/p01.md)
+- [Evidências da P12](docs/evidence/p12-production-hardening-release.md)
+- [Handoff atual da P12](docs/handoffs/p12.md)
 
 ## Entregáveis para execução
 
