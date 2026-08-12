@@ -18,7 +18,7 @@
 | P05 | IN_PROGRESS | P03,P04 | MCP read-only autenticado com dados reais | [draft PR #7](https://github.com/felipefrmelo/swim-coach/pull/7) |
 | P06 | IN_PROGRESS | P05 | plugin/Skills instalados e evals aprovadas | branch `p06-plugin-read-only` |
 | P07 | IN_PROGRESS | P04 | publicação Garmin pela PWA com aprovação | [draft PR #5](https://github.com/felipefrmelo/swim-coach/pull/5) |
-| P08 | IN_PROGRESS | P06,P07 | escrita MCP com scopes/hash/auditoria | branch `p08-mcp-controlled-write` / draft PR pendente |
+| P08 | IN_PROGRESS | P06,P07 | escrita MCP com scopes/hash/auditoria | [draft PR #9](https://github.com/felipefrmelo/swim-coach/pull/9) |
 | P09 | NOT_STARTED | P08 | UI MCP opcional e fallback headless | — |
 | P10 | NOT_STARTED | P03,P04,P08 | semana adaptativa explicável | — |
 | P11 | NOT_STARTED | P10 | automações recuperáveis e PWA offline | — |
@@ -267,6 +267,7 @@
   P06 como base; gates externos P06/P07 permanecem pendentes.
 - Implementação local: P08-T01..T09 concluídas; gate automatizado aprovado e
   gate real de host/Garmin pendente.
+- Commit/PR: [`ee728f0`](https://github.com/felipefrmelo/swim-coach/commit/ee728f0) / [draft PR #9](https://github.com/felipefrmelo/swim-coach/pull/9)
 - Evidências:
   - branch `p08-mcp-controlled-write` criada sobre o PR #8 com todo o histórico
     P07/P05/P06 presente.

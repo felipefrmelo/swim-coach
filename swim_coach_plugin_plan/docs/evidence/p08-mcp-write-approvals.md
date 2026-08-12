@@ -2,6 +2,8 @@
 
 State: local implementation and automated gate complete; real host/Garmin gate pending.
 
+Publication: commit `ee728f0`, draft PR #9, based on `p06-plugin-read-only`.
+
 ## Implemented
 
 - independent `SWIM_COACH_MCP_WRITE_ENABLED` kill switch, which requires a

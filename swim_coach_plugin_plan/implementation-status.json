@@ -194,11 +194,13 @@
         "local:secret-scan-clean:20-commits-final-tree",
         "local:plugin-0.2.0:6-skills:132-evals",
         "local:release-candidate:releases/plugin-0.2.0.json",
+        "github:draft-pr:9",
+        "github:commit:ee728f0:controlled-mcp-write-workflows",
         "pending:p06-personal-plugin-smoke",
         "pending:p07-real-disposable-canary",
         "pending:p08-chatgpt-two-turn-exact-hash-canary"
       ],
-      "commit": null
+      "commit": "ee728f0"
     },
     {
       "id": "P09",

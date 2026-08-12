@@ -35,6 +35,12 @@
     "adversarial": 18,
     "result": "passed"
   },
+  "publication": {
+    "draft_pr": 9,
+    "implementation_commit": "ee728f0",
+    "base_branch": "p06-plugin-read-only",
+    "quality": "local_passed_ci_pending"
+  },
   "pending_gates": [
     "personal marketplace upgrade to the 0.2.0 copy",
     "fresh-conversation two-turn exact-hash Skill smoke",
