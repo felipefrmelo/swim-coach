@@ -178,6 +178,7 @@
 
 - Estado: `IN_PROGRESS`
 - Início: 2026-08-12T09:53:04-03:00
+- Commit/PR: [`ec86e8c`](https://github.com/felipefrmelo/swim-coach/commit/ec86e8c6d4fe44ff6a382ba3b78ffa0ebddc0504) / [draft PR #7](https://github.com/felipefrmelo/swim-coach/pull/7)
 - Implementação local: P05-T01..T06 e P05-T09 concluídas; P05-T07 automatizada
   mas aguarda MCP Inspector; P05-T08/host real pendente.
 - Evidências:
@@ -195,7 +196,9 @@
     validadores verdes.
   - Compose rebuild/up → API, worker, web e PostgreSQL saudáveis, migration
     `000006`; runtime sem OAuth segue fail-closed no tool P00.
-  - dependency scan e gitleaks (15 commits + worktree) sem achados.
+  - dependency scan e gitleaks (16 commits + worktree) sem achados.
+  - GitHub Actions [run 31601391000](https://github.com/felipefrmelo/swim-coach/actions/runs/31601391000)
+    → `quality` aprovado em 1m46s.
 - Gate pendente: consulta no host com token real user-scoped, scopes mínimos e
   dados Garmin reais persistidos; fixture e cobertura automatizada não substituem
   essa prova.

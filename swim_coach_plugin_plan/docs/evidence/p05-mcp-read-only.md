@@ -2,6 +2,12 @@
 
 Estado: implementação local concluída; Inspector/host real e dados Garmin reais pendentes.
 
+Publicação: commit [`ec86e8c`](https://github.com/felipefrmelo/swim-coach/commit/ec86e8c6d4fe44ff6a382ba3b78ffa0ebddc0504),
+[draft PR #7](https://github.com/felipefrmelo/swim-coach/pull/7) empilhado sobre
+`p03-fit-normalization-analytics` e GitHub Actions
+[run 31601391000](https://github.com/felipefrmelo/swim-coach/actions/runs/31601391000)
+com `quality` aprovado em 1m46s.
+
 ## Escopo comprovado
 
 - P05-T01: resource metadata anuncia os seis scopes read-only; JWT RS256 valida
@@ -41,7 +47,7 @@ Estado: implementação local concluída; Inspector/host real e dados Garmin rea
 - challenge sem bearer → HTTP 401 com `WWW-Authenticate` apontando para protected
   resource metadata.
 - `make dependency-scan` → nenhuma vulnerabilidade conhecida em Python/pnpm;
-- `make secret-scan` → 15 commits e worktree sem vazamentos;
+- `make secret-scan` → 16 commits e worktree sem vazamentos;
 - Compose rebuild/up → API, worker, web e PostgreSQL saudáveis; migration `000006`
   aplicada. Como OAuth não está injetado no stack atual, metadata retorna 404 e a
   superfície runtime permanece corretamente reduzida ao P00 inofensivo.

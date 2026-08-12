@@ -8,7 +8,7 @@ f4e34a31482c64c6a133f7f960057193e855099bb9368265e0d9ec807c8508c7  ./.env.example
 d671dc70659b25a23e74c2d218754722299f641e4db6604b3d55b4faabe2635d  ./AGENTS.md
 a36ae6373d02b89b5d634254ddd96a290263271d8707f959edc1f8109b7ffb3b  ./CHANGELOG.md
 3e229bedb950b7c94af27b5bd4d36d0a78efd0a1564e711685d0ff9d13e76523  ./FILE_INDEX.md
-4bbfd0b692233509ac9b83bf9893f95cf352e95de3e1807ca21f52e803dcaf41  ./IMPLEMENTATION_STATUS.md
+ddd011b22a26d2033cfe892cb343f65401d58b25e61c1e193fa4459d8041ca24  ./IMPLEMENTATION_STATUS.md
 d527a9882dedf6a1b4d79c593a910aeb37475c3286d55cdc533aa6f1656cb046  ./LLM_START_HERE.md
 bd92538a91bf6779f5bc5fc0c62c751bdad18112e642dfcd14643af099650000  ./MASTER_PLAN.md
 6cc52a95dcf03fe301ad5ca2f026bc344eb6fbc0818578c6234850a4823add8b  ./Makefile
@@ -233,14 +233,14 @@ d93bd6e9825a8a3cb44afe875364f298a72b0b36a4cfdca26116244bf769bbfb  ./docs/evidenc
 ba94d0f78f6ccfcdecdaa4678369d9fcbe56e108fcd771da665e4059816369fc  ./docs/evidence/p03-fit-normalization-analytics.md
 1c7b7f4eaf883d1a4512c66bc3f46fe9977ce9dd8e96beae9b90d87199fc1307  ./docs/evidence/p04-workout-authoring-pwa.md
 517441c4963f1b7a68a8026760f6ff20f015902115779120da97b104eb3e9fe5  ./docs/evidence/p04-workout-editor-mobile.png
-7b4d994266659781567be23110fca9a9703ea7902bcea75afa4ebf4497510f90  ./docs/evidence/p05-mcp-read-only.md
+c3c5687d230032e3a2702213adc8846f878d325dd99b9ad10e2208687028fdaa  ./docs/evidence/p05-mcp-read-only.md
 e535bea6b74dea74a38759777d3a1cbc982a38701a696ba5eaa935d024898f94  ./docs/evidence/p07-garmin-publish-mobile.png
 d8b1da03a80de7a05d52356790049f067a00a7a996774c46617c9a361890588e  ./docs/evidence/p07-garmin-write-pwa.md
 9b78955f5b9075c71ae85ef36eab7ad881d51ab7545e7008ca5a32d150b75b8c  ./docs/handoffs/p00.md
 74c7bacc55937c5efd212a91dcb7a92d1cf0fea4a51b07e4ed8c4465f68bdfb1  ./docs/handoffs/p01.md
 444ef1407ed7b452fe4b72a6c7e7158e8b4af841dba82d664eab90ce8b939466  ./docs/handoffs/p03.md
 880ed75e0ca68e2427091ba3a6fbeeb6cdc7a858dda9b5b74b43272aff747881  ./docs/handoffs/p04.md
-dd72a368d85ba67faef4f29080174578a6114d2358960afb302f7bf30f025440  ./docs/handoffs/p05.md
+a96f1324ee01c9f00bad35b08acf3235526aa002fba7f0b3686d3f77282faab3  ./docs/handoffs/p05.md
 bbbe06112f49c7b904309b96b89826d8ba70edad28d3f9c9bd5861951c88b862  ./docs/handoffs/p07.md
 4dde286597b0d595be2b16cfdf4cf9acd820187e377dd59fa84c3cc38244ecc9  ./docs/operations/p07-garmin-write-reconciliation.md
 cd879188fa383ebef9db58a4a8bbf03cd917a97fa38fe9ac8308bf3347ed8189  ./evals/README.md
@@ -269,7 +269,7 @@ d4a0cc48f4a9c5bf9390021dcfa9165bceb60ee87a46cf35ea73990841b68579  ./examples/wor
 589ad673add619fe6874b596fb2765ad19cc2fb3cf1761c04f3beeea47db286a  ./examples/workouts/speed-1000m.json
 5eb974921e2ba72d3e80583885321a1597b2b87040641fb394f3b03d6fc5414a  ./examples/workouts/technique-800m.json
 7cc081768d2c785adf13e2e3807eeab4e2881d315a247c7abebb4ce5e07fdf21  ./examples/workouts/test-1200m.json
-630769bfdff427d2a5a3c793b6018fd2ddaf3e4f61f1ad4c0fe02c87d0de2d8f  ./implementation-status.json
+5c8f675943279176969a192389c1153a14fc2d8bccbfbe4202f975f840f4382f  ./implementation-status.json
 ea58f087bddd5ab9bcdeb75d7227a038be43a8d57a2c598d8d98e656914d5613  ./package.json
 baabfa99c45f3041617bec8a088622eae460d1e36de20dd590e6e5670a4ddefa  ./phases/README.md
 4179920a3af7740d9a7313cb8b409dcdd47d47bf0c49065f4aab5fc1aa2f3687  ./phases/p00-foundation-and-spikes.md

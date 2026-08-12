@@ -123,11 +123,13 @@
         "local:make-check:91-python:2-web",
         "local:compose:healthy:migration-000006:oauth-unconfigured-fail-closed",
         "local:dependency-scan-clean",
-        "local:secret-scan-clean:15-commits-worktree",
+        "local:secret-scan-clean:16-commits-worktree",
+        "github:draft-pr:7",
+        "github:actions:31601391000:quality-pass",
         "pending:mcp-inspector-real-oauth",
         "pending:host-real-auth-scoped-read-only-query"
       ],
-      "commit": null
+      "commit": "ec86e8c6d4fe44ff6a382ba3b78ffa0ebddc0504"
     },
     {
       "id": "P06",
