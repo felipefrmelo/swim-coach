@@ -253,6 +253,20 @@ A confirmação textual é auditável, mas não substitui autorização/host app
 - publish/schedule são `openWorldHint=true` e requerem confirmação.
 - cancel pode ter `destructiveHint=true` apenas se cancelar ação já aprovada; descrever claramente.
 
+### Boundary de confirmação P08
+
+- `preview_garmin_publish` persiste somente uma proposal revisável e nunca chama
+  Garmin;
+- `approve_action_proposal` persiste decisão/hash e retorna `APPROVED` sem criar
+  execution/job;
+- `execute_approved_action` é uma chamada posterior, recebe somente proposal ID
+  e chave idempotente, revalida expiry/revisão/hash persistido e exige o scope
+  dinâmico da ação além de `proposals:approve`;
+- Skills não podem chamar preview e approval/execute no mesmo turno inicial,
+  mesmo quando o usuário tenta pré-autorizar;
+- replay retorna a execution/job existente e efeito ambíguo nunca recebe retry
+  automático.
+
 ## 7. Versionamento
 
 - tool name permanece estável dentro da major version;

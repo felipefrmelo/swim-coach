@@ -11,8 +11,8 @@
 | FR-WO-001..006 | P04 | canonical schema + property tests |
 | FR-WO-007..008 | P07 | compiler/publish/reconcile tests |
 | FR-MCP-001..004 | P05 | MCP Inspector + contract suite |
-| FR-MCP-005..008 | P08 | approval/security evals |
-| FR-SKILL-001..007 | P06 | eval cases por Skill |
+| FR-MCP-005..008 | P08 | contract + PostgreSQL scope/hash/IDOR/replay tests |
+| FR-SKILL-001..007 | P06/P08 | 132 eval cases, 22 por Skill da release 0.2.0 |
 | FR-WEB-001..007 | P01/P04/P07 | Playwright flows |
 | FR-WEB-008 | P11 | offline E2E |
 | FR-PLAN-001..005 | P10 | planning golden/property tests |
@@ -23,7 +23,7 @@
 | NFR-REL-002 | P01/P11 | queue/outbox tests |
 | NFR-PERF-001 | P05/P12 | load smoke |
 | NFR-PERF-002 | P02/P07 | async job behavior |
-| NFR-OBS-001 | P01/P05 | correlation propagation |
+| NFR-OBS-001 | P01/P05/P08 | correlation/causation invocation→proposal/job |
 | NFR-PORT-001 | P05/P09 | headless fallback eval |
 | NFR-DATA-001 | P12 | export/delete E2E |
 | NFR-TEST-001 | todas | phase gate |

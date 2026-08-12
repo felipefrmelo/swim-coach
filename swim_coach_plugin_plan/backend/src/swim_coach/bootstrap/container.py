@@ -15,6 +15,7 @@ from swim_coach.application.services import (
     GarminSyncService,
     IdentityService,
     McpReadService,
+    McpWriteService,
     SessionService,
     WorkoutService,
 )
@@ -48,6 +49,7 @@ class AppServices:
     workouts: WorkoutService
     activity_data: ActivityDataService
     mcp_read: McpReadService
+    mcp_write: McpWriteService | None
 
 
 def build_services(settings: Settings, database: Database | None = None) -> AppServices:
@@ -120,6 +122,23 @@ def build_services(settings: Settings, database: Database | None = None) -> AppS
         FilesystemObjectStorage(settings.activity_storage_path),
         GarminFitActivityParser(),
     )
+    garmin_publish = GarminPublishService(
+        uow_factory,
+        write_enabled=settings.garmin_write_enabled,
+        allow_fake_device=settings.garmin_write_mode == "fake",
+        canary_title_prefix=(
+            settings.garmin_write_canary_title_prefix
+            if settings.garmin_write_mode == "live" and settings.garmin_write_canary_only
+            else None
+        ),
+    )
+    mcp_read = McpReadService(
+        uow_factory=uow_factory,
+        identity=identity,
+        context=context,
+        workouts=workouts,
+        activity_data=activity_data,
+    )
     return AppServices(
         database=database,
         uow_factory=uow_factory,
@@ -129,24 +148,20 @@ def build_services(settings: Settings, database: Database | None = None) -> AppS
         oidc_login=oidc_login,
         garmin_connection=garmin_connection,
         garmin_sync=garmin_sync,
-        garmin_publish=GarminPublishService(
-            uow_factory,
-            write_enabled=settings.garmin_write_enabled,
-            allow_fake_device=settings.garmin_write_mode == "fake",
-            canary_title_prefix=(
-                settings.garmin_write_canary_title_prefix
-                if settings.garmin_write_mode == "live" and settings.garmin_write_canary_only
-                else None
-            ),
-        ),
+        garmin_publish=garmin_publish,
         garmin_writer=garmin_writer,
         workouts=workouts,
         activity_data=activity_data,
-        mcp_read=McpReadService(
-            uow_factory=uow_factory,
-            identity=identity,
-            context=context,
-            workouts=workouts,
-            activity_data=activity_data,
+        mcp_read=mcp_read,
+        mcp_write=(
+            McpWriteService(
+                uow_factory=uow_factory,
+                workouts=workouts,
+                activity_data=activity_data,
+                garmin_sync=garmin_sync,
+                garmin_publish=garmin_publish,
+            )
+            if settings.mcp_write_enabled
+            else None
         ),
     )

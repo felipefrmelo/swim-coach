@@ -130,8 +130,23 @@ class Worker:
             return False
         if self._garmin_sync is None or job.user_id is None:
             return await self._finish_failure(job, "GARMIN_JOB_INVALID", retryable=False)
+        raw_from_date = job.payload.get("from_date")
         try:
-            await self._garmin_sync.sync(UserId(job.user_id.value), trigger="worker")
+            from_date = (
+                date.fromisoformat(raw_from_date) if isinstance(raw_from_date, str) else None
+            )
+        except ValueError:
+            return await self._finish_failure(job, "GARMIN_JOB_INVALID", retryable=False)
+        force = job.payload.get("force", False)
+        if not isinstance(force, bool):
+            return await self._finish_failure(job, "GARMIN_JOB_INVALID", retryable=False)
+        try:
+            await self._garmin_sync.sync(
+                UserId(job.user_id.value),
+                trigger="worker",
+                from_date=from_date,
+                force=force,
+            )
         except GarminProviderError as exc:
             return await self._finish_failure(
                 job,

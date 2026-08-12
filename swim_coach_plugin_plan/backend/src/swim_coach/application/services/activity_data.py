@@ -6,7 +6,7 @@ import hashlib
 import io
 import zipfile
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -22,7 +22,7 @@ from swim_coach.domain.activities import (
     analyze_swim,
 )
 from swim_coach.domain.garmin import Activity
-from swim_coach.domain.operations import AuditEvent
+from swim_coach.domain.operations import ApiIdempotencyRecord, AuditEvent
 from swim_coach.domain.shared.errors import DomainError, ResourceNotFoundError
 from swim_coach.domain.shared.types import JsonObject
 from swim_coach.domain.shared.value_objects import CorrelationId, EntityId, UserId
@@ -340,11 +340,34 @@ class ActivityDataService:
         expected_version: int | None,
         actor_id: str,
         correlation_id: CorrelationId,
+        idempotency_key: str | None = None,
+        request_hash: str | None = None,
     ) -> SessionFeedback:
         async with self._uow_factory() as uow:
             activity = await uow.activities.get(user_id, activity_id)
             if activity is None:
                 raise ResourceNotFoundError("activity")
+            idempotency_scope = f"feedback:{user_id}:{activity_id}"
+            if idempotency_key is not None:
+                if request_hash is None or len(request_hash) != 64:
+                    raise DomainError(
+                        "VALIDATION_FAILED", "A request hash is required for idempotency."
+                    )
+                replay = await uow.idempotency.get(
+                    idempotency_scope, idempotency_key, datetime.now(UTC)
+                )
+                if replay is not None:
+                    if replay.request_hash != request_hash:
+                        raise DomainError(
+                            "IDEMPOTENCY_CONFLICT",
+                            "This idempotency key was already used for different feedback.",
+                        )
+                    existing_feedback = await uow.activity_data.get_feedback(user_id, activity_id)
+                    if existing_feedback is None:
+                        raise DomainError(
+                            "INTERNAL_ERROR", "Idempotent feedback record is inconsistent."
+                        )
+                    return existing_feedback
             feedback = await uow.activity_data.get_feedback(user_id, activity_id)
             previous_version = feedback.version if feedback else None
             if feedback is None:
@@ -412,5 +435,18 @@ class ActivityDataService:
                     },
                 )
             )
+            if idempotency_key is not None and request_hash is not None:
+                now = datetime.now(UTC)
+                await uow.idempotency.add(
+                    ApiIdempotencyRecord(
+                        scope=idempotency_scope,
+                        idempotency_key=idempotency_key,
+                        request_hash=request_hash,
+                        response_status=200,
+                        response={"resource_id": str(feedback.id)},
+                        created_at=now,
+                        expires_at=now + timedelta(hours=24),
+                    )
+                )
             await uow.commit()
         return feedback

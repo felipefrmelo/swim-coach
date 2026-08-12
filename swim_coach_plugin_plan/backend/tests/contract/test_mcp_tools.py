@@ -7,6 +7,7 @@ import yaml
 from mcp.server.auth.provider import AccessToken
 
 from swim_coach.application.services.mcp_read import MCP_READ_TOOLS, McpReadService
+from swim_coach.application.services.mcp_write import MCP_WRITE_TOOLS, McpWriteService
 from swim_coach.interfaces.mcp.server import create_mcp_server
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -75,3 +76,32 @@ def test_p05_tool_schemas_and_annotations_match_versioned_contract() -> None:
             "next_actions",
             "human_summary",
         }
+
+
+def test_p08_controlled_write_tools_match_contract_and_risk_annotations() -> None:
+    contract = yaml.safe_load((ROOT / "contracts/mcp-tools.yaml").read_text())
+    selected = set((*MCP_READ_TOOLS, *MCP_WRITE_TOOLS))
+    expected = {item["name"]: item for item in contract["tools"] if item["name"] in selected}
+    server = create_mcp_server(
+        read_service=cast(McpReadService, object()),
+        write_service=cast(McpWriteService, object()),
+        token_verifier=ContractVerifier(),
+        oauth_issuer="https://tenant.example.test",
+        oauth_resource="https://swim.example.test/mcp",
+    )
+    registered = server._tool_manager._tools
+
+    assert list(registered) == [*MCP_READ_TOOLS, *MCP_WRITE_TOOLS]
+    assert set(registered) == set(expected)
+    for name in MCP_WRITE_TOOLS:
+        tool = registered[name]
+        declared = expected[name]
+        annotations = declared["annotations"]
+        assert tool.annotations is not None
+        assert tool.annotations.readOnlyHint is annotations["readOnlyHint"]
+        assert tool.annotations.destructiveHint is annotations["destructiveHint"]
+        assert tool.annotations.openWorldHint is annotations["openWorldHint"]
+        assert tool.parameters["additionalProperties"] is False
+        declared_input = declared["input"]
+        assert set(tool.parameters.get("required", [])) == set(declared_input.get("required", []))
+        assert set(tool.parameters["properties"]) == set(declared_input["properties"])

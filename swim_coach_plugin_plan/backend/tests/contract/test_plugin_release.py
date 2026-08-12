@@ -18,7 +18,34 @@ SKILLS = {
         "get_sync_status",
     ),
     "goal-progress": ("get_training_context", "get_goal_progress"),
-    "diagnose-sync": ("get_sync_status",),
+    "diagnose-sync": (
+        "get_sync_status",
+        "sync_garmin_activities",
+        "get_job_status",
+        "retry_failed_job",
+    ),
+    "adapt-workout": (
+        "get_training_context",
+        "get_today_workout",
+        "get_week_plan",
+        "propose_workout_change",
+        "propose_workout_reschedule",
+        "get_action_proposal",
+    ),
+    "publish-to-garmin": (
+        "get_today_workout",
+        "get_week_plan",
+        "preview_garmin_publish",
+        "get_action_proposal",
+        "approve_action_proposal",
+        "execute_approved_action",
+        "get_job_status",
+    ),
+    "post-swim-checkin": (
+        "list_recent_swims",
+        "get_swim_activity",
+        "record_session_feedback",
+    ),
 }
 CATEGORY_COUNTS = {
     "direct": 5,
@@ -46,19 +73,18 @@ def load_eval_cases() -> list[dict[str, Any]]:
     return cases
 
 
-def test_p06_manifest_app_marketplace_and_release_matrix_are_read_only() -> None:
+def test_p08_manifest_app_marketplace_and_release_matrix_are_controlled_write() -> None:
     manifest = load_json(PLUGIN_ROOT / ".codex-plugin/plugin.json")
     app_mapping = load_json(PLUGIN_ROOT / ".app.json")
     marketplace = load_json(ROOT / ".agents/plugins/marketplace.json")
     release_matrix = load_yaml(ROOT / "contracts/capability-release-matrix.yaml")
 
     assert manifest["name"] == "swim-coach"
-    assert manifest["version"] == "0.1.0"
+    assert manifest["version"] == "0.2.0"
     assert manifest["skills"] == "./skills/"
     assert manifest["apps"] == "./.app.json"
-    assert manifest["interface"]["capabilities"] == ["Read"]
-    assert len(manifest["interface"]["defaultPrompt"]) == 3
-    assert "Write" not in manifest["interface"]["capabilities"]
+    assert manifest["interface"]["capabilities"] == ["Read", "Write"]
+    assert len(manifest["interface"]["defaultPrompt"]) == 6
 
     assert app_mapping == {
         "apps": {
@@ -77,16 +103,18 @@ def test_p06_manifest_app_marketplace_and_release_matrix_are_read_only() -> None
         }
     ]
 
-    p06_release = next(item for item in release_matrix["plugin_releases"] if item["phase"] == "P06")
-    assert p06_release["version"] == "0.1.0"
-    assert p06_release["mode"] == "read-only"
+    p08_release = next(item for item in release_matrix["plugin_releases"] if item["phase"] == "P08")
+    assert p08_release["version"] == "0.2.0"
+    assert p08_release["mode"] == "controlled-write"
     released_skills = {
-        item["name"] for item in release_matrix["skills"] if item.get("introduced") == "P06"
+        item["name"]
+        for item in release_matrix["skills"]
+        if item.get("introduced") in {"P06", "P08"}
     }
     assert released_skills == set(SKILLS)
 
 
-def test_p06_skill_frontmatter_workflows_and_ui_metadata_are_valid() -> None:
+def test_p08_skill_frontmatter_workflows_and_ui_metadata_are_valid() -> None:
     skill_files = sorted((PLUGIN_ROOT / "skills").glob("*/SKILL.md"))
     assert {path.parent.name for path in skill_files} == set(SKILLS)
 
@@ -101,7 +129,10 @@ def test_p06_skill_frontmatter_workflows_and_ui_metadata_are_valid() -> None:
         assert len(frontmatter["description"]) >= 80
         assert "TODO" not in content
 
-        referenced_tools = set(re.findall(r"`([a-z][a-z0-9_]+)`", content))
+        referenced_names = set(re.findall(r"`([a-z][a-z0-9_]+)`", content))
+        referenced_tools = referenced_names & {
+            tool for canonical_tools in SKILLS.values() for tool in canonical_tools
+        }
         assert referenced_tools == set(SKILLS[skill_name])
 
         agent_metadata = load_yaml(path.parent / "agents/openai.yaml")
@@ -110,16 +141,14 @@ def test_p06_skill_frontmatter_workflows_and_ui_metadata_are_valid() -> None:
         assert f"${skill_name}" in interface["default_prompt"]
 
 
-def test_p06_eval_dataset_validates_selection_order_and_write_negatives() -> None:
+def test_p08_eval_dataset_validates_selection_order_and_confirmation_boundaries() -> None:
     schema = load_json(ROOT / "contracts/plugin-eval-case.schema.json")
     validator = Draft202012Validator(schema)
     tool_catalog = load_yaml(ROOT / "contracts/mcp-tools.yaml")
     tool_names = {item["name"] for item in tool_catalog["tools"]}
-    release_matrix = load_yaml(ROOT / "contracts/capability-release-matrix.yaml")
-    write_tools = {item["name"] for item in release_matrix["tools"] if item["kind"] != "read"}
     cases = load_eval_cases()
 
-    assert len(cases) == 66
+    assert len(cases) == 132
     assert len({case["id"] for case in cases}) == len(cases)
     assert Counter(case["skill"] for case in cases) == Counter(
         {skill_name: 22 for skill_name in SKILLS}
@@ -134,10 +163,19 @@ def test_p06_eval_dataset_validates_selection_order_and_write_negatives() -> Non
         indices = [canonical_order.index(tool) for tool in sequence]
         assert indices == sorted(indices), case["id"]
         assert set(sequence) <= set(canonical_order) <= tool_names
-        assert set(sequence).isdisjoint(write_tools)
-        assert expected["requires_confirmation"] is False
-        if "_adversarial_" in case["id"]:
-            assert set(expected["forbidden_tools"]) == write_tools
+        if "approve_action_proposal" in sequence or "execute_approved_action" in sequence:
+            assert case["skill"] == "publish-to-garmin"
+            assert len(case["user_turns"]) >= 2 or case.get("fixtures", {}).get("prior_turn")
+        if len(case["user_turns"]) == 1 and "preview_garmin_publish" in sequence:
+            assert "approve_action_proposal" not in sequence
+            assert "execute_approved_action" not in sequence
+        if (
+            case["skill"] == "publish-to-garmin"
+            and "preview_garmin_publish" in sequence
+            and "approve_action_proposal" not in sequence
+            and "auth" not in case.get("fixtures", {})
+        ):
+            assert expected["requires_confirmation"] is True
 
     for skill_name in SKILLS:
         skill_cases = [case for case in cases if case["skill"] == skill_name]

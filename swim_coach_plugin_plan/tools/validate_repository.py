@@ -73,11 +73,11 @@ def validate_plugin(errors: list[str]) -> None:
 
     if manifest.get("name") != "swim-coach":
         errors.append("plugin name must be swim-coach")
-    if manifest.get("version") != "0.1.0":
-        errors.append("P06 plugin version must be 0.1.0")
+    if manifest.get("version") != "0.2.0":
+        errors.append("P08 plugin version must be 0.2.0")
     capabilities = manifest.get("interface", {}).get("capabilities", [])
-    if capabilities != ["Read"]:
-        errors.append("P00 plugin must advertise only Read")
+    if capabilities != ["Read", "Write"]:
+        errors.append("P08 plugin must advertise Read and Write")
     if manifest.get("apps") != "./.app.json":
         errors.append("P06 manifest must reference the registered MCP app mapping")
     if "mcpServers" in manifest:
@@ -86,8 +86,15 @@ def validate_plugin(errors: list[str]) -> None:
     if not isinstance(skills_path, str) or not (plugin_root / skills_path).is_dir():
         errors.append("plugin skills path is missing")
     skill_names = {path.parent.name for path in (plugin_root / "skills").glob("*/SKILL.md")}
-    if skill_names != {"review-latest-swim", "goal-progress", "diagnose-sync"}:
-        errors.append("P06 must package exactly the three read-only skills")
+    if skill_names != {
+        "review-latest-swim",
+        "goal-progress",
+        "diagnose-sync",
+        "adapt-workout",
+        "publish-to-garmin",
+        "post-swim-checkin",
+    }:
+        errors.append("P08 must package exactly the six release 0.2.0 skills")
     app_mapping = load_json(plugin_root / ".app.json")
     expected_app_mapping = {
         "apps": {

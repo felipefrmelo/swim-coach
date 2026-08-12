@@ -132,7 +132,8 @@ async def test_proposal_approval_ambiguous_reconciliation_and_replay(
                 headers={"X-CSRF-Token": csrf, "If-Match": preview.headers["etag"]},
                 json={"action_hash": proposal["action_hash"]},
             )
-            assert replay.status_code == 409
+            assert replay.status_code == 200
+            assert replay.json()["execution"]["id"] == approval.json()["execution"]["id"]
 
             provider = FakeGarminWorkoutProvider(
                 ambiguous_create_once=True, ambiguous_schedule_once=True

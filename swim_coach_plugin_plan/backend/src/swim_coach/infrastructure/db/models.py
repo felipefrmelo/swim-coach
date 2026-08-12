@@ -376,6 +376,8 @@ class McpToolInvocationModel(Base):
     args_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     outcome: Mapped[str] = mapped_column(String(20), nullable=False)
     latency_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    correlation_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True))
+    causation_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True))
     error_code: Mapped[str | None] = mapped_column(String(80))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -387,6 +389,8 @@ class McpToolInvocationModel(Base):
         ),
         Index("ix_mcp_invocation_user_created", "user_id", text("created_at DESC")),
         Index("ix_mcp_invocation_tool_created", "tool_name", text("created_at DESC")),
+        Index("ix_mcp_invocation_correlation", "correlation_id"),
+        Index("ix_mcp_invocation_causation", "causation_id"),
     )
 
 

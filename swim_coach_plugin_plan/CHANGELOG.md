@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+### P08 — MCP de escrita controlada e plugin `0.2.0` (smoke real pendente)
+
+- adicionada flag independente `mcp_write_enabled`, fail-closed sem OAuth, e
+  bundles granulares de leitura, escrita local, sync, proposal, aprovação e ação;
+- registradas 12 tools P08 com schemas fechados, annotations de risco e ownership;
+- separada aprovação de execução: approval persiste somente decisão/hash e a
+  execução exige chamada posterior, proposal aprovada, scope dinâmico e idempotência;
+- implementados sync idempotente, feedback idempotente, rascunho, proposals de
+  mudança/reagendamento, preview Garmin, cancelamento e retry atômico apenas seguro;
+- migration `000007` conecta invocação sanitizada a proposal/job por correlation
+  e causation IDs, sem guardar argumentos livres ou credenciais;
+- pacote atualizado para seis Skills e capability `Read` + `Write`; publicação
+  contém proibição literal de preview/aprovação/execução no mesmo turno;
+- adicionadas 66 evals P08, totalizando 132 casos com 22 por Skill, incluindo
+  bypass, hash alterado, IDOR, auth, dados ausentes e follow-up explícito;
+- integração provou hash adulterado, execução prematura, scope dinâmico, IDOR e
+  replay com exatamente uma approval, execution e job; efeito ambíguo não é retentado;
+- fase permanece `IN_PROGRESS` até upgrade/smoke em conversa nova, OAuth real e
+  canário Garmin descartável confirmarem o gate fora de fixtures.
+
 ### P06 — plugin pessoal read-only `0.1.0` (smoke de instalação pendente)
 
 - substituído o Skill P00 por três workflows de objetivo: revisão da última

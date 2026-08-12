@@ -183,6 +183,7 @@ skills:
   - get_sync_status
   - sync_garmin_activities
   - get_job_status
+  - retry_failed_job
 - name: plan-swim-week
   introduced: P10
   release: 0.4.0

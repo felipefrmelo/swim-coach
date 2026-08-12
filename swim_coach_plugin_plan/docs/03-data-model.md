@@ -376,9 +376,12 @@ A fonte de verdade de uma revisão pode ser o `definition_json`; a tabela de pas
 
 ### `mcp_tool_invocation`
 
-- `id`, `user_id`, `principal_id`, `tool_name`, `tool_schema_version`;
-- `request_id`, `correlation_id`, `arguments_hash`, `result_status`;
-- `error_code`, `duration_ms`, `proposal_id`, `job_id`;
+- implementação P08: `id`, `user_id`, `tool_name`, `request_id`;
+- `correlation_id`, `causation_id`, `args_hash`, `outcome`;
+- `error_code`, `latency_ms`, `created_at`;
+- `causation_id` referencia semanticamente a proposal, job, workout ou activity
+  relevante sem FK polimórfica; referências específicas continuam no resultado
+  estruturado, audit/outbox e payload sanitizado do job;
 - `created_at`;
 - retenção limitada; sem argumentos completos por padrão.
 
@@ -387,6 +390,7 @@ A fonte de verdade de uma revisão pode ser o `definition_json`; a tabela de pas
 - `(user_id, created_at desc)`;
 - `(tool_name, created_at desc)`;
 - `(correlation_id)`;
+- `(causation_id)`;
 - parcial em `result_status = 'ERROR'`.
 
 ### `action_proposal`

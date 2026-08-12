@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import cast
@@ -166,6 +167,7 @@ class GarminPublishService:
         expected_version: int,
         action_hash: str,
         correlation_id: CorrelationId,
+        explicit_verb: str | None = None,
     ) -> GarminActionDetail:
         if not self._write_enabled:
             raise DomainError(
@@ -174,7 +176,7 @@ class GarminPublishService:
             )
         now = datetime.now(UTC)
         async with self._uow_factory() as uow:
-            proposal = await uow.action_proposals.get(user_id, proposal_id)
+            proposal = await uow.action_proposals.get_for_update(user_id, proposal_id)
             if proposal is None:
                 raise ResourceNotFoundError("action_proposal")
             if proposal.version != expected_version:
@@ -196,21 +198,85 @@ class GarminPublishService:
                 raise DomainError("REVISION_CONFLICT", "The compiled workout changed since review.")
             previous_version = proposal.version
             proposal.approve(action_hash=action_hash, now=now)
-            explicit_verb = f"Publicar {revision.totals.distance_m:,} m na Garmin"
+            recorded_verb = (
+                explicit_verb.strip()[:200]
+                if explicit_verb and explicit_verb.strip()
+                else f"Publicar {revision.totals.distance_m:,} m na Garmin"
+            )
             approval = ActionApproval(
                 id=EntityId.new(),
                 proposal_id=proposal.id,
                 user_id=user_id,
                 action_hash=proposal.action_hash,
                 decision=ActionDecision.APPROVE,
-                explicit_verb=explicit_verb,
+                explicit_verb=recorded_verb,
                 created_at=now,
             )
+            await uow.action_approvals.add(approval)
+            await uow.action_proposals.update(proposal, expected_version=previous_version)
+            await self._record(
+                uow,
+                proposal,
+                correlation_id,
+                event_type="swim_coach.actions.garmin_publish_approved.v1",
+                action="actions.garmin_publish_approved",
+            )
+            await uow.commit()
+            return GarminActionDetail(proposal, None)
+
+    async def execute(
+        self,
+        user_id: UserId,
+        proposal_id: EntityId,
+        *,
+        idempotency_key: str,
+        correlation_id: CorrelationId,
+    ) -> GarminActionDetail:
+        """Queue an already-approved exact proposal in a separate transaction.
+
+        Keeping this boundary separate from :meth:`approve` prevents an MCP client from
+        turning a preview response into an external effect in the same tool call.
+        """
+
+        if not self._write_enabled:
+            raise DomainError(
+                "GARMIN_WRITE_DISABLED",
+                "Garmin publication is disabled by the server kill switch.",
+            )
+        if not 8 <= len(idempotency_key.strip()) <= 200:
+            raise DomainError(
+                "VALIDATION_FAILED", "idempotency_key must contain between 8 and 200 characters."
+            )
+        now = datetime.now(UTC)
+        async with self._uow_factory() as uow:
+            proposal = await uow.action_proposals.get_for_update(user_id, proposal_id)
+            if proposal is None:
+                raise ResourceNotFoundError("action_proposal")
+            existing_execution = await uow.action_executions.get_by_proposal(user_id, proposal.id)
+            if existing_execution is not None:
+                return GarminActionDetail(proposal, existing_execution)
+            workout, revision, schedule = await self._publication_input(
+                uow, user_id, proposal.target_id, expected_workout_version=None
+            )
+            if self._canary_title_prefix and not workout.title.startswith(
+                self._canary_title_prefix
+            ):
+                raise DomainError(
+                    "GARMIN_CANARY_REQUIRED",
+                    "Live publication is limited to titles starting with "
+                    f"{self._canary_title_prefix}.",
+                )
+            self._assert_proposal_current(proposal, workout, revision, schedule)
+            compiled = self._compiler.compile(revision)
+            if compiled.compiled_hash != proposal.payload.get("compiled_hash"):
+                raise DomainError("REVISION_CONFLICT", "The compiled workout changed since review.")
+            previous_version = proposal.version
+            proposal.queue(now)
             execution = ActionExecution(
                 id=EntityId.new(),
                 proposal_id=proposal.id,
                 user_id=user_id,
-                idempotency_key=self._idempotency_key(proposal),
+                idempotency_key=self._idempotency_key(proposal, idempotency_key),
                 created_at=now,
                 updated_at=now,
             )
@@ -244,17 +310,15 @@ class GarminPublishService:
                 updated_at=now,
                 available_at=now,
             )
-            await uow.action_approvals.add(approval)
             await uow.action_executions.add(execution)
             await uow.jobs.add_idempotent(job)
-            proposal.queue(now)
             await uow.action_proposals.update(proposal, expected_version=previous_version)
             await self._record(
                 uow,
                 proposal,
                 correlation_id,
-                event_type="swim_coach.actions.garmin_publish_approved.v1",
-                action="actions.garmin_publish_approved",
+                event_type="swim_coach.actions.garmin_publish_queued.v1",
+                action="actions.garmin_publish_queued",
             )
             await uow.commit()
             return GarminActionDetail(proposal, execution)
@@ -270,7 +334,7 @@ class GarminPublishService:
     ) -> GarminActionDetail:
         now = datetime.now(UTC)
         async with self._uow_factory() as uow:
-            proposal = await uow.action_proposals.get(user_id, proposal_id)
+            proposal = await uow.action_proposals.get_for_update(user_id, proposal_id)
             if proposal is None:
                 raise ResourceNotFoundError("action_proposal")
             if proposal.version != expected_version:
@@ -340,11 +404,9 @@ class GarminPublishService:
             raise DomainError("REVISION_CONFLICT", "The workout schedule changed since review.")
 
     @staticmethod
-    def _idempotency_key(proposal: ActionProposal) -> str:
-        return (
-            f"garmin:publish:{proposal.user_id}:{proposal.target_id}:"
-            f"{proposal.target_revision_id}:{proposal.payload['scheduled_date']}"
-        )
+    def _idempotency_key(proposal: ActionProposal, client_key: str) -> str:
+        client_digest = hashlib.sha256(client_key.strip().encode()).hexdigest()
+        return f"garmin:publish:{proposal.id}:{client_digest}"
 
     @staticmethod
     async def _record(

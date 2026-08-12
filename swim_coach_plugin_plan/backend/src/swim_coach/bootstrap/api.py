@@ -51,6 +51,7 @@ def create_app(
     )
     mcp_server = create_mcp_server(
         read_service=services.mcp_read,
+        write_service=services.mcp_write,
         token_verifier=token_verifier,
         oauth_issuer=oauth_issuer,
         oauth_resource=oauth_resource,

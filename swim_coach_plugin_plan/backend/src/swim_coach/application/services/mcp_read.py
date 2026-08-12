@@ -23,7 +23,7 @@ from swim_coach.domain.goals import GoalStatus, TrainingGoal
 from swim_coach.domain.operations import McpToolInvocation
 from swim_coach.domain.shared.errors import DomainError, ResourceNotFoundError
 from swim_coach.domain.shared.types import JsonObject
-from swim_coach.domain.shared.value_objects import EntityId, UserId
+from swim_coach.domain.shared.value_objects import CorrelationId, EntityId, UserId
 
 MCP_READ_SCOPES = (
     "profile:read",
@@ -498,6 +498,8 @@ class McpReadService:
         arguments: dict[str, Any],
         started_at: float,
         outcome: str,
+        correlation_id: CorrelationId | None = None,
+        causation_id: EntityId | None = None,
         error_code: str | None = None,
     ) -> None:
         encoded = json.dumps(arguments, sort_keys=True, separators=(",", ":"), default=str).encode()
@@ -509,6 +511,8 @@ class McpReadService:
             args_hash=hashlib.sha256(encoded).hexdigest(),
             outcome=outcome,
             latency_ms=max(0, round((perf_counter() - started_at) * 1_000)),
+            correlation_id=correlation_id,
+            causation_id=causation_id,
             error_code=error_code,
         )
         async with self._uow_factory() as uow:

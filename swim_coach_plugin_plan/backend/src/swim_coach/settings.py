@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     oauth_issuer: HttpUrl | None = None
     oauth_resource: HttpUrl | None = None
     oauth_jwks_cache_seconds: int = Field(default=300, ge=30, le=3_600)
+    mcp_write_enabled: bool = False
     pwa_base_url: HttpUrl = HttpUrl("http://127.0.0.1:14173")
     oidc_issuer: HttpUrl | None = None
     oidc_client_id: str | None = None
@@ -57,6 +58,8 @@ class Settings(BaseSettings):
 
         if (self.oauth_issuer is None) != (self.oauth_resource is None):
             raise ValueError("oauth_issuer and oauth_resource must be configured together")
+        if self.mcp_write_enabled and self.oauth_issuer is None:
+            raise ValueError("mcp_write_enabled requires OAuth issuer and resource metadata")
         if self.oauth_issuer is not None and self.oauth_issuer.scheme != "https":
             raise ValueError("oauth_issuer must use HTTPS")
         if self.oauth_resource is not None and self.oauth_resource.scheme != "https":

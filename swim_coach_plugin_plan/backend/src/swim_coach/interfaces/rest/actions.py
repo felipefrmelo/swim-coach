@@ -10,6 +10,7 @@ from fastapi import APIRouter, Header, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from swim_coach.application.services.garmin_publish import GarminActionDetail
+from swim_coach.domain.actions import ActionProposalStatus
 from swim_coach.domain.shared.errors import DomainError
 from swim_coach.domain.shared.types import JsonObject
 from swim_coach.domain.shared.value_objects import EntityId
@@ -164,11 +165,31 @@ async def approve_action(
     correlation_id: RequestCorrelationId,
     response: Response,
 ) -> ActionProposalResponse:
-    detail = await services.garmin_publish.approve(
+    detail = await services.garmin_publish.get(authenticated.user.id, EntityId(proposal_id))
+    if detail.proposal.status is ActionProposalStatus.READY_FOR_REVIEW:
+        detail = await services.garmin_publish.approve(
+            authenticated.user.id,
+            EntityId(proposal_id),
+            expected_version=_version(if_match),
+            action_hash=payload.action_hash,
+            correlation_id=correlation_id,
+        )
+    elif detail.proposal.action_hash != payload.action_hash:
+        raise DomainError("ACTION_TAMPERED", "The reviewed action no longer matches.")
+    elif detail.proposal.status not in {
+        ActionProposalStatus.APPROVED,
+        ActionProposalStatus.QUEUED,
+        ActionProposalStatus.EXECUTING,
+        ActionProposalStatus.SUCCEEDED,
+    }:
+        raise DomainError(
+            "ACTION_STATE_CONFLICT",
+            "The action cannot be approved or executed from its current state.",
+        )
+    detail = await services.garmin_publish.execute(
         authenticated.user.id,
         EntityId(proposal_id),
-        expected_version=_version(if_match),
-        action_hash=payload.action_hash,
+        idempotency_key=f"pwa-approval:{proposal_id}:{payload.action_hash}",
         correlation_id=correlation_id,
     )
     return _response(detail, services, response)

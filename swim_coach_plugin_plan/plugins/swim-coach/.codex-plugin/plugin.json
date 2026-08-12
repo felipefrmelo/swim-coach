@@ -1,7 +1,7 @@
 {
   "name": "swim-coach",
-  "version": "0.1.0",
-  "description": "Review Garmin-backed pool swims, swimming-goal progress, and sync health without performing writes.",
+  "version": "0.2.0",
+  "description": "Review pool swims and safely perform scoped local writes or exact-confirmed Garmin publication.",
   "author": {
     "name": "Felipe"
   },
@@ -15,17 +15,21 @@
   "apps": "./.app.json",
   "interface": {
     "displayName": "Swim Coach",
-    "shortDescription": "Review pool swimming training",
-    "longDescription": "Review authenticated pool swims, evidence-based goal progress, planned workouts, and Garmin sync health in read-only mode.",
+    "shortDescription": "Review and safely update swim training",
+    "longDescription": "Review authenticated pool swims and goals, queue Garmin activity sync, record feedback, propose workout adaptations, and publish only after an exact-hash confirmation boundary.",
     "developerName": "Felipe",
     "category": "Health & Fitness",
     "capabilities": [
-      "Read"
+      "Read",
+      "Write"
     ],
     "defaultPrompt": [
       "Use Swim Coach to review my latest swim.",
       "Use Swim Coach to show my swimming goal progress.",
-      "Use Swim Coach to explain why my latest swim is missing."
+      "Use Swim Coach to explain why my latest swim is missing.",
+      "Use Swim Coach to adapt my next swim.",
+      "Use Swim Coach to publish my workout to Garmin safely.",
+      "Use Swim Coach to record my post-swim feedback."
     ]
   }
 }

@@ -2,7 +2,7 @@
 
 > **Versão do plano:** 1.0
 > **Data-base:** 11 de agosto de 2026
-> **Estado:** P06 em implementação; gates reais P02/P03/P05/P06 e canário P07 pendentes
+> **Estado:** P08 em implementação; gates reais P02/P03/P05/P06 e canários P07/P08 pendentes
 > **Uso inicial:** pessoal
 > **Atleta inicial:** Felipe
 > **Dispositivo:** Garmin Forerunner 265
@@ -12,9 +12,9 @@
 Este diretório contém a especificação inicial de implementação do Swim Coach, organizada em documentos menores, contratos, fases e gates executáveis por LLMs. A arquitetura definida para o produto é **Plugin-first**.
 
 > **Checkpoint:** P00, P01 e P04 estão `DONE`; P05 foi publicado no draft PR #7
-> com CI verde e o release candidate P06 `0.1.0` contém três Skills read-only e
-> 66 evals aprovadas. Os gates com atividade Garmin persistida, host OAuth e
-> instalação `0.1.0` em conversa nova continuam pendentes. Veja
+> com CI verde e o release candidate P08 `0.2.0` contém seis Skills e 132 evals
+> contratuais. Os gates com atividade Garmin persistida, host OAuth, instalação
+> em conversa nova e canário real de publicação continuam pendentes. Veja
 > [`IMPLEMENTATION_STATUS.md`](IMPLEMENTATION_STATUS.md).
 
 ```text
@@ -71,7 +71,7 @@ O MVP **não terá um chat próprio nem chamará a OpenAI Responses API**. A con
 | `contracts/` | schemas e contratos de API/MCP/domínio |
 | `adrs/` | decisões arquiteturais imutáveis ou versionadas |
 | `plugin-blueprint/` | esqueleto do plugin, Skills e instruções de registro |
-| `plugins/swim-coach/` | release candidate P06 `0.1.0`, com três Skills read-only e app mapping real |
+| `plugins/swim-coach/` | release candidate P08 `0.2.0`, com seis Skills e app mapping real |
 | `backend/` | API/MCP, worker, probes e testes da fundação P00 |
 | `apps/web/` | shell PWA operacional, sem chat próprio |
 | `examples/` | fixtures de referência e payloads válidos |
@@ -104,8 +104,9 @@ Sem `SWIM_COACH_OAUTH_ISSUER`/`SWIM_COACH_OAUTH_RESOURCE`, o MCP falha fechado e
 libera somente `get_capabilities`, sem dados pessoais. Com OAuth configurado, a
 P05 registra oito tools autenticadas estritamente read-only para contexto,
 treinos, atividades, meta e status de sync; nenhuma chama Garmin nem altera
-estado de negócio. O pacote P06 `0.1.0` ativa somente `review-latest-swim`,
-`goal-progress` e `diagnose-sync`; seus 66 evals ficam em `tests/evals/`. A PWA
+estado de negócio. `SWIM_COACH_MCP_WRITE_ENABLED=true` libera a superfície P08
+somente com OAuth completo; Garmin externo continua dependente do kill switch
+separado. O pacote `0.2.0` ativa seis Skills e 132 evals em `tests/evals/`. A PWA
 P01 usa BFF/cookie opaco,
 allowlist e ownership em todos os endpoints de contexto.
 
@@ -145,7 +146,7 @@ codex mcp get swim_coach_p00
 - use [`evals/`](evals/) como suíte mínima de comportamento do plugin;
 - use [`examples/`](examples/) como fixtures canônicas;
 
-O `.app.json` P06 foi materializado a partir da conexão real já registrada. Ele
+O `.app.json` foi materializado a partir da conexão real já registrada. Ele
 contém apenas o identificador técnico do app; credenciais e tokens continuam fora
 do repositório.
 

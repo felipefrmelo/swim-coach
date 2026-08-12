@@ -128,6 +128,8 @@ class McpToolInvocation:
     args_hash: str
     outcome: str
     latency_ms: int
+    correlation_id: CorrelationId | None = None
+    causation_id: EntityId | None = None
     error_code: str | None = None
     created_at: datetime = field(default_factory=utc_now)
 

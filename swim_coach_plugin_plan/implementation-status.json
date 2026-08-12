@@ -2,8 +2,8 @@
   "schema_version": "1.0",
   "project": "swim-coach",
   "plan_version": "1.0",
-  "updated_at": "2026-08-12T10:34:52-03:00",
-  "active_phase": "P06",
+  "updated_at": "2026-08-12T14:30:00-03:00",
+  "active_phase": "P08",
   "phases": [
     {
       "id": "P00",
@@ -178,8 +178,26 @@
     },
     {
       "id": "P08",
-      "status": "NOT_STARTED",
-      "evidence": [],
+      "status": "IN_PROGRESS",
+      "evidence": [
+        "local:branch:p08-mcp-controlled-write",
+        "local:base:p06-plugin-read-only",
+        "docs/evidence/p08-mcp-write-approvals.md",
+        "docs/handoffs/p08.md",
+        "local:migration-000007:invocation-correlation-causation",
+        "local:mcp:12-write-tools:scope-hash-idor-contract",
+        "local:approval-execution-hard-boundary",
+        "local:replay:one-approval-one-execution-one-job",
+        "local:retry-safe-atomic:ambiguous-rejected",
+        "local:gate-final:81-nondocker:7-focused-postgresql:2-web",
+        "local:dependency-scan-clean",
+        "local:secret-scan-clean:20-commits-final-tree",
+        "local:plugin-0.2.0:6-skills:132-evals",
+        "local:release-candidate:releases/plugin-0.2.0.json",
+        "pending:p06-personal-plugin-smoke",
+        "pending:p07-real-disposable-canary",
+        "pending:p08-chatgpt-two-turn-exact-hash-canary"
+      ],
       "commit": null
     },
     {

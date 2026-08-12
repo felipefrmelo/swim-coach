@@ -7,7 +7,7 @@ import hashlib
 import json
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 
 from swim_coach.application.ports.garmin import ActivityFilter, GarminProvider, GarminProviderError
 from swim_coach.application.ports.repositories import UnitOfWorkFactory
@@ -57,13 +57,30 @@ class GarminSyncService:
         self._overlap_seconds = overlap_seconds
         self._page_size = page_size
 
-    async def request_sync(self, user_id: UserId, idempotency_key: str) -> Job:
+    async def request_sync(
+        self,
+        user_id: UserId,
+        idempotency_key: str,
+        *,
+        from_date: date | None = None,
+        force: bool = False,
+    ) -> Job:
         stable_key = (
             f"garmin-sync:{user_id}:{hashlib.sha256(idempotency_key.strip().encode()).hexdigest()}"
         )
+        requested_payload: JsonObject = {
+            "user_id": str(user_id),
+            "from_date": from_date.isoformat() if from_date else None,
+            "force": force,
+        }
         async with self._uow_factory() as uow:
             existing = await uow.jobs.get_by_idempotency_key(stable_key)
             if existing is not None:
+                if existing.payload != requested_payload:
+                    raise DomainError(
+                        "IDEMPOTENCY_CONFLICT",
+                        "This idempotency key was already used for a different sync request.",
+                    )
                 return existing
             connection = await uow.garmin_connections.get(user_id)
             if (
@@ -77,11 +94,16 @@ class GarminSyncService:
                 id=EntityId.new(),
                 user_id=user_id,
                 job_type=self.JOB_TYPE,
-                payload={"user_id": str(user_id)},
+                payload=requested_payload,
                 idempotency_key=stable_key,
                 max_attempts=5,
             )
             job = await uow.jobs.add_idempotent(job)
+            if job.payload != requested_payload:
+                raise DomainError(
+                    "IDEMPOTENCY_CONFLICT",
+                    "This idempotency key was already used for a different sync request.",
+                )
             await uow.commit()
             return job
 
@@ -253,15 +275,27 @@ class GarminSyncService:
             await uow.sync_runs.update(run, expected_version=1)
             await uow.commit()
 
-    async def sync(self, user_id: UserId, *, trigger: str = "worker") -> SyncRun:
+    async def sync(
+        self,
+        user_id: UserId,
+        *,
+        trigger: str = "worker",
+        from_date: date | None = None,
+        force: bool = False,
+    ) -> SyncRun:
         """Import a complete window; never advance the cursor after a failed run."""
 
         async with self._user_lock(user_id):
             run, cursor = await self._begin(user_id, trigger)
+            requested_start = (
+                datetime.combine(from_date, time.min, tzinfo=UTC) if from_date else None
+            )
             started_after = (
-                cursor.watermark_at - timedelta(seconds=cursor.overlap_seconds)
-                if cursor.watermark_at
+                requested_start
+                if requested_start is not None
                 else datetime.now(UTC) - timedelta(days=self._lookback_days)
+                if force or cursor.watermark_at is None
+                else cursor.watermark_at - timedelta(seconds=cursor.overlap_seconds)
             )
             provider_cursor: str | None = None
             watermark = cursor.watermark_at

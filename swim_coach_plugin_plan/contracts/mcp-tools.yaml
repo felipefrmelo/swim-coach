@@ -77,7 +77,7 @@ tools:
     description: Queue an idempotent read from Garmin and local import; returns a job and does not wait for the provider.
     scopes: [sync:run]
     annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: true}
-    input: {type: object, additionalProperties: false, properties: {from_date: {type: [string, "null"], format: date}, force: {type: boolean, default: false}, idempotency_key: {type: string, minLength: 8, maxLength: 200}}}
+    input: {type: object, additionalProperties: false, required: [idempotency_key], properties: {from_date: {type: [string, "null"], format: date}, force: {type: boolean, default: false}, idempotency_key: {type: string, minLength: 8, maxLength: 200}}}
   - name: record_session_feedback
     title: Record post-swim feedback
     description: Store RPE, technique, pain signal, and notes for a user-owned activity; this is not medical diagnosis.
@@ -89,7 +89,13 @@ tools:
     description: Create a local canonical workout draft; never publishes or schedules it externally.
     scopes: [workouts:write]
     annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
-    input: {$ref: ./canonical-workout.schema.json}
+    input:
+      type: object
+      additionalProperties: false
+      required: [definition]
+      properties:
+        definition: {$ref: ./canonical-workout.schema.json}
+        pool_id: {type: [string, "null"], format: uuid}
   - name: propose_week_plan
     title: Propose a weekly swim plan
     description: Generate and persist a reviewable weekly plan proposal from current data and versioned training rules; never approves or publishes it.

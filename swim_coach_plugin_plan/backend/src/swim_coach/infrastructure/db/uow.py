@@ -2037,6 +2037,18 @@ class SqlAlchemyActionProposalsRepository:
         model = (await self._session.scalars(statement)).one_or_none()
         return _action_proposal(model) if model else None
 
+    async def get_for_update(self, user_id: UserId, proposal_id: EntityId) -> ActionProposal | None:
+        statement = (
+            select(ActionProposalModel)
+            .where(
+                ActionProposalModel.id == proposal_id.value,
+                ActionProposalModel.user_id == user_id.value,
+            )
+            .with_for_update()
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _action_proposal(model) if model else None
+
     async def get_by_hash(self, user_id: UserId, action_hash: str) -> ActionProposal | None:
         statement = select(ActionProposalModel).where(
             ActionProposalModel.user_id == user_id.value,
@@ -2266,10 +2278,43 @@ class SqlAlchemyJobsRepository:
             )
         )
 
+    async def get(self, user_id: UserId, job_id: EntityId) -> Job | None:
+        statement = select(JobModel).where(
+            JobModel.id == job_id.value,
+            JobModel.user_id == user_id.value,
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _job(model) if model else None
+
     async def get_by_idempotency_key(self, idempotency_key: str) -> Job | None:
         statement = select(JobModel).where(JobModel.idempotency_key == idempotency_key)
         model = (await self._session.scalars(statement)).one_or_none()
         return _job(model) if model else None
+
+    async def retry_failed(self, user_id: UserId, job_id: EntityId, at: datetime) -> Job | None:
+        statement = (
+            update(JobModel)
+            .where(
+                JobModel.id == job_id.value,
+                JobModel.user_id == user_id.value,
+                JobModel.status == JobStatus.FAILED_TERMINAL.value,
+            )
+            .values(
+                status=JobStatus.RETRY_SCHEDULED.value,
+                available_at=at,
+                finished_at=None,
+                locked_by=None,
+                locked_at=None,
+                heartbeat_at=None,
+                lease_expires_at=None,
+                updated_at=at,
+                version=JobModel.version + 1,
+            )
+            .returning(JobModel.id)
+        )
+        if await self._session.scalar(statement) is None:
+            return None
+        return await self.get(user_id, job_id)
 
     async def add_idempotent(self, job: Job) -> Job:
         if job.idempotency_key is None:
@@ -2499,6 +2544,10 @@ class SqlAlchemyMcpToolInvocationsRepository:
                 args_hash=invocation.args_hash,
                 outcome=invocation.outcome,
                 latency_ms=invocation.latency_ms,
+                correlation_id=(
+                    invocation.correlation_id.value if invocation.correlation_id else None
+                ),
+                causation_id=invocation.causation_id.value if invocation.causation_id else None,
                 error_code=invocation.error_code,
                 created_at=invocation.created_at,
             )

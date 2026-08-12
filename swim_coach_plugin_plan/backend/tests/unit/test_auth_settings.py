@@ -56,3 +56,16 @@ def test_garmin_keyring_requires_32_byte_active_key() -> None:
             garmin_master_keys=f"v1:{encoded}",
             garmin_active_key_version="v2",
         )
+
+
+def test_mcp_write_kill_switch_requires_oauth_metadata() -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, mcp_write_enabled=True)
+
+    settings = Settings(
+        _env_file=None,
+        oauth_issuer="https://issuer.example.com",
+        oauth_resource="https://swim.example.com/mcp",
+        mcp_write_enabled=True,
+    )
+    assert settings.mcp_write_enabled is True

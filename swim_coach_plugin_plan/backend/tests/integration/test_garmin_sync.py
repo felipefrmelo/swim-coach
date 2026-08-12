@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
@@ -20,6 +20,7 @@ from swim_coach.application.ports.garmin import (
 from swim_coach.application.services import GarminSyncService, IdentityService
 from swim_coach.domain.garmin import GarminConnection, GarminConnectionStatus
 from swim_coach.domain.shared import CorrelationId, EncryptedSecret, UserId
+from swim_coach.domain.shared.errors import DomainError
 from swim_coach.infrastructure.db import Database, SqlAlchemyUnitOfWorkFactory
 from swim_coach.infrastructure.db.models import (
     ActivityImportModel,
@@ -215,3 +216,12 @@ async def test_sync_request_is_atomic_for_same_idempotency_key(database: Databas
             select(func.count()).select_from(JobModel).where(JobModel.user_id == user.id.value)
         )
     assert job_count == 1
+
+    with pytest.raises(DomainError) as captured:
+        await service.request_sync(
+            user.id,
+            "same-request-key",
+            from_date=date(2026, 8, 1),
+            force=True,
+        )
+    assert getattr(captured.value, "code", None) == "IDEMPOTENCY_CONFLICT"

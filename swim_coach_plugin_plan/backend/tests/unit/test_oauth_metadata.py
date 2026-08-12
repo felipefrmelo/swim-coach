@@ -3,6 +3,7 @@ import pytest
 from pydantic import ValidationError
 
 from swim_coach.application.services.mcp_read import MCP_READ_SCOPES
+from swim_coach.application.services.mcp_write import MCP_WRITE_SCOPES
 from swim_coach.bootstrap.api import create_app
 from swim_coach.settings import Settings, get_settings
 
@@ -53,6 +54,24 @@ async def test_protected_resource_metadata_uses_configured_https_urls(
     assert root_response.json() == expected
     assert path_response.status_code == 200
     assert path_response.json() == expected
+
+
+@pytest.mark.asyncio
+async def test_protected_resource_advertises_write_scopes_only_with_kill_switch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SWIM_COACH_OAUTH_ISSUER", "https://tenant.example.com/")
+    monkeypatch.setenv("SWIM_COACH_OAUTH_RESOURCE", "https://swim.example.com/mcp/")
+    monkeypatch.setenv("SWIM_COACH_MCP_WRITE_ENABLED", "true")
+    app = create_app()
+    transport = httpx.ASGITransport(app=app)
+
+    async with app.router.lifespan_context(app):
+        async with httpx.AsyncClient(transport=transport, base_url="http://localhost") as client:
+            response = await client.get("/.well-known/oauth-protected-resource")
+
+    assert response.status_code == 200
+    assert response.json()["scopes_supported"] == list((*MCP_READ_SCOPES, *MCP_WRITE_SCOPES))
 
 
 def test_oauth_resource_allows_development_loopback_http() -> None:

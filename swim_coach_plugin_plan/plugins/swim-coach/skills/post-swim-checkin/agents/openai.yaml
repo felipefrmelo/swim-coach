@@ -1,0 +1,4 @@
+interface:
+  display_name: "Post-swim Check-in"
+  short_description: "Record bounded post-swim feedback"
+  default_prompt: "Use $post-swim-checkin to record how my swim felt."

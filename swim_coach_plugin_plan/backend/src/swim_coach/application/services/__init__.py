@@ -7,6 +7,7 @@ from swim_coach.application.services.garmin_publish import GarminPublishService
 from swim_coach.application.services.garmin_sync import GarminSyncService
 from swim_coach.application.services.identity import IdentityService
 from swim_coach.application.services.mcp_read import McpReadService
+from swim_coach.application.services.mcp_write import McpWriteService
 from swim_coach.application.services.sessions import SessionService
 from swim_coach.application.services.workouts import WorkoutService
 
@@ -18,6 +19,7 @@ __all__ = [
     "GarminSyncService",
     "IdentityService",
     "McpReadService",
+    "McpWriteService",
     "SessionService",
     "WorkoutService",
 ]

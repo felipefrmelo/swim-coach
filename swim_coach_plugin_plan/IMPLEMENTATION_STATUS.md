@@ -18,7 +18,7 @@
 | P05 | IN_PROGRESS | P03,P04 | MCP read-only autenticado com dados reais | [draft PR #7](https://github.com/felipefrmelo/swim-coach/pull/7) |
 | P06 | IN_PROGRESS | P05 | plugin/Skills instalados e evals aprovadas | branch `p06-plugin-read-only` |
 | P07 | IN_PROGRESS | P04 | publicação Garmin pela PWA com aprovação | [draft PR #5](https://github.com/felipefrmelo/swim-coach/pull/5) |
-| P08 | NOT_STARTED | P06,P07 | escrita MCP com scopes/hash/auditoria | — |
+| P08 | IN_PROGRESS | P06,P07 | escrita MCP com scopes/hash/auditoria | branch `p08-mcp-controlled-write` / draft PR pendente |
 | P09 | NOT_STARTED | P08 | UI MCP opcional e fallback headless | — |
 | P10 | NOT_STARTED | P03,P04,P08 | semana adaptativa explicável | — |
 | P11 | NOT_STARTED | P10 | automações recuperáveis e PWA offline | — |
@@ -261,8 +261,27 @@
 
 ### P08
 
-- Estado: `NOT_STARTED`
+- Estado: `IN_PROGRESS`
+- Início: 2026-08-12T10:58:49-03:00
+- Escopo: P08-T01..T09, usando a implementação P07 fake/kill-switch e o pacote
+  P06 como base; gates externos P06/P07 permanecem pendentes.
+- Implementação local: P08-T01..T09 concluídas; gate automatizado aprovado e
+  gate real de host/Garmin pendente.
 - Evidências:
+  - branch `p08-mcp-controlled-write` criada sobre o PR #8 com todo o histórico
+    P07/P05/P06 presente.
+  - [`docs/evidence/p08-mcp-write-approvals.md`](docs/evidence/p08-mcp-write-approvals.md)
+  - [`docs/handoffs/p08.md`](docs/handoffs/p08.md)
+  - approval e execution separados; replay cria uma única execução/job;
+  - scope dinâmico, hash adulterado, execução prematura, IDOR e retry ambíguo
+    cobertos por integração PostgreSQL;
+  - migration `000007` adiciona correlation/causation sanitizados;
+  - plugin `0.2.0` validado com seis Skills e 132 evals, 22 por Skill;
+  - gate final decomposto: 81 unit/property/contract + 7 integrações PostgreSQL
+    do delta + 2 web; lint, tipos, dependency scan e gitleaks verdes;
+  - release candidate [`releases/plugin-0.2.0.json`](releases/plugin-0.2.0.json).
+- Gate pendente: instalar a cópia pessoal, conversa nova em dois turnos com OAuth
+  real e um canário Garmin descartável seguido de replay sem duplicata.
 
 ### P09
 
