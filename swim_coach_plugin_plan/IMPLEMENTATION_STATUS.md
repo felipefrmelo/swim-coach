@@ -20,7 +20,7 @@
 | P07 | IN_PROGRESS | P04 | publicação Garmin pela PWA com aprovação | [draft PR #5](https://github.com/felipefrmelo/swim-coach/pull/5) |
 | P08 | IN_PROGRESS | P06,P07 | escrita MCP com scopes/hash/auditoria | [draft PR #9](https://github.com/felipefrmelo/swim-coach/pull/9) |
 | P09 | IN_PROGRESS | P08 | UI MCP opcional e fallback headless | [draft PR #10](https://github.com/felipefrmelo/swim-coach/pull/10) |
-| P10 | IN_PROGRESS | P03,P04,P08 | semana adaptativa explicável | branch `p10-adaptive-planning` |
+| P10 | IN_PROGRESS | P03,P04,P08 | semana adaptativa explicável | [draft PR #11](https://github.com/felipefrmelo/swim-coach/pull/11) |
 | P11 | NOT_STARTED | P10 | automações recuperáveis e PWA offline | — |
 | P12 | NOT_STARTED | P11 | restore testado e release pessoal | — |
 
@@ -311,6 +311,7 @@
 
 - Estado: `IN_PROGRESS`
 - Início: 2026-08-12T12:15:00-03:00
+- Commit/PR: [`543e3f9`](https://github.com/felipefrmelo/swim-coach/commit/543e3f9) / [draft PR #11](https://github.com/felipefrmelo/swim-coach/pull/11)
 - Escopo: P10-T01..T10 implementado localmente; gate automatizado aprovado e
   revisão humana com dados reais pendente.
 - Evidências:

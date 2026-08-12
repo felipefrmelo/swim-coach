@@ -3,6 +3,8 @@
 State: implementation and automated gate complete; human review with real
 athlete-owned data in ChatGPT pending.
 
+Publication: commit `543e3f9`, draft PR #11, based on `p09-mcp-apps-ui`.
+
 ## Implemented
 
 - immutable `TrainingRuleSet` records include semantic version, effective range,

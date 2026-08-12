@@ -45,6 +45,12 @@
     "approval_applies_week": false,
     "result": "passed"
   },
+  "publication": {
+    "draft_pr": 11,
+    "implementation_commit": "543e3f9",
+    "base_branch": "p09-mcp-apps-ui",
+    "quality": "local_passed_ci_pending"
+  },
   "pending_gates": [
     "real athlete-owned weekly proposal reviewed humanly in ChatGPT",
     "sanitized decision trace and ruleset hash retained from that proposal",

@@ -235,9 +235,11 @@
         "local:goal-progress:four-dimensions-confidence-sample-size",
         "local:plugin-0.4.0:7-skills:154-evals",
         "local:release-candidate:releases/plugin-0.4.0.json",
+        "github:draft-pr:11",
+        "github:commit:543e3f9:adaptive-weekly-planning",
         "pending:real-athlete-week-human-review-chatgpt"
       ],
-      "commit": null
+      "commit": "543e3f9"
     },
     {
       "id": "P11",
