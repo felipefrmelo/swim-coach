@@ -3,6 +3,9 @@
 State: local implementation and automated host gate complete; real ChatGPT host
 smoke pending.
 
+Publication: commit `48729a9`, draft PR #10, based on
+`p08-mcp-controlled-write`.
+
 ## Implemented
 
 - `SWIM_COACH_MCP_UI_ENABLED` is independent and fail-closed: OAuth and the P08
@@ -41,6 +44,7 @@ smoke pending.
 - `make secret-scan` scanned 24 commits and the final directory with no leaks;
 - `make build` completed the Vite and four Compose images; a separate wheel
   inspection confirmed both `ui.py` and the versioned HTML asset are packaged.
+- the rebuilt API image loaded the packaged HTML at runtime (11,481 bytes).
 
 Sanitized bridge-host screenshot:
 

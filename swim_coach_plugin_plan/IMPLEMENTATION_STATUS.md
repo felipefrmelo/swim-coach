@@ -19,7 +19,7 @@
 | P06 | IN_PROGRESS | P05 | plugin/Skills instalados e evals aprovadas | branch `p06-plugin-read-only` |
 | P07 | IN_PROGRESS | P04 | publicação Garmin pela PWA com aprovação | [draft PR #5](https://github.com/felipefrmelo/swim-coach/pull/5) |
 | P08 | IN_PROGRESS | P06,P07 | escrita MCP com scopes/hash/auditoria | [draft PR #9](https://github.com/felipefrmelo/swim-coach/pull/9) |
-| P09 | IN_PROGRESS | P08 | UI MCP opcional e fallback headless | branch `p09-mcp-apps-ui` |
+| P09 | IN_PROGRESS | P08 | UI MCP opcional e fallback headless | [draft PR #10](https://github.com/felipefrmelo/swim-coach/pull/10) |
 | P10 | NOT_STARTED | P03,P04,P08 | semana adaptativa explicável | — |
 | P11 | NOT_STARTED | P10 | automações recuperáveis e PWA offline | — |
 | P12 | NOT_STARTED | P11 | restore testado e release pessoal | — |
@@ -292,6 +292,7 @@
   pendentes e não são promovidos por fixture.
 - Implementação local: P09-T01..T07 concluídas; P09-T08 aprovada no bridge host
   de teste e pendente no host real do ChatGPT.
+- Commit/PR: [`48729a9`](https://github.com/felipefrmelo/swim-coach/commit/48729a9) / [draft PR #10](https://github.com/felipefrmelo/swim-coach/pull/10)
 - Evidências:
   - [`docs/evidence/p09-mcp-apps-ui.md`](docs/evidence/p09-mcp-apps-ui.md)
   - [`docs/handoffs/p09.md`](docs/handoffs/p09.md)

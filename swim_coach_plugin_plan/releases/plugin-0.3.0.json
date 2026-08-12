@@ -48,8 +48,8 @@
     "result": "passed"
   },
   "publication": {
-    "draft_pr": null,
-    "implementation_commit": null,
+    "draft_pr": 10,
+    "implementation_commit": "48729a97eaa098b6f7c22bc0c9fa6f80294d6596",
     "base_branch": "p08-mcp-controlled-write",
     "quality": "local_passed_ci_pending"
   },

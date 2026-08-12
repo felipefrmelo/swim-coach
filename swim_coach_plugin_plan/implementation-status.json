@@ -214,9 +214,11 @@
         "local:csp-closed:self-contained:no-token-no-fetch",
         "local:bridge-mock:mobile-a11y-expiry-double-click",
         "local:plugin-0.3.0:6-skills:132-evals",
+        "github:draft-pr:10",
+        "github:commit:48729a9:optional-mcp-apps-ui",
         "pending:chatgpt-real-host-card-smoke"
       ],
-      "commit": null
+      "commit": "48729a97eaa098b6f7c22bc0c9fa6f80294d6596"
     },
     {
       "id": "P10",
