@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import cast
 
 from sqlalchemy import select
@@ -16,7 +16,15 @@ class FailingGarminSync:
     def __init__(self, error: GarminProviderError) -> None:
         self.error = error
 
-    async def sync(self, user_id: UserId, *, trigger: str = "worker") -> None:
+    async def sync(
+        self,
+        user_id: UserId,
+        *,
+        trigger: str = "worker",
+        from_date: date | None = None,
+        force: bool = False,
+    ) -> None:
+        del user_id, trigger, from_date, force
         raise self.error
 
 
