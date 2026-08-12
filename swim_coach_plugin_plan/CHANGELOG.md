@@ -11,7 +11,8 @@
 - resultados ambíguos agora são consultados externamente antes de qualquer retry;
 - adicionados kill switch, flags read/write independentes e canário live obrigatório;
 - provados 50 unitários, 14 integrações e E2E mobile fake; o gate permanece aberto
-  até a única escrita real descartável ser confirmada sem duplicação.
+  até a única escrita real descartável ser confirmada sem duplicação;
+- publicado o delta no draft PR #5, empilhado sobre o P04.
 
 ### P04 — treino canônico, calendário e editor PWA
 

@@ -119,9 +119,10 @@
         "local:kill-switch:live-canary-only",
         "local:dependency-scan-clean",
         "local:secret-scan-clean",
+        "github:draft-pr-5:ci-run-31553966600",
         "pending:garmin-real-disposable-canary"
       ],
-      "commit": null
+      "commit": "c88d660"
     },
     {
       "id": "P08",
