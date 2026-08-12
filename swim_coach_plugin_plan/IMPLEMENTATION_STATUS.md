@@ -19,7 +19,7 @@
 | P06 | IN_PROGRESS | P05 | plugin/Skills instalados e evals aprovadas | branch `p06-plugin-read-only` |
 | P07 | IN_PROGRESS | P04 | publicação Garmin pela PWA com aprovação | [draft PR #5](https://github.com/felipefrmelo/swim-coach/pull/5) |
 | P08 | IN_PROGRESS | P06,P07 | escrita MCP com scopes/hash/auditoria | [draft PR #9](https://github.com/felipefrmelo/swim-coach/pull/9) |
-| P09 | NOT_STARTED | P08 | UI MCP opcional e fallback headless | — |
+| P09 | IN_PROGRESS | P08 | UI MCP opcional e fallback headless | branch `p09-mcp-apps-ui` |
 | P10 | NOT_STARTED | P03,P04,P08 | semana adaptativa explicável | — |
 | P11 | NOT_STARTED | P10 | automações recuperáveis e PWA offline | — |
 | P12 | NOT_STARTED | P11 | restore testado e release pessoal | — |
@@ -286,8 +286,23 @@
 
 ### P09
 
-- Estado: `NOT_STARTED`
+- Estado: `IN_PROGRESS`
+- Início: 2026-08-12T11:30:00-03:00
+- Escopo: P09-T01..T08 sobre a superfície P08; gates externos anteriores seguem
+  pendentes e não são promovidos por fixture.
+- Implementação local: P09-T01..T07 concluídas; P09-T08 aprovada no bridge host
+  de teste e pendente no host real do ChatGPT.
 - Evidências:
+  - [`docs/evidence/p09-mcp-apps-ui.md`](docs/evidence/p09-mcp-apps-ui.md)
+  - [`docs/handoffs/p09.md`](docs/handoffs/p09.md)
+  - cinco resources `ui://` versionados com MIME MCP Apps e CSP fechada;
+  - cinco render tools read-only desacopladas das tools de dados/ação;
+  - flag independente fail-closed e paridade exata da superfície P08 sem UI;
+  - bridge mock, viewport móvel, expiração e double-click cobertos por Playwright;
+  - documentação oficial OpenAI revalidada em 2026-08-12 para o protocolo e
+    metadados atuais.
+- Gate pendente: carregar os cards pela conexão real do ChatGPT, testar revisão e
+  decisão em proposal descartável e salvar screenshot/transcript sanitizados.
 
 ### P10
 

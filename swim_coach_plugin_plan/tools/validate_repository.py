@@ -73,11 +73,11 @@ def validate_plugin(errors: list[str]) -> None:
 
     if manifest.get("name") != "swim-coach":
         errors.append("plugin name must be swim-coach")
-    if manifest.get("version") != "0.2.0":
-        errors.append("P08 plugin version must be 0.2.0")
+    if manifest.get("version") != "0.3.0":
+        errors.append("P09 plugin version must be 0.3.0")
     capabilities = manifest.get("interface", {}).get("capabilities", [])
     if capabilities != ["Read", "Write"]:
-        errors.append("P08 plugin must advertise Read and Write")
+        errors.append("P09 plugin must advertise Read and Write")
     if manifest.get("apps") != "./.app.json":
         errors.append("P06 manifest must reference the registered MCP app mapping")
     if "mcpServers" in manifest:
@@ -94,7 +94,7 @@ def validate_plugin(errors: list[str]) -> None:
         "publish-to-garmin",
         "post-swim-checkin",
     }:
-        errors.append("P08 must package exactly the six release 0.2.0 skills")
+        errors.append("P09 must retain exactly the six release 0.3.0 skills")
     app_mapping = load_json(plugin_root / ".app.json")
     expected_app_mapping = {
         "apps": {

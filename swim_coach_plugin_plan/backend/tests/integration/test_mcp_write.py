@@ -28,6 +28,7 @@ from swim_coach.infrastructure.db.models import (
     JobModel,
 )
 from swim_coach.interfaces.mcp.server import create_mcp_server
+from swim_coach.interfaces.mcp.ui import MCP_APP_MIME_TYPE, MCP_UI_RESOURCE_URIS
 from swim_coach.settings import Settings
 
 from .test_workout_authoring import canonical_workout
@@ -143,6 +144,8 @@ async def test_mcp_preview_approve_execute_requires_two_boundaries_and_replays_o
         token_verifier=verifier,
         oauth_issuer="https://tenant.example.test",
         oauth_resource="https://swim.example.test/mcp",
+        ui_enabled=True,
+        pwa_base_url="https://coach.example.test",
     )
     app = server.streamable_http_app()
     transport = httpx.ASGITransport(app=app)
@@ -156,6 +159,17 @@ async def test_mcp_preview_approve_execute_requires_two_boundaries_and_replays_o
             async with streamable_http_client("http://127.0.0.1/", http_client=client) as streams:
                 async with ClientSession(streams[0], streams[1]) as session:
                     await session.initialize()
+                    resources = await session.list_resources()
+                    assert [str(item.uri) for item in resources.resources] == list(
+                        MCP_UI_RESOURCE_URIS.values()
+                    )
+                    template = await session.read_resource(MCP_UI_RESOURCE_URIS["proposal"])
+                    assert template.contents[0].mimeType == MCP_APP_MIME_TYPE
+                    workout_card = await session.call_tool(
+                        "render_workout_card", {"view": "today", "date": today.isoformat()}
+                    )
+                    assert workout_card.isError is False
+                    assert workout_card.structuredContent["data"]["card"]["kind"] == "workout"
                     preview = await session.call_tool(
                         "preview_garmin_publish",
                         {
@@ -169,6 +183,17 @@ async def test_mcp_preview_approve_execute_requires_two_boundaries_and_replays_o
                     proposal = preview.structuredContent["data"]
                     assert proposal["status"] == "READY_FOR_REVIEW"
                     assert proposal["execution"] is None
+                    rendered_proposal = await session.call_tool(
+                        "render_proposal_confirmation_card",
+                        {"proposal_id": proposal["proposal_id"]},
+                    )
+                    proposal_card = rendered_proposal.structuredContent["data"]["card"]
+                    assert proposal_card["hash"] == proposal["action_hash"]
+                    assert proposal_card["decision"] == {
+                        "tool": "approve_action_proposal",
+                        "proposal_id": proposal["proposal_id"],
+                        "expected_action_hash": proposal["action_hash"],
+                    }
 
                     premature = await session.call_tool(
                         "execute_approved_action",

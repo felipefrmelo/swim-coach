@@ -1,7 +1,7 @@
 {
   "name": "swim-coach",
-  "version": "0.2.0",
-  "description": "Review pool swims and safely perform scoped local writes or exact-confirmed Garmin publication.",
+  "version": "0.3.0",
+  "description": "Review pool swims with optional accessible cards and safely perform exact-confirmed actions.",
   "author": {
     "name": "Felipe"
   },
@@ -16,7 +16,7 @@
   "interface": {
     "displayName": "Swim Coach",
     "shortDescription": "Review and safely update swim training",
-    "longDescription": "Review authenticated pool swims and goals, queue Garmin activity sync, record feedback, propose workout adaptations, and publish only after an exact-hash confirmation boundary.",
+    "longDescription": "Review authenticated swims, goals, workouts, proposals, and sync status with optional accessible MCP Apps cards while retaining complete headless workflows and exact-hash confirmation boundaries.",
     "developerName": "Felipe",
     "category": "Health & Fitness",
     "capabilities": [

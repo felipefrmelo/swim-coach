@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Swim Coach</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --surface: light-dark(#ffffff, #121923);
+        --surface-2: light-dark(#f3f7fb, #1b2633);
+        --text: light-dark(#10212f, #f4f8fb);
+        --muted: light-dark(#536979, #aec0cc);
+        --line: light-dark(#cddae3, #405363);
+        --accent: light-dark(#006b83, #6bdcf0);
+        --accent-text: light-dark(#ffffff, #06232c);
+        --danger: light-dark(#a51d35, #ff9aae);
+        --warning: light-dark(#805600, #ffd27d);
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: transparent; color: var(--text); }
+      main { min-width: 0; padding: 16px; background: var(--surface); border-radius: 16px; }
+      h1 { margin: 0; font-size: 1.15rem; line-height: 1.35; }
+      p { margin: 0; }
+      .subtitle { margin-top: 4px; color: var(--muted); font-size: .875rem; overflow-wrap: anywhere; }
+      .badge { display: inline-flex; margin-top: 10px; border: 1px solid var(--line); border-radius: 999px; padding: 3px 8px; font-size: .75rem; font-weight: 700; }
+      .metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 16px 0; }
+      .metric { min-width: 0; padding: 10px; border-radius: 12px; background: var(--surface-2); }
+      .metric dt { color: var(--muted); font-size: .75rem; }
+      .metric dd { margin: 3px 0 0; font-size: .95rem; font-weight: 750; overflow-wrap: anywhere; }
+      .hash { margin: 12px 0; padding: 9px 10px; border: 1px dashed var(--line); border-radius: 10px; font: .76rem ui-monospace, monospace; overflow-wrap: anywhere; }
+      ul { display: grid; gap: 7px; margin: 12px 0; padding: 0; list-style: none; }
+      li { padding: 9px 10px; border-left: 3px solid var(--accent); background: var(--surface-2); border-radius: 8px; }
+      li strong, li span { display: block; overflow-wrap: anywhere; }
+      li span { margin-top: 2px; color: var(--muted); font-size: .8rem; }
+      .warning { margin-top: 8px; color: var(--warning); font-size: .82rem; }
+      .error { color: var(--danger); }
+      .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+      button, a.action { min-height: 44px; border-radius: 10px; padding: 10px 14px; font: inherit; font-weight: 750; cursor: pointer; }
+      button { border: 0; background: var(--accent); color: var(--accent-text); }
+      button.secondary { border: 1px solid var(--line); background: transparent; color: var(--text); }
+      button:disabled { cursor: not-allowed; opacity: .55; }
+      a.action { display: inline-flex; align-items: center; border: 1px solid var(--line); color: var(--text); text-decoration: none; }
+      button:focus-visible, a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+      .empty { margin: 16px 0; color: var(--muted); }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+      @media (min-width: 520px) { .metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+      @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; } }
+    </style>
+  </head>
+  <body>
+    <main id="card" aria-live="polite" aria-busy="true">
+      <p class="subtitle">Carregando cartão do Swim Coach…</p>
+    </main>
+    <div id="announcer" class="sr-only" aria-live="assertive"></div>
+    <script>
+      (() => {
+        "use strict";
+        const root = document.getElementById("card");
+        const announcer = document.getElementById("announcer");
+        const pending = new Map();
+        let nextId = 1;
+        let busy = false;
+
+        function element(tag, text, className) {
+          const node = document.createElement(tag);
+          if (text !== undefined && text !== null) node.textContent = String(text);
+          if (className) node.className = className;
+          return node;
+        }
+
+        function request(method, params) {
+          const id = nextId++;
+          window.parent.postMessage({ jsonrpc: "2.0", id, method, params }, "*");
+          return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
+        }
+
+        async function callTool(name, args) {
+          if (busy) return;
+          busy = true;
+          root.setAttribute("aria-busy", "true");
+          root.querySelectorAll("button").forEach((button) => { button.disabled = true; });
+          try {
+            const result = await request("tools/call", { name, arguments: args });
+            const envelope = result && result.structuredContent;
+            if (envelope) render(envelope);
+            announcer.textContent = "Ação registrada. O estado foi atualizado pelo servidor.";
+          } catch (error) {
+            const message = error && error.message ? error.message : "Não foi possível concluir a ação.";
+            const alert = element("p", message, "warning error");
+            alert.setAttribute("role", "alert");
+            root.append(alert);
+            announcer.textContent = message;
+          } finally {
+            busy = false;
+            root.setAttribute("aria-busy", "false");
+            root.querySelectorAll("button").forEach((button) => { button.disabled = false; });
+          }
+        }
+
+        function render(envelope) {
+          const card = envelope && envelope.data && envelope.data.card;
+          root.replaceChildren();
+          root.setAttribute("aria-busy", "false");
+          if (!card || typeof card !== "object") {
+            root.append(element("h1", "Swim Coach"));
+            root.append(element("p", envelope && envelope.human_summary ? envelope.human_summary : "Resultado disponível em texto.", "empty"));
+            return;
+          }
+
+          root.dataset.kind = String(card.kind || "unknown");
+          root.append(element("h1", card.title || "Swim Coach"));
+          if (card.subtitle) root.append(element("p", card.subtitle, "subtitle"));
+          if (card.status) root.append(element("span", card.status, "badge"));
+          if (card.expired) {
+            const expired = element("p", "Esta proposta expirou. Gere uma nova prévia antes de decidir.", "warning error");
+            expired.setAttribute("role", "alert");
+            root.append(expired);
+          }
+          if (card.empty) root.append(element("p", "Nenhum item encontrado para este período.", "empty"));
+
+          const metrics = Array.isArray(card.metrics) ? card.metrics : [];
+          if (metrics.length) {
+            const list = element("dl", undefined, "metrics");
+            for (const metric of metrics) {
+              const group = element("div", undefined, "metric");
+              group.append(element("dt", metric.label || "Métrica"));
+              group.append(element("dd", metric.value === undefined || metric.value === null ? "—" : metric.value));
+              list.append(group);
+            }
+            root.append(list);
+          }
+
+          if (card.hash) {
+            const hash = element("p", `Hash exato: ${card.hash}`, "hash");
+            hash.setAttribute("aria-label", `Hash exato da ação ${card.hash}`);
+            root.append(hash);
+          }
+
+          const items = Array.isArray(card.items) ? card.items : [];
+          if (items.length) {
+            const list = element("ul");
+            for (const item of items) {
+              const row = element("li");
+              row.append(element("strong", item.title || "Item"));
+              if (item.detail) row.append(element("span", item.detail));
+              if (item.status) row.append(element("span", item.status));
+              list.append(row);
+            }
+            root.append(list);
+          }
+
+          const warnings = Array.isArray(card.warnings) ? card.warnings : [];
+          for (const warning of warnings) {
+            const row = element("p", warning.message || warning.code || "Aviso", "warning");
+            row.setAttribute("role", "status");
+            root.append(row);
+          }
+
+          const actions = element("div", undefined, "actions");
+          const decision = card.decision;
+          if (decision && !card.expired) {
+            const approve = element("button", "Aprovar ação exata");
+            approve.type = "button";
+            approve.addEventListener("click", () => callTool(decision.tool, {
+              proposal_id: decision.proposal_id,
+              expected_action_hash: decision.expected_action_hash,
+              decision: "APPROVE",
+              confirmation_text: `Confirmo a ação com hash ${decision.expected_action_hash}.`,
+            }));
+            const reject = element("button", "Rejeitar", "secondary");
+            reject.type = "button";
+            reject.addEventListener("click", () => callTool(decision.tool, {
+              proposal_id: decision.proposal_id,
+              expected_action_hash: decision.expected_action_hash,
+              decision: "REJECT",
+              confirmation_text: `Rejeito a ação com hash ${decision.expected_action_hash}.`,
+            }));
+            actions.append(approve, reject);
+          }
+
+          if (card.retry) {
+            const retry = element("button", "Tentar job novamente", "secondary");
+            retry.type = "button";
+            retry.addEventListener("click", () => callTool(card.retry.tool, {
+              job_id: card.retry.job_id,
+              idempotency_key: card.retry.idempotency_key,
+            }));
+            actions.append(retry);
+          }
+
+          const links = Array.isArray(card.links) ? card.links : [];
+          for (const link of links) {
+            if (!link || typeof link.href !== "string" || !/^https?:\/\//.test(link.href)) continue;
+            const anchor = element("a", link.label || "Abrir", "action");
+            anchor.href = link.href;
+            anchor.target = "_blank";
+            anchor.rel = "noopener noreferrer";
+            anchor.addEventListener("click", (event) => {
+              const openai = window.openai;
+              if (openai && typeof openai.openExternal === "function") {
+                event.preventDefault();
+                openai.openExternal({ href: link.href, redirectUrl: false });
+              }
+            });
+            actions.append(anchor);
+          }
+          if (actions.childElementCount) root.append(actions);
+        }
+
+        window.addEventListener("message", (event) => {
+          if (event.source !== window.parent) return;
+          const message = event.data;
+          if (!message || message.jsonrpc !== "2.0") return;
+          if (message.id !== undefined && pending.has(message.id)) {
+            const requestState = pending.get(message.id);
+            pending.delete(message.id);
+            if (message.error) requestState.reject(message.error);
+            else requestState.resolve(message.result);
+            return;
+          }
+          if (message.method === "ui/notifications/tool-result") {
+            render(message.params && message.params.structuredContent);
+          }
+        }, { passive: true });
+
+        if (window.openai && window.openai.toolOutput) render(window.openai.toolOutput);
+      })();
+    </script>
+  </body>
+</html>

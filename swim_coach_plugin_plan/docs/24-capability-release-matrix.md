@@ -73,13 +73,14 @@ Ela gera proposal revisável; não ativa nem publica a semana automaticamente.
 
 Somente P09:
 
-- workout/week card;
-- comparação planejado versus realizado;
-- progresso da meta;
-- proposal/confirmation card;
-- sync/job status.
+- `render_workout_card` → workout/week card;
+- `render_activity_comparison_card` → comparação planejado versus realizado;
+- `render_goal_progress_card` → progresso da meta;
+- `render_proposal_confirmation_card` → revisão e decisão, nunca execução;
+- `render_sync_status_card` → sync/job status e retry somente quando permitido.
 
-Toda tool deve continuar retornando texto/structured content suficiente sem UI.
+As tools de dados/ação não carregam UI. Cada render tool retorna texto e
+`structuredContent` suficientes, e toda operação continua disponível sem UI.
 
 ## 5. Gates automáticos
 

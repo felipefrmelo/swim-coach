@@ -32,6 +32,17 @@ from swim_coach.application.services.mcp_write import McpWriteService
 from swim_coach.domain.shared.errors import DomainError
 from swim_coach.domain.shared.value_objects import CorrelationId, EntityId
 from swim_coach.domain.workouts import CanonicalWorkout
+from swim_coach.interfaces.mcp.ui import (
+    MCP_UI_RESOURCE_URIS,
+    MCP_UI_TOOLS,
+    activity_card,
+    goal_card,
+    proposal_card,
+    register_ui_resources,
+    sync_card,
+    ui_tool_meta,
+    workout_card,
+)
 
 READ_ONLY = ToolAnnotations(
     readOnlyHint=True,
@@ -66,6 +77,8 @@ def create_mcp_server(
     token_verifier: TokenVerifier | None = None,
     oauth_issuer: str | None = None,
     oauth_resource: str | None = None,
+    ui_enabled: bool = False,
+    pwa_base_url: str = "http://127.0.0.1:14173",
     allowed_hosts: list[str] | None = None,
     allowed_origins: list[str] | None = None,
 ) -> FastMCP:
@@ -83,6 +96,7 @@ def create_mcp_server(
             required_scopes=[],
         )
     write_enabled = bool(oauth_enabled and write_service)
+    ui_enabled = bool(oauth_enabled and write_enabled and ui_enabled)
     instructions = (
         "Swim Coach exposes authenticated, user-scoped swimming training data. "
         + (
@@ -118,6 +132,9 @@ def create_mcp_server(
             allowed_origins=allowed_origins or ["http://127.0.0.1:*", "http://localhost:*"],
         ),
     )
+
+    if ui_enabled:
+        register_ui_resources(server, pwa_base_url=pwa_base_url)
 
     if not oauth_enabled:
         _register_p00_capabilities(server)
@@ -259,6 +276,20 @@ def create_mcp_server(
                 result.human_summary = (
                     "Swim Coach exposes authenticated reads and controlled writes with exact-hash "
                     "approval and a separate execution turn."
+                )
+            if ui_enabled:
+                result.data["server_version"] = "0.3.0-optional-ui"
+                result.data["phase"] = "P09"
+                result.data["release_mode"] = "controlled-write-optional-ui"
+                result.data["available_tools"] = [
+                    *result.data["available_tools"],
+                    *MCP_UI_TOOLS,
+                ]
+                result.data["custom_ui_enabled"] = True
+                result.data["ui_resources"] = list(MCP_UI_RESOURCE_URIS.values())
+                result.human_summary = (
+                    "Swim Coach exposes authenticated reads, controlled writes, and optional "
+                    "portable MCP Apps cards. Every workflow remains complete without UI."
                 )
             return result
 
@@ -493,6 +524,14 @@ def create_mcp_server(
 
     if write_enabled and write_service is not None:
         _register_write_tools(server, write_service, execute_write)
+    if ui_enabled and write_service is not None:
+        _register_ui_tools(
+            server,
+            read_service,
+            write_service,
+            execute,
+            pwa_base_url=pwa_base_url,
+        )
 
     _harden_tool_schemas(server)
     return server
@@ -875,6 +914,226 @@ def _register_write_tools(
                 idempotency_key=idempotency_key,
                 correlation_id=correlation_id,
             ),
+        )
+
+
+def _register_ui_tools(
+    server: FastMCP,
+    read_service: McpReadService,
+    write_service: McpWriteService,
+    execute: Callable[
+        [
+            str,
+            Context[Any, Any, Any],
+            frozenset[str],
+            dict[str, Any],
+            Callable[[McpPrincipal, str], Awaitable[McpResult]],
+        ],
+        Awaitable[McpResult],
+    ],
+    *,
+    pwa_base_url: str,
+) -> None:
+    """Register presentation-only P09 tools after the headless data/action surface."""
+
+    @server.tool(
+        name="render_workout_card",
+        title="Render workout or week card",
+        description=(
+            "Render an optional portable card from authoritative workout data. The underlying "
+            "get_today_workout and get_week_plan tools remain complete without UI."
+        ),
+        annotations=READ_ONLY,
+        meta=ui_tool_meta("workout"),
+        structured_output=True,
+    )
+    async def render_workout_card(
+        ctx: Context[Any, Any, Any],
+        view: Literal["today", "week"] = "today",
+        date: LocalDate | None = None,
+        week_start: LocalDate | None = None,
+    ) -> McpResult:
+        if view == "today" and week_start is not None:
+            raise ToolError(
+                _error(
+                    "VALIDATION_FAILED",
+                    "week_start is only valid for the week view.",
+                    _safe_request_id(ctx.request_id),
+                )
+            )
+        if view == "week" and date is not None:
+            raise ToolError(
+                _error(
+                    "VALIDATION_FAILED",
+                    "date is only valid for the today view.",
+                    _safe_request_id(ctx.request_id),
+                )
+            )
+        args = {
+            "view": view,
+            "date": date.isoformat() if date else None,
+            "week_start": week_start.isoformat() if week_start else None,
+        }
+
+        async def query(principal: McpPrincipal, request_id: str) -> McpResult:
+            result = (
+                await read_service.get_week_plan(
+                    principal,
+                    request_id,
+                    week_start=week_start,
+                )
+                if view == "week"
+                else await read_service.get_today_workout(
+                    principal,
+                    request_id,
+                    target_date=date,
+                    include_steps=True,
+                    include_publish_status=True,
+                )
+            )
+            return workout_card(result, pwa_base_url=pwa_base_url, view=view)
+
+        return await execute(
+            "render_workout_card",
+            ctx,
+            frozenset({"workouts:read"}),
+            args,
+            query,
+        )
+
+    @server.tool(
+        name="render_activity_comparison_card",
+        title="Render swim comparison card",
+        description=(
+            "Render an optional planned-versus-executed swim card with bounded intervals and "
+            "feedback status; raw FIT is never returned."
+        ),
+        annotations=READ_ONLY,
+        meta=ui_tool_meta("activity"),
+        structured_output=True,
+    )
+    async def render_activity_comparison_card(
+        activity_id: UUID,
+        ctx: Context[Any, Any, Any],
+        max_intervals: Annotated[int, Field(ge=1, le=30)] = 20,
+    ) -> McpResult:
+        args = {"activity_id": str(activity_id), "max_intervals": max_intervals}
+
+        async def query(principal: McpPrincipal, request_id: str) -> McpResult:
+            result = await read_service.get_swim_activity(
+                principal,
+                request_id,
+                activity_id=EntityId(activity_id),
+                include_intervals=True,
+                include_lengths=False,
+                max_intervals=max_intervals,
+            )
+            return activity_card(result, pwa_base_url=pwa_base_url)
+
+        return await execute(
+            "render_activity_comparison_card",
+            ctx,
+            frozenset({"activities:read", "analytics:read"}),
+            args,
+            query,
+        )
+
+    @server.tool(
+        name="render_goal_progress_card",
+        title="Render goal progress card",
+        description="Render an optional evidence-based goal card with sample quality.",
+        annotations=READ_ONLY,
+        meta=ui_tool_meta("goal"),
+        structured_output=True,
+    )
+    async def render_goal_progress_card(
+        ctx: Context[Any, Any, Any], goal_id: UUID | None = None
+    ) -> McpResult:
+        args = {"goal_id": str(goal_id) if goal_id else None}
+
+        async def query(principal: McpPrincipal, request_id: str) -> McpResult:
+            result = await read_service.get_goal_progress(
+                principal,
+                request_id,
+                goal_id=EntityId(goal_id) if goal_id else None,
+            )
+            return goal_card(result, pwa_base_url=pwa_base_url)
+
+        return await execute(
+            "render_goal_progress_card",
+            ctx,
+            frozenset({"goals:read", "analytics:read"}),
+            args,
+            query,
+        )
+
+    @server.tool(
+        name="render_proposal_confirmation_card",
+        title="Render exact proposal confirmation card",
+        description=(
+            "Render an owned persisted proposal. The card may approve or reject the exact hash, "
+            "but never executes the approved action."
+        ),
+        annotations=READ_ONLY,
+        meta=ui_tool_meta("proposal"),
+        structured_output=True,
+    )
+    async def render_proposal_confirmation_card(
+        proposal_id: UUID,
+        ctx: Context[Any, Any, Any],
+    ) -> McpResult:
+        args = {"proposal_id": str(proposal_id)}
+
+        async def query(principal: McpPrincipal, request_id: str) -> McpResult:
+            result = await write_service.get_action_proposal(
+                principal,
+                request_id,
+                EntityId(proposal_id),
+            )
+            return proposal_card(result)
+
+        return await execute(
+            "render_proposal_confirmation_card",
+            ctx,
+            frozenset({"proposals:read"}),
+            args,
+            query,
+        )
+
+    @server.tool(
+        name="render_sync_status_card",
+        title="Render sync and job status card",
+        description=(
+            "Render persisted Garmin sync state and, when requested, one owned job with a safe "
+            "retry action only when the server classifies it retryable."
+        ),
+        annotations=READ_ONLY,
+        meta=ui_tool_meta("sync"),
+        structured_output=True,
+    )
+    async def render_sync_status_card(
+        ctx: Context[Any, Any, Any], job_id: UUID | None = None
+    ) -> McpResult:
+        args = {"job_id": str(job_id) if job_id else None}
+        scopes = {"sync:read"}
+        if job_id is not None:
+            scopes.add("operations:read")
+
+        async def query(principal: McpPrincipal, request_id: str) -> McpResult:
+            result = await read_service.get_sync_status(principal, request_id)
+            job = (
+                await write_service.get_job_status(principal, request_id, EntityId(job_id))
+                if job_id
+                else None
+            )
+            return sync_card(result, job=job)
+
+        return await execute(
+            "render_sync_status_card",
+            ctx,
+            frozenset(scopes),
+            args,
+            query,
         )
 
 

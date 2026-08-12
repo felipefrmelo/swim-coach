@@ -60,6 +60,42 @@ tools:
     scopes: [sync:read]
     annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
     input: {type: object, additionalProperties: false, properties: {}}
+  - name: render_workout_card
+    title: Render workout or week card
+    description: Render an optional portable card from authoritative workout data while preserving the complete headless result.
+    scopes: [workouts:read]
+    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
+    ui_resource: ui://swim-coach/workout-card/v1.html
+    input: {type: object, additionalProperties: false, properties: {view: {type: string, enum: [today, week], default: today}, date: {type: [string, "null"], format: date}, week_start: {type: [string, "null"], format: date}}}
+  - name: render_activity_comparison_card
+    title: Render swim comparison card
+    description: Render an optional planned-versus-executed swim card with bounded intervals and feedback status.
+    scopes: [activities:read, analytics:read]
+    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
+    ui_resource: ui://swim-coach/activity-comparison-card/v1.html
+    input: {type: object, additionalProperties: false, required: [activity_id], properties: {activity_id: {type: string, format: uuid}, max_intervals: {type: integer, minimum: 1, maximum: 30, default: 20}}}
+  - name: render_goal_progress_card
+    title: Render goal progress card
+    description: Render an optional evidence-based goal card with explicit sample quality.
+    scopes: [goals:read, analytics:read]
+    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
+    ui_resource: ui://swim-coach/goal-progress-card/v1.html
+    input: {type: object, additionalProperties: false, properties: {goal_id: {type: [string, "null"], format: uuid}}}
+  - name: render_proposal_confirmation_card
+    title: Render exact proposal confirmation card
+    description: Render an owned persisted proposal that can approve or reject its exact hash but never execute it.
+    scopes: [proposals:read]
+    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
+    ui_resource: ui://swim-coach/proposal-confirmation-card/v1.html
+    input: {type: object, additionalProperties: false, required: [proposal_id], properties: {proposal_id: {type: string, format: uuid}}}
+  - name: render_sync_status_card
+    title: Render sync and job status card
+    description: Render Garmin sync state and optionally one owned job with safe retry only when the server classifies it retryable.
+    scopes: [sync:read]
+    conditional_scopes: {job_id: [operations:read]}
+    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
+    ui_resource: ui://swim-coach/sync-status-card/v1.html
+    input: {type: object, additionalProperties: false, properties: {job_id: {type: [string, "null"], format: uuid}}}
   - name: get_action_proposal
     title: Get action proposal
     description: Return the exact persisted impact, hash, expiry, required scopes, and execution state of an action proposal.

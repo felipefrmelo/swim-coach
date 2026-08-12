@@ -73,14 +73,14 @@ def load_eval_cases() -> list[dict[str, Any]]:
     return cases
 
 
-def test_p08_manifest_app_marketplace_and_release_matrix_are_controlled_write() -> None:
+def test_p09_manifest_app_marketplace_and_release_matrix_add_optional_ui() -> None:
     manifest = load_json(PLUGIN_ROOT / ".codex-plugin/plugin.json")
     app_mapping = load_json(PLUGIN_ROOT / ".app.json")
     marketplace = load_json(ROOT / ".agents/plugins/marketplace.json")
     release_matrix = load_yaml(ROOT / "contracts/capability-release-matrix.yaml")
 
     assert manifest["name"] == "swim-coach"
-    assert manifest["version"] == "0.2.0"
+    assert manifest["version"] == "0.3.0"
     assert manifest["skills"] == "./skills/"
     assert manifest["apps"] == "./.app.json"
     assert manifest["interface"]["capabilities"] == ["Read", "Write"]
@@ -106,15 +106,25 @@ def test_p08_manifest_app_marketplace_and_release_matrix_are_controlled_write() 
     p08_release = next(item for item in release_matrix["plugin_releases"] if item["phase"] == "P08")
     assert p08_release["version"] == "0.2.0"
     assert p08_release["mode"] == "controlled-write"
+    p09_release = next(item for item in release_matrix["plugin_releases"] if item["phase"] == "P09")
+    assert p09_release["version"] == "0.3.0"
+    assert p09_release["mode"] == "optional-ui"
     released_skills = {
         item["name"]
         for item in release_matrix["skills"]
         if item.get("introduced") in {"P06", "P08"}
     }
     assert released_skills == set(SKILLS)
+    assert {item["name"] for item in release_matrix["ui_resources"]} == {
+        "workout-card",
+        "swim-comparison-card",
+        "goal-progress-card",
+        "proposal-confirmation-card",
+        "sync-status-card",
+    }
 
 
-def test_p08_skill_frontmatter_workflows_and_ui_metadata_are_valid() -> None:
+def test_p09_skill_frontmatter_workflows_and_ui_metadata_are_valid() -> None:
     skill_files = sorted((PLUGIN_ROOT / "skills").glob("*/SKILL.md"))
     assert {path.parent.name for path in skill_files} == set(SKILLS)
 
@@ -141,7 +151,7 @@ def test_p08_skill_frontmatter_workflows_and_ui_metadata_are_valid() -> None:
         assert f"${skill_name}" in interface["default_prompt"]
 
 
-def test_p08_eval_dataset_validates_selection_order_and_confirmation_boundaries() -> None:
+def test_p09_eval_dataset_validates_selection_order_and_confirmation_boundaries() -> None:
     schema = load_json(ROOT / "contracts/plugin-eval-case.schema.json")
     validator = Draft202012Validator(schema)
     tool_catalog = load_yaml(ROOT / "contracts/mcp-tools.yaml")

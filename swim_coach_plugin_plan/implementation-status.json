@@ -2,8 +2,8 @@
   "schema_version": "1.0",
   "project": "swim-coach",
   "plan_version": "1.0",
-  "updated_at": "2026-08-12T14:30:00-03:00",
-  "active_phase": "P08",
+  "updated_at": "2026-08-12T12:03:03-03:00",
+  "active_phase": "P09",
   "phases": [
     {
       "id": "P00",
@@ -204,8 +204,18 @@
     },
     {
       "id": "P09",
-      "status": "NOT_STARTED",
-      "evidence": [],
+      "status": "IN_PROGRESS",
+      "evidence": [
+        "local:branch:p09-mcp-apps-ui",
+        "docs/evidence/p09-mcp-apps-ui.md",
+        "docs/handoffs/p09.md",
+        "local:mcp-apps:5-versioned-resources:5-render-tools",
+        "local:optional-ui:exact-p08-headless-parity",
+        "local:csp-closed:self-contained:no-token-no-fetch",
+        "local:bridge-mock:mobile-a11y-expiry-double-click",
+        "local:plugin-0.3.0:6-skills:132-evals",
+        "pending:chatgpt-real-host-card-smoke"
+      ],
       "commit": null
     },
     {

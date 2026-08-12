@@ -4,9 +4,9 @@
 
 Ferramentas são implementadas e estabilizadas primeiro. UI entra na P09 somente onde melhora inspeção, comparação, edição, confirmação ou navegação. O mesmo workflow deve continuar completo em texto.
 
-## 2. Componentes planejados
+## 2. Componentes P09
 
-### `workout-review-card`
+### `workout-card`
 
 - título, data, piscina e objetivo;
 - blocos/repetições colapsáveis;
@@ -15,7 +15,8 @@ Ferramentas são implementadas e estabilizadas primeiro. UI entra na P09 somente
 - revision/hash resumido;
 - ações: pedir alteração, abrir PWA, iniciar preview de publicação.
 
-### `week-plan-card`
+O mesmo resource também renderiza a visão semanal quando o render tool recebe
+`view=week`:
 
 - sessões por dia;
 - volume total e distribuição;
@@ -30,6 +31,12 @@ Ferramentas são implementadas e estabilizadas primeiro. UI entra na P09 somente
 - aderência;
 - feedback ausente/presente;
 - não renderizar centenas de lengths sem interação explícita.
+
+### `goal-progress-card`
+
+- alvo e melhor resultado recente;
+- ritmo e tamanho/qualidade da amostra;
+- link allowlisted para a PWA.
 
 ### `proposal-confirmation-card`
 
@@ -51,7 +58,9 @@ Ferramentas são implementadas e estabilizadas primeiro. UI entra na P09 somente
 
 ## 3. Arquitetura
 
-- resource declarado pelo MCP com `_meta.ui.resourceUri`;
+- cinco render tools read-only são separados das tools de dados/ação;
+- somente os render tools declaram `_meta.ui.resourceUri`;
+- resources usam `text/html;profile=mcp-app` e URIs `ui://` versionadas;
 - iframe isolado;
 - comunicação via bridge MCP Apps JSON-RPC sobre `postMessage`;
 - inputs/resultados vêm do host;
@@ -68,6 +77,10 @@ Ferramentas são implementadas e estabilizadas primeiro. UI entra na P09 somente
 - links externos e navegação passam por allowlist;
 - UI não cria uma API paralela.
 
+O template usa o protocolo `ui/*` e `tools/call` como caminho principal. A API
+`window.openai` é detectada apenas para abrir links externos quando o host a
+oferece; links HTML comuns continuam sendo o fallback.
+
 ## 5. Segurança de confirmação
 
 - a UI exibe conteúdo vindo da proposal persistida;
@@ -75,7 +88,7 @@ Ferramentas são implementadas e estabilizadas primeiro. UI entra na P09 somente
 - server revalida estado, expiry, ownership e escopo;
 - UI não pode alterar payload após preview;
 - qualquer mudança de revisão invalida a proposal;
-- execução é chamada separadamente ou encadeada somente conforme política explícita.
+- execução sempre exige uma chamada separada fora do card P09.
 
 ## 6. Acessibilidade e mobile
 
@@ -97,3 +110,10 @@ Ferramentas são implementadas e estabilizadas primeiro. UI entra na P09 somente
 - proposal expirada;
 - double click/idempotência;
 - CSP e links.
+
+## 8. Ativação e rollback
+
+`SWIM_COACH_MCP_UI_ENABLED=true` exige OAuth completo e
+`SWIM_COACH_MCP_WRITE_ENABLED=true`. Se qualquer pré-condição faltar, nenhum
+resource nem render tool é registrado. Desativar a flag restaura exatamente a
+superfície headless P08.

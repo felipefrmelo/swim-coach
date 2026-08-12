@@ -65,6 +65,31 @@ tools:
   release: 0.1.0
   kind: read
   external_effect: false
+- name: render_workout_card
+  introduced: P09
+  release: 0.3.0
+  kind: optional-ui-read
+  external_effect: false
+- name: render_activity_comparison_card
+  introduced: P09
+  release: 0.3.0
+  kind: optional-ui-read
+  external_effect: false
+- name: render_goal_progress_card
+  introduced: P09
+  release: 0.3.0
+  kind: optional-ui-read
+  external_effect: false
+- name: render_proposal_confirmation_card
+  introduced: P09
+  release: 0.3.0
+  kind: optional-ui-read
+  external_effect: false
+- name: render_sync_status_card
+  introduced: P09
+  release: 0.3.0
+  kind: optional-ui-read
+  external_effect: false
 - name: get_action_proposal
   introduced: P08
   release: 0.2.0
@@ -198,27 +223,24 @@ ui_resources:
   introduced: P09
   optional: true
   tools:
-  - get_today_workout
-  - get_week_plan
+  - render_workout_card
 - name: swim-comparison-card
   introduced: P09
   optional: true
   tools:
-  - get_swim_activity
+  - render_activity_comparison_card
 - name: goal-progress-card
   introduced: P09
   optional: true
   tools:
-  - get_goal_progress
+  - render_goal_progress_card
 - name: proposal-confirmation-card
   introduced: P09
   optional: true
   tools:
-  - get_action_proposal
-  - preview_garmin_publish
+  - render_proposal_confirmation_card
 - name: sync-status-card
   introduced: P09
   optional: true
   tools:
-  - get_sync_status
-  - get_job_status
+  - render_sync_status_card

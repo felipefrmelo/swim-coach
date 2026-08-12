@@ -55,6 +55,8 @@ def create_app(
         token_verifier=token_verifier,
         oauth_issuer=oauth_issuer,
         oauth_resource=oauth_resource,
+        ui_enabled=settings.mcp_ui_enabled,
+        pwa_base_url=str(settings.pwa_base_url),
         allowed_hosts=allowed_hosts,
         allowed_origins=allowed_origins,
     )

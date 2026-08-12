@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### P09 — UI opcional MCP Apps e plugin `0.3.0` (smoke no host pendente)
+
+- adicionados cinco resources `ui://` versionados e cinco render tools read-only
+  para treino/semana, atividade, meta, proposal e sync;
+- adotado `text/html;profile=mcp-app`, `_meta.ui.resourceUri`, CSP fechada e
+  bridge MCP Apps `ui/*`/`tools/call`, com fallback por capability detection;
+- mantidas as tools de dados/ação desacopladas da renderização e a superfície
+  P08 exatamente igual quando `SWIM_COACH_MCP_UI_ENABLED=false`;
+- proposal expirada ou inválida falha fechada, approve/reject usa proposal e hash
+  persistidos, double-click é bloqueado e execução externa nunca parte do card;
+- entregue template autocontido, sem fetch/token/HTML não confiável, com foco,
+  labels, alvos de 44 px e layout móvel sem scroll horizontal;
+- plugin elevado a `0.3.0`, preservando seis Skills e 132 evals;
+- fase permanece `IN_PROGRESS` até screenshot e smoke sanitizado em um host real
+  do ChatGPT; o bridge host de teste não é promovido como essa prova.
+
 ### P08 — MCP de escrita controlada e plugin `0.2.0` (smoke real pendente)
 
 - adicionada flag independente `mcp_write_enabled`, fail-closed sem OAuth, e
