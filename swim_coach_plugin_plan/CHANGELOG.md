@@ -17,6 +17,8 @@
 - plugin pessoal validado e atualizado para `1.0.0+codex.20260812170215`;
 - reconciliado o checkpoint do README com P12/1.0.0 e registrado o CI final
   `31621402450` verde antes da integração da pilha na `main`;
+- promovido o PR #13 de draft empilhado para PR umbrella pronto contra `main`,
+  preservando os gates operacionais abertos e o histórico linear P00–P12;
 - fase permanece `IN_PROGRESS` até o smoke em conversa nova e os gates reais P11
   e anteriores fecharem; `1.0.0` continua release candidate pessoal.
 

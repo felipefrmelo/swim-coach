@@ -3,8 +3,8 @@
 State: implementation and automated/integration gate complete; phase remains
 `IN_PROGRESS` because P11 and earlier real-data gates are still open.
 
-Publication: commit `aa98d80`, draft PR #13, based on
-`p11-automation-offline`.
+Publication: implementation commit `aa98d80`; PR #13 is the ready, green umbrella
+integration from the complete linear P00–P12 head into `main`.
 
 ## Delivered by task
 

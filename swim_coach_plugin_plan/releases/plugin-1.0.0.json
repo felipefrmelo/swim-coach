@@ -61,9 +61,11 @@
     "enabled": true
   },
   "publication": {
-    "draft_pr": 13,
+    "pr": 13,
+    "pr_state": "ready",
     "implementation_commit": "aa98d80",
-    "base_branch": "p11-automation-offline"
+    "base_branch": "main",
+    "integration_head_commit": "0e67818"
   },
   "pending_gates": [
     "P11 personal automation/offline/queue evidence",
