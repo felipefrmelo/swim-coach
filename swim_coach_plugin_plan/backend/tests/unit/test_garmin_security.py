@@ -15,9 +15,11 @@ def test_aes_gcm_round_trip_tamper_detection_and_rotation() -> None:
     assert old_cipher.decrypt(encrypted, user_id=user_id) == b'{"token":"secret"}'
     assert b"secret" not in encrypted.ciphertext
 
+    tampered_ciphertext = encrypted.ciphertext[:-1] + bytes([encrypted.ciphertext[-1] ^ 0x01])
+    assert tampered_ciphertext != encrypted.ciphertext
     with pytest.raises(DomainError, match="authenticated"):
         old_cipher.decrypt(
-            replace(encrypted, ciphertext=encrypted.ciphertext[:-1] + b"x"),
+            replace(encrypted, ciphertext=tampered_ciphertext),
             user_id=user_id,
         )
     with pytest.raises(DomainError):

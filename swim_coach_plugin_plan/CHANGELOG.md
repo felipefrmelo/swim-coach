@@ -13,6 +13,8 @@
 - adicionados metadados `agents/openai.yaml`, validação oficial de Skills/plugin,
   contratos estáticos e 66 evals de seleção, ordem, vazio, auth e adversarial;
 - criado release candidate com hashes de manifesto, app mapping e Skills;
+- removida flakiness do teste AES-GCM: a adulteração agora sempre altera um byte
+  por XOR, em vez de ocasionalmente substituir `x` por `x` sem mudança;
 - mantido `IN_PROGRESS`: a cópia pessoal continua no spike porque duas tentativas
   de upgrade fora do workspace expiraram na aprovação do ambiente; conversa nova
   e gate autenticado P05 ainda são provas manuais pendentes.
