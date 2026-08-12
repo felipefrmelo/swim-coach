@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "plugin": "swim-coach",
+  "version": "0.1.0",
+  "mode": "read-only",
+  "status": "release_candidate",
+  "created_at": "2026-08-12T10:41:08-03:00",
+  "registered_app": "plugin_asdk_app_6a7b7fbeceec819196c168888a9494b6",
+  "skills": [
+    "review-latest-swim",
+    "goal-progress",
+    "diagnose-sync"
+  ],
+  "hashes": {
+    "plugins/swim-coach/.codex-plugin/plugin.json": "54fe3d65230bff5ab1daf97832c289c0f8b8a18389654cb6ac8957e89e187e41",
+    "plugins/swim-coach/.app.json": "c9a2762870f08690de4f94978addbedb2e05ec35215823d4773093c49909a7b9",
+    "plugins/swim-coach/skills/review-latest-swim/SKILL.md": "52b16d1f462a406a0442d391108fa302fc63e953d44c03cdbdf82f885e073e6b",
+    "plugins/swim-coach/skills/goal-progress/SKILL.md": "94932eb3b558e71367d2ac08958d3ebbaee682dcfb6727934d66c1ba4aa3ac6e",
+    "plugins/swim-coach/skills/diagnose-sync/SKILL.md": "2e0c52832988e91592086bd16e0101e5667ed84cab012c48d3eba8120c2ea5e0"
+  },
+  "automated_evals": {
+    "total": 66,
+    "direct": 15,
+    "indirect": 15,
+    "followup": 9,
+    "empty": 9,
+    "auth": 9,
+    "adversarial": 9,
+    "result": "passed"
+  },
+  "pending_gates": [
+    "personal marketplace upgrade to the 0.1.0 copy",
+    "fresh-conversation Skill activation smoke",
+    "P05 authenticated host read with persistent Garmin data"
+  ]
+}

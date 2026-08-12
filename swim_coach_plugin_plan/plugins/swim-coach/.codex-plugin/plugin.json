@@ -1,7 +1,7 @@
 {
   "name": "swim-coach",
-  "version": "0.0.0-spike",
-  "description": "Harmless platform-feasibility workflow for the personal Swim Coach plugin.",
+  "version": "0.1.0",
+  "description": "Review Garmin-backed pool swims, swimming-goal progress, and sync health without performing writes.",
   "author": {
     "name": "Felipe"
   },
@@ -12,17 +12,20 @@
     "coach"
   ],
   "skills": "./skills/",
+  "apps": "./.app.json",
   "interface": {
     "displayName": "Swim Coach",
-    "shortDescription": "Verify the Swim Coach integration",
-    "longDescription": "Run the harmless P00 capability check before private data or write actions are enabled.",
+    "shortDescription": "Review pool swimming training",
+    "longDescription": "Review authenticated pool swims, evidence-based goal progress, planned workouts, and Garmin sync health in read-only mode.",
     "developerName": "Felipe",
     "category": "Health & Fitness",
     "capabilities": [
       "Read"
     ],
     "defaultPrompt": [
-      "Use Swim Coach to verify which capabilities are connected."
+      "Use Swim Coach to review my latest swim.",
+      "Use Swim Coach to show my swimming goal progress.",
+      "Use Swim Coach to explain why my latest swim is missing."
     ]
   }
 }

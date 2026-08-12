@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate P00 repository contracts without requiring external services."""
+"""Validate repository contracts without requiring external services."""
 
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ def validate_documents(errors: list[str]) -> None:
         for path in repository_files(suffix):
             try:
                 with path.open(encoding="utf-8") as handle:
-                    yaml.safe_load(handle)
+                    list(yaml.safe_load_all(handle))
             except (OSError, yaml.YAMLError) as exc:
                 errors.append(f"invalid YAML {path.relative_to(ROOT)}: {exc}")
     for path in repository_files(".md"):
@@ -73,16 +73,31 @@ def validate_plugin(errors: list[str]) -> None:
 
     if manifest.get("name") != "swim-coach":
         errors.append("plugin name must be swim-coach")
-    if manifest.get("version") != "0.0.0-spike":
-        errors.append("P00 plugin version must be 0.0.0-spike")
+    if manifest.get("version") != "0.1.0":
+        errors.append("P06 plugin version must be 0.1.0")
     capabilities = manifest.get("interface", {}).get("capabilities", [])
     if capabilities != ["Read"]:
         errors.append("P00 plugin must advertise only Read")
-    if "apps" in manifest or "mcpServers" in manifest:
-        errors.append("P00 manifest must not invent MCP connection wiring")
+    if manifest.get("apps") != "./.app.json":
+        errors.append("P06 manifest must reference the registered MCP app mapping")
+    if "mcpServers" in manifest:
+        errors.append("P06 manifest must use the registered app, not a bundled MCP server")
     skills_path = manifest.get("skills")
     if not isinstance(skills_path, str) or not (plugin_root / skills_path).is_dir():
         errors.append("plugin skills path is missing")
+    skill_names = {path.parent.name for path in (plugin_root / "skills").glob("*/SKILL.md")}
+    if skill_names != {"review-latest-swim", "goal-progress", "diagnose-sync"}:
+        errors.append("P06 must package exactly the three read-only skills")
+    app_mapping = load_json(plugin_root / ".app.json")
+    expected_app_mapping = {
+        "apps": {
+            "dev-6a7b7fbeceec819196c168888a9494b6": {
+                "id": "asdk_app_6a7b7fbeceec819196c168888a9494b6"
+            }
+        }
+    }
+    if app_mapping != expected_app_mapping:
+        errors.append("P06 app mapping must reference the registered Swim Coach connection")
     entries = [
         entry for entry in marketplace.get("plugins", []) if entry.get("name") == "swim-coach"
     ]

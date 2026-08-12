@@ -15,8 +15,8 @@
 | P02 | IN_PROGRESS | P01 | import real Garmin sem duplicata | [draft PR #3](https://github.com/felipefrmelo/swim-coach/pull/3) |
 | P03 | IN_PROGRESS | P02 | FIT normalizado e analytics reproduzíveis | [draft PR #6](https://github.com/felipefrmelo/swim-coach/pull/6) |
 | P04 | DONE | P01 | treino válido de 20 m criado/revisado/agendado na PWA | [draft PR #4](https://github.com/felipefrmelo/swim-coach/pull/4) |
-| P05 | IN_PROGRESS | P03,P04 | MCP read-only autenticado com dados reais | branch `p05-mcp-read-only` |
-| P06 | NOT_STARTED | P05 | plugin/Skills instalados e evals aprovadas | — |
+| P05 | IN_PROGRESS | P03,P04 | MCP read-only autenticado com dados reais | [draft PR #7](https://github.com/felipefrmelo/swim-coach/pull/7) |
+| P06 | IN_PROGRESS | P05 | plugin/Skills instalados e evals aprovadas | branch `p06-plugin-read-only` |
 | P07 | IN_PROGRESS | P04 | publicação Garmin pela PWA com aprovação | [draft PR #5](https://github.com/felipefrmelo/swim-coach/pull/5) |
 | P08 | NOT_STARTED | P06,P07 | escrita MCP com scopes/hash/auditoria | — |
 | P09 | NOT_STARTED | P08 | UI MCP opcional e fallback headless | — |
@@ -205,8 +205,31 @@
 
 ### P06
 
-- Estado: `NOT_STARTED`
+- Estado: `IN_PROGRESS`
+- Início: 2026-08-12T10:34:52-03:00
+- Escopo: P06-T01..T08; implementação independente iniciada enquanto o gate
+  externo P05 permanece pendente.
+- Implementação local: P06-T01..T04 e P06-T06 concluídas; P06-T05/T07/T08
+  aguardam upgrade da cópia pessoal e smoke em conversa nova.
 - Evidências:
+  - [`docs/evidence/p06-plugin-read-only.md`](docs/evidence/p06-plugin-read-only.md)
+  - [`docs/handoffs/p06.md`](docs/handoffs/p06.md)
+  - conexão real encontrada localmente como mapeamento técnico
+    `plugin_asdk_app_6a7b7fbeceec819196c168888a9494b6`;
+  - marketplace pessoal já contém `swim-coach@personal` instalado/ativo na
+    versão spike;
+  - manifesto e três Skills aprovados pelos validadores oficiais; capability
+    exclusiva `Read`, sem Skill/tool futura empacotada;
+  - 66 evals contratuais aprovadas: 22 por Skill, cobrindo direct, indirect,
+    follow-up, empty, auth e adversarial com todas as writes proibidas;
+  - `make check` → 94 testes Python, 2 Vitest, lint, tipos e validadores verdes;
+  - dependency scan sem vulnerabilidades conhecidas e gitleaks sem achados em
+    17 commits + worktree;
+  - release candidate [`releases/plugin-0.1.0.json`](releases/plugin-0.1.0.json)
+    registra hashes de manifesto, app mapping e Skills.
+- Gate pendente: duas tentativas de mover a cópia pessoal para backup expiraram
+  na aprovação externa sem alterar a instalação; ela permanece em `0.0.0-spike`.
+  Depois do upgrade, falta smoke em conversa nova e host OAuth P05 com dado real.
 
 ### P07
 

@@ -86,7 +86,8 @@ def load_yaml(path: Path, report: Report) -> Any | None:
         report.warn("PyYAML não instalado; arquivos YAML não foram parseados.")
         return None
     try:
-        return yaml.safe_load(path.read_text(encoding="utf-8"))
+        documents = list(yaml.safe_load_all(path.read_text(encoding="utf-8")))
+        return documents[0] if len(documents) == 1 else documents
     except Exception as exc:  # noqa: BLE001
         report.error(f"YAML inválido em {path.relative_to(ROOT)}: {exc}")
         return None

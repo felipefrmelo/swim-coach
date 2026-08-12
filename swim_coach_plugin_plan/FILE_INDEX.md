@@ -149,6 +149,7 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`backend/tests/contract/test_canonical_workout_schema.py`](backend/tests/contract/test_canonical_workout_schema.py) | arquivo estruturado/auxiliar |
 | [`backend/tests/contract/test_mcp_tools.py`](backend/tests/contract/test_mcp_tools.py) | arquivo estruturado/auxiliar |
 | [`backend/tests/contract/test_oidc_client.py`](backend/tests/contract/test_oidc_client.py) | arquivo estruturado/auxiliar |
+| [`backend/tests/contract/test_plugin_release.py`](backend/tests/contract/test_plugin_release.py) | arquivo estruturado/auxiliar |
 | [`backend/tests/fixtures/p03/pool_swim_120m.golden.json`](backend/tests/fixtures/p03/pool_swim_120m.golden.json) | arquivo estruturado/auxiliar |
 | [`backend/tests/fixtures/p03/pool_swim_120m.json`](backend/tests/fixtures/p03/pool_swim_120m.json) | arquivo estruturado/auxiliar |
 | [`backend/tests/integration/__init__.py`](backend/tests/integration/__init__.py) | arquivo estruturado/auxiliar |
@@ -188,17 +189,25 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`implementation-status.json`](implementation-status.json) | arquivo estruturado/auxiliar |
 | [`package.json`](package.json) | arquivo estruturado/auxiliar |
 | [`plan-manifest.json`](plan-manifest.json) | arquivo estruturado/auxiliar |
+| [`plugins/swim-coach/.app.json`](plugins/swim-coach/.app.json) | arquivo estruturado/auxiliar |
 | [`plugins/swim-coach/.codex-plugin/plugin.json`](plugins/swim-coach/.codex-plugin/plugin.json) | arquivo estruturado/auxiliar |
-| [`plugins/swim-coach/.gitignore`](plugins/swim-coach/.gitignore) | arquivo estruturado/auxiliar |
-| [`plugins/swim-coach/skills/get-capabilities/SKILL.md`](plugins/swim-coach/skills/get-capabilities/SKILL.md) | Verify Swim Coach capabilities |
+| [`plugins/swim-coach/skills/diagnose-sync/SKILL.md`](plugins/swim-coach/skills/diagnose-sync/SKILL.md) | Diagnose Garmin sync |
+| [`plugins/swim-coach/skills/diagnose-sync/agents/openai.yaml`](plugins/swim-coach/skills/diagnose-sync/agents/openai.yaml) | arquivo estruturado/auxiliar |
+| [`plugins/swim-coach/skills/goal-progress/SKILL.md`](plugins/swim-coach/skills/goal-progress/SKILL.md) | Explain swimming goal progress |
+| [`plugins/swim-coach/skills/goal-progress/agents/openai.yaml`](plugins/swim-coach/skills/goal-progress/agents/openai.yaml) | arquivo estruturado/auxiliar |
+| [`plugins/swim-coach/skills/review-latest-swim/SKILL.md`](plugins/swim-coach/skills/review-latest-swim/SKILL.md) | Review a pool swim |
+| [`plugins/swim-coach/skills/review-latest-swim/agents/openai.yaml`](plugins/swim-coach/skills/review-latest-swim/agents/openai.yaml) | arquivo estruturado/auxiliar |
 | [`pnpm-lock.yaml`](pnpm-lock.yaml) | arquivo estruturado/auxiliar |
 | [`pnpm-workspace.yaml`](pnpm-workspace.yaml) | arquivo estruturado/auxiliar |
 | [`pyproject.toml`](pyproject.toml) | arquivo estruturado/auxiliar |
+| [`releases/plugin-0.1.0.json`](releases/plugin-0.1.0.json) | arquivo estruturado/auxiliar |
 | [`tests/e2e/p01-auth-context.spec.ts`](tests/e2e/p01-auth-context.spec.ts) | arquivo estruturado/auxiliar |
 | [`tests/e2e/p02-garmin-status.spec.ts`](tests/e2e/p02-garmin-status.spec.ts) | arquivo estruturado/auxiliar |
 | [`tests/e2e/p03-activity-detail.spec.ts`](tests/e2e/p03-activity-detail.spec.ts) | arquivo estruturado/auxiliar |
 | [`tests/e2e/p04-workout-authoring.spec.ts`](tests/e2e/p04-workout-authoring.spec.ts) | arquivo estruturado/auxiliar |
 | [`tests/e2e/p07-garmin-publish.spec.ts`](tests/e2e/p07-garmin-publish.spec.ts) | arquivo estruturado/auxiliar |
+| [`tests/evals/cases/p06-read-only.yaml`](tests/evals/cases/p06-read-only.yaml) | arquivo estruturado/auxiliar |
+| [`tests/evals/reports/p06-read-only.json`](tests/evals/reports/p06-read-only.json) | arquivo estruturado/auxiliar |
 | [`uv.lock`](uv.lock) | arquivo estruturado/auxiliar |
 
 ## Documentos duráveis
@@ -239,6 +248,7 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`docs/evidence/p04-workout-authoring-pwa.md`](docs/evidence/p04-workout-authoring-pwa.md) | Evidência — P04 Treino canônico, calendário e editor PWA |
 | [`docs/evidence/p04-workout-editor-mobile.png`](docs/evidence/p04-workout-editor-mobile.png) | arquivo estruturado/auxiliar |
 | [`docs/evidence/p05-mcp-read-only.md`](docs/evidence/p05-mcp-read-only.md) | P05 — evidência do MCP autenticado somente leitura |
+| [`docs/evidence/p06-plugin-read-only.md`](docs/evidence/p06-plugin-read-only.md) | P06 — evidência do plugin pessoal read-only |
 | [`docs/evidence/p07-garmin-publish-mobile.png`](docs/evidence/p07-garmin-publish-mobile.png) | arquivo estruturado/auxiliar |
 | [`docs/evidence/p07-garmin-write-pwa.md`](docs/evidence/p07-garmin-write-pwa.md) | P07 — publicação Garmin com aprovação explícita |
 | [`docs/handoffs/p00.md`](docs/handoffs/p00.md) | Handoff — P00 Fundação e spikes de risco |
@@ -246,6 +256,7 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`docs/handoffs/p03.md`](docs/handoffs/p03.md) | Handoff P03 |
 | [`docs/handoffs/p04.md`](docs/handoffs/p04.md) | Handoff — P04 Treino canônico, calendário e editor PWA |
 | [`docs/handoffs/p05.md`](docs/handoffs/p05.md) | Handoff P05 |
+| [`docs/handoffs/p06.md`](docs/handoffs/p06.md) | Handoff P06 |
 | [`docs/handoffs/p07.md`](docs/handoffs/p07.md) | Handoff P07 |
 | [`docs/operations/p07-garmin-write-reconciliation.md`](docs/operations/p07-garmin-write-reconciliation.md) | P07 — Publicação Garmin e reconciliação |
 
@@ -383,4 +394,4 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`tools/validate_plan.py`](tools/validate_plan.py) | arquivo estruturado/auxiliar |
 | [`tools/validate_repository.py`](tools/validate_repository.py) | arquivo estruturado/auxiliar |
 
-**Total indexado:** 331 arquivos (sem contar este índice e o arquivo de checksums).
+**Total indexado:** 342 arquivos (sem contar este índice e o arquivo de checksums).

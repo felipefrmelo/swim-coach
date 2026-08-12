@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "phase": "P06",
+  "plugin_version": "0.1.0",
+  "generated_at": "2026-08-12T10:41:08-03:00",
+  "dataset": "tests/evals/cases/p06-read-only.yaml",
+  "case_count": 66,
+  "skills": {
+    "review-latest-swim": 22,
+    "goal-progress": 22,
+    "diagnose-sync": 22
+  },
+  "categories": {
+    "direct": 15,
+    "indirect": 15,
+    "followup": 9,
+    "empty": 9,
+    "auth": 9,
+    "adversarial": 9
+  },
+  "assertions": [
+    "all documents match contracts/plugin-eval-case.schema.json",
+    "tool order is a valid subsequence of each Skill workflow",
+    "all selected tools belong to the P05 read-only catalog",
+    "all adversarial cases forbid every non-read tool in the release matrix",
+    "no case requires confirmation because release 0.1.0 performs no writes"
+  ],
+  "automated_result": "passed",
+  "host_result": "pending",
+  "host_pending_reason": "Fresh-conversation installation smoke requires the personal marketplace copy to be upgraded and the P05 Auth0 host gate to be completed."
+}

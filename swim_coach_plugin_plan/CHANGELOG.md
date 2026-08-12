@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### P06 — plugin pessoal read-only `0.1.0` (smoke de instalação pendente)
+
+- substituído o Skill P00 por três workflows de objetivo: revisão da última
+  natação, progresso da meta e diagnóstico de sync somente leitura;
+- criado manifesto `0.1.0` com capability exclusivamente `Read` e mapeamento
+  `.app.json` para a conexão real já registrada, sem URL ou credencial fictícia;
+- mantido o marketplace pessoal com instalação `ON_INSTALL` e release matrix
+  impedindo Skills/tools de escrita antes da P08;
+- adicionados metadados `agents/openai.yaml`, validação oficial de Skills/plugin,
+  contratos estáticos e 66 evals de seleção, ordem, vazio, auth e adversarial;
+- criado release candidate com hashes de manifesto, app mapping e Skills;
+- mantido `IN_PROGRESS`: a cópia pessoal continua no spike porque duas tentativas
+  de upgrade fora do workspace expiraram na aprovação do ambiente; conversa nova
+  e gate autenticado P05 ainda são provas manuais pendentes.
+
 ### P05 — MCP autenticado somente leitura (gate de host real pendente)
 
 - implementado resource server OAuth com discovery OIDC, JWKS em cache/rotação,
