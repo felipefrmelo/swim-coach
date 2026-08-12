@@ -3,6 +3,9 @@
 State: implementation and automated gate complete; personal automated cycle,
 offline iPhone screenshot and live queue screenshot pending.
 
+Publication: commit `f379551`, draft PR #12, based on
+`p10-adaptive-planning`.
+
 ## Implemented
 
 - timezone-aware scheduler scans active users at most once per minute and creates
@@ -29,9 +32,10 @@ offline iPhone screenshot and live queue screenshot pending.
 
 ## Automated evidence
 
-- `make check` passed Ruff, ESLint, mypy, TypeScript, 118 Python tests, four
-  Vitest tests and both repository validators;
-- 20 PostgreSQL/Testcontainers integration tests passed after adding P11 coverage;
+- clean GitHub Actions run `31617300086` passed Ruff, ESLint, mypy, TypeScript,
+  119 Python tests, four Vitest tests, dependency/secret scans, validators and
+  all four container builds in 1m40s;
+- 20 PostgreSQL/Testcontainers integration tests passed, including P11 coverage;
 - migration head `000009` completed `up → down → up` on PostgreSQL 16;
 - scheduler unit evidence fixes Sunday 18:00 in `America/Sao_Paulo`, materializes
   sync plus next-Monday planning exactly once, and repeats with zero duplicates;

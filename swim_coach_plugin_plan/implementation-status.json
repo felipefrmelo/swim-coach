@@ -254,10 +254,13 @@
         "local:pwa:workout-read-cache-controlled-actions-denied",
         "local:feedback:indexeddb-idempotent-reconciliation",
         "local:operations:metrics-safe-retry-notification-dedupe",
-        "local:quality:118-python:4-vitest:build-4-images",
+        "github:draft-pr:12",
+        "github:commit:f379551:automation-offline-hardening",
+        "github:actions:31617300086:quality-pass",
+        "ci:quality:119-python:4-vitest:scans:build-4-images",
         "pending:personal-cycle-offline-screenshot-live-queue-metrics"
       ],
-      "commit": null
+      "commit": "f379551"
     },
     {
       "id": "P12",

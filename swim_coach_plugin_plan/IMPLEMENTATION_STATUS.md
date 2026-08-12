@@ -21,7 +21,7 @@
 | P08 | IN_PROGRESS | P06,P07 | escrita MCP com scopes/hash/auditoria | [draft PR #9](https://github.com/felipefrmelo/swim-coach/pull/9) |
 | P09 | IN_PROGRESS | P08 | UI MCP opcional e fallback headless | [draft PR #10](https://github.com/felipefrmelo/swim-coach/pull/10) |
 | P10 | IN_PROGRESS | P03,P04,P08 | semana adaptativa explicável | [draft PR #11](https://github.com/felipefrmelo/swim-coach/pull/11) |
-| P11 | IN_PROGRESS | P10 | automações recuperáveis e PWA offline | implementação em andamento |
+| P11 | IN_PROGRESS | P10 | automações recuperáveis e PWA offline | [draft PR #12](https://github.com/felipefrmelo/swim-coach/pull/12) |
 | P12 | NOT_STARTED | P11 | restore testado e release pessoal | — |
 
 ## Evidências por fase
@@ -340,10 +340,12 @@
   - notification inbox para treino, feedback, falha e proposal pronta;
   - migration `000009` em `up/down/up`, metrics/retention/retry seguro;
   - PWA com cache estreito, stale explícito e feedback IndexedDB idempotente;
-  - `make check` → 118 Python, 4 Vitest, lint, tipos e validadores verdes;
+  - CI limpo → 119 Python, 4 Vitest, lint, tipos, scans, validadores e builds verdes;
   - `make build` → Vite e quatro imagens Compose verdes;
   - detalhes em [`docs/evidence/p11-automation-offline.md`](docs/evidence/p11-automation-offline.md)
     e [`docs/handoffs/p11.md`](docs/handoffs/p11.md).
+  - [GitHub Actions run `31617300086`](https://github.com/felipefrmelo/swim-coach/actions/runs/31617300086)
+    → job `quality` verde em 1m40s.
 - Gate pendente: ciclo automático no ambiente pessoal, screenshot offline em
   viewport/iPhone real e fila ao vivo retornando a idade zero sem ação insegura.
 
