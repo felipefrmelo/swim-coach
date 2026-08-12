@@ -12,7 +12,7 @@
 | P01 | DONE | P00 | migrações + testes de domínio + PWA shell | [PR #2](https://github.com/felipefrmelo/swim-coach/pull/2) |
 | P02 | IN_PROGRESS | P01 | import real Garmin sem duplicata | [draft PR #3](https://github.com/felipefrmelo/swim-coach/pull/3) |
 | P03 | NOT_STARTED | P02 | FIT normalizado e analytics reproduzíveis | — |
-| P04 | DONE | P01 | treino válido de 20 m criado/revisado/agendado na PWA | branch `p04-workout-authoring-pwa` |
+| P04 | DONE | P01 | treino válido de 20 m criado/revisado/agendado na PWA | [draft PR #4](https://github.com/felipefrmelo/swim-coach/pull/4) |
 | P05 | NOT_STARTED | P03,P04 | MCP read-only autenticado com dados reais | — |
 | P06 | NOT_STARTED | P05 | plugin/Skills instalados e evals aprovadas | — |
 | P07 | NOT_STARTED | P04 | publicação Garmin pela PWA com aprovação | — |
@@ -135,6 +135,7 @@
 - Estado: `DONE`
 - Início: 2026-08-11T21:25:00-03:00
 - Conclusão local: 2026-08-11T21:49:43-03:00
+- Commit/PR: [`82e9e77`](https://github.com/felipefrmelo/swim-coach/commit/82e9e77184df4c0a57a6e5125737a022d46b9b59) / [draft PR #4](https://github.com/felipefrmelo/swim-coach/pull/4)
 - Implementação: P04-T01 até P04-T09 concluídas.
 - Evidências:
   - [`docs/evidence/p04-workout-authoring-pwa.md`](docs/evidence/p04-workout-authoring-pwa.md)

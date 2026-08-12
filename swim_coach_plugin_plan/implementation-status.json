@@ -86,9 +86,10 @@
         "local:canonical-fixtures:technique-endurance-speed-test",
         "local:dependency-scan-clean",
         "local:secret-scan-clean",
-        "local:no-garmin-provider-in-p04"
+        "local:no-garmin-provider-in-p04",
+        "https://github.com/felipefrmelo/swim-coach/pull/4"
       ],
-      "commit": null
+      "commit": "82e9e77184df4c0a57a6e5125737a022d46b9b59"
     },
     {
       "id": "P05",
