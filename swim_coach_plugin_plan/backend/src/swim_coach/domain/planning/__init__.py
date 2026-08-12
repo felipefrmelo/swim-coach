@@ -1,0 +1,41 @@
+"""Deterministic, versioned weekly swim planning domain."""
+
+from swim_coach.domain.planning.entities import (
+    AvailabilitySnapshot,
+    ConstraintSnapshot,
+    ExistingSessionSnapshot,
+    FeedbackSnapshot,
+    GeneratedSession,
+    GeneratedWeek,
+    PlanningContext,
+    PlanningDecision,
+    PlanningPreferences,
+    PlanningRules,
+    PlanningRun,
+    PlanningRunStatus,
+    RecentWeekSnapshot,
+    TrainingDecisionRecord,
+    TrainingRuleSet,
+    canonical_json_hash,
+    generate_week,
+)
+
+__all__ = [
+    "AvailabilitySnapshot",
+    "ConstraintSnapshot",
+    "ExistingSessionSnapshot",
+    "FeedbackSnapshot",
+    "GeneratedSession",
+    "GeneratedWeek",
+    "PlanningContext",
+    "PlanningDecision",
+    "PlanningPreferences",
+    "PlanningRules",
+    "PlanningRun",
+    "PlanningRunStatus",
+    "RecentWeekSnapshot",
+    "TrainingDecisionRecord",
+    "TrainingRuleSet",
+    "canonical_json_hash",
+    "generate_week",
+]

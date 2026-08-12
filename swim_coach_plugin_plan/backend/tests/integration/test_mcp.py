@@ -308,6 +308,11 @@ async def test_authenticated_mcp_read_tools_scopes_ownership_contract_and_zero_b
     assert today_result.structuredContent["data"]["workout"]["totals"]["distance_m"] == 1_600
     assert len(recent.structuredContent["data"]["items"]) == 1
     assert activity.structuredContent["status"] == "OK"
+    dimensions = progress.structuredContent["data"]["dimensions"]
+    assert set(dimensions) == {"endurance", "pace", "consistency", "confidence"}
+    assert (
+        dimensions["confidence"]["sample_size"] == progress.structuredContent["data"]["sample_size"]
+    )
     serialized = cast(str, activity.content[0].text)
     assert "external_activity_id" not in serialized
     assert "raw_fit" not in serialized

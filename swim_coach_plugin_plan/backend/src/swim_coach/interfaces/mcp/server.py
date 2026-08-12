@@ -28,7 +28,8 @@ from swim_coach.application.queries.get_capabilities import (
     get_capabilities as p00_capabilities,
 )
 from swim_coach.application.services.mcp_read import McpPrincipal, McpReadService, McpResult
-from swim_coach.application.services.mcp_write import McpWriteService
+from swim_coach.application.services.mcp_write import MCP_PLANNING_TOOLS, McpWriteService
+from swim_coach.domain.planning import PlanningPreferences
 from swim_coach.domain.shared.errors import DomainError
 from swim_coach.domain.shared.value_objects import CorrelationId, EntityId
 from swim_coach.domain.workouts import CanonicalWorkout
@@ -290,6 +291,23 @@ def create_mcp_server(
                 result.human_summary = (
                     "Swim Coach exposes authenticated reads, controlled writes, and optional "
                     "portable MCP Apps cards. Every workflow remains complete without UI."
+                )
+            if write_service is not None and getattr(write_service, "planning_enabled", False):
+                result.data["server_version"] = "0.4.0-adaptive-planning"
+                result.data["phase"] = "P10"
+                result.data["release_mode"] = "controlled-write-optional-ui-planning"
+                result.data["available_tools"] = [
+                    *result.data["available_tools"],
+                    *MCP_PLANNING_TOOLS,
+                ]
+                result.data["required_scopes"] = [
+                    *result.data["required_scopes"],
+                    "planning:write",
+                ]
+                result.data["adaptive_planning_enabled"] = True
+                result.human_summary = (
+                    "Swim Coach adds reproducible, explainable weekly plan proposals. "
+                    "Planning never approves, applies, schedules, or publishes automatically."
                 )
             return result
 
@@ -694,6 +712,47 @@ def _register_write_tools(
                 correlation_id=correlation_id,
             ),
         )
+
+    if getattr(write_service, "planning_enabled", False):
+
+        @server.tool(
+            name="propose_week_plan",
+            title="Propose a weekly swim plan",
+            description=(
+                "Generate and persist a reproducible weekly plan proposal from owned context "
+                "and versioned conservative rules; never approves, applies, or publishes it."
+            ),
+            annotations=LOCAL_WRITE,
+            structured_output=True,
+        )
+        async def propose_week_plan(
+            week_start: LocalDate,
+            ctx: Context[Any, Any, Any],
+            constraints: PlanningPreferences | None = None,
+            user_notes: Annotated[str | None, Field(max_length=1000)] = None,
+        ) -> McpResult:
+            structured_constraints = (
+                constraints.model_dump(mode="json", exclude_none=True) if constraints else {}
+            )
+            args = {
+                "week_start": week_start.isoformat(),
+                "constraints": structured_constraints,
+                "user_notes": user_notes,
+            }
+            return await execute(
+                "propose_week_plan",
+                ctx,
+                frozenset({"planning:write", "proposals:write"}),
+                args,
+                lambda principal, request_id, correlation_id: write_service.propose_week_plan(
+                    principal,
+                    request_id,
+                    week_start=week_start,
+                    constraints=structured_constraints,
+                    user_notes=user_notes,
+                    correlation_id=correlation_id,
+                ),
+            )
 
     @server.tool(
         name="propose_workout_change",

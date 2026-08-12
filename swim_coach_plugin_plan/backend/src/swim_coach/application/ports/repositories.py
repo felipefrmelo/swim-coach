@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from types import TracebackType
 from typing import Protocol, Self
 
@@ -50,6 +50,7 @@ from swim_coach.domain.operations import (
     McpToolInvocation,
     OutboxEvent,
 )
+from swim_coach.domain.planning import PlanningRun, TrainingDecisionRecord, TrainingRuleSet
 from swim_coach.domain.shared.types import JsonObject
 from swim_coach.domain.shared.value_objects import EntityId, UserId
 from swim_coach.domain.workouts import (
@@ -248,6 +249,26 @@ class ActionExecutionsRepository(Protocol):
     async def update(self, execution: ActionExecution, *, expected_version: int) -> None: ...
 
 
+class TrainingRuleSetsRepository(Protocol):
+    async def get_active(self, effective_on: date) -> TrainingRuleSet | None: ...
+    async def get_by_hash(self, content_hash: str) -> TrainingRuleSet | None: ...
+    async def add(self, rule_set: TrainingRuleSet) -> None: ...
+
+
+class PlanningRunsRepository(Protocol):
+    async def get_by_input(
+        self, user_id: UserId, rule_set_id: EntityId, input_hash: str
+    ) -> PlanningRun | None: ...
+    async def add(self, run: PlanningRun) -> None: ...
+
+
+class TrainingDecisionsRepository(Protocol):
+    async def add(self, decision: TrainingDecisionRecord) -> None: ...
+    async def list_for_run(
+        self, user_id: UserId, planning_run_id: EntityId
+    ) -> Sequence[TrainingDecisionRecord]: ...
+
+
 class ExternalWorkoutBindingsRepository(Protocol):
     async def get(self, user_id: UserId, binding_id: EntityId) -> ExternalWorkoutBinding | None: ...
     async def get_by_revision_hash(
@@ -363,6 +384,12 @@ class UnitOfWork(Protocol):
     def action_approvals(self) -> ActionApprovalsRepository: ...
     @property
     def action_executions(self) -> ActionExecutionsRepository: ...
+    @property
+    def training_rule_sets(self) -> TrainingRuleSetsRepository: ...
+    @property
+    def planning_runs(self) -> PlanningRunsRepository: ...
+    @property
+    def training_decisions(self) -> TrainingDecisionsRepository: ...
     @property
     def external_workout_bindings(self) -> ExternalWorkoutBindingsRepository: ...
     @property

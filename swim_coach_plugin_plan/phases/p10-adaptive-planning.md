@@ -15,7 +15,7 @@ Gerar propostas semanais explicáveis e conservadoras a partir de meta, disponib
 - propose_week_plan tool;
 - plan Skill;
 - goal progress avançado;
-- plugin v0.3.0.
+- plugin v0.4.0.
 
 ## Fora do escopo
 

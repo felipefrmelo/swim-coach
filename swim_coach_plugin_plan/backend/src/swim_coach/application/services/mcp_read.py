@@ -18,6 +18,7 @@ from swim_coach.application.services.activity_data import ActivityDataService
 from swim_coach.application.services.context import ContextService
 from swim_coach.application.services.identity import IdentityService
 from swim_coach.application.services.workouts import WorkoutDetail, WorkoutService
+from swim_coach.domain.activities import coefficient_of_variation
 from swim_coach.domain.garmin import Activity
 from swim_coach.domain.goals import GoalStatus, TrainingGoal
 from swim_coach.domain.operations import McpToolInvocation
@@ -418,6 +419,27 @@ class McpReadService:
         best_pace = min(paces, default=None)
         target_distance = goal.target_distance.meters
         target_pace = goal.target_pace.seconds_per_100m
+        distance_ratio = (
+            Decimal(best_distance) / Decimal(target_distance) if target_distance else None
+        )
+        pace_gap = best_pace - target_pace if best_pace is not None else None
+        pace_ratio = target_pace / best_pace if best_pace is not None else None
+        pace_variation = coefficient_of_variation(tuple(paces))
+        consistency_score = (
+            max(Decimal(0), Decimal(1) - min(pace_variation, Decimal(1)))
+            if pace_variation is not None
+            else None
+        )
+        confidence_score = min(Decimal(1), Decimal(len(samples)) / Decimal(8))
+        confidence_level = (
+            "HIGH"
+            if len(samples) >= 8
+            else "MODERATE"
+            if len(samples) >= 3
+            else "LOW"
+            if samples
+            else "NONE"
+        )
         return McpResult(
             request_id=request_id,
             status="OK" if samples else "PARTIAL",
@@ -426,13 +448,43 @@ class McpReadService:
                 "sample_size": len(samples),
                 "best_recent_distance_m": best_distance,
                 "best_recent_pace_seconds_per_100m": self._number(best_pace),
-                "distance_completion_ratio": self._number(
-                    Decimal(best_distance) / Decimal(target_distance) if target_distance else None
-                ),
-                "pace_gap_seconds_per_100m": self._number(
-                    best_pace - target_pace if best_pace is not None else None
-                ),
+                "distance_completion_ratio": self._number(distance_ratio),
+                "pace_gap_seconds_per_100m": self._number(pace_gap),
                 "sample_quality": "GOOD" if len(samples) >= 3 else "LIMITED",
+                "dimensions": {
+                    "endurance": {
+                        "best_recent_distance_m": best_distance,
+                        "target_distance_m": target_distance,
+                        "completion_ratio": self._number(distance_ratio),
+                        "status": (
+                            "ACHIEVED"
+                            if distance_ratio is not None and distance_ratio >= 1
+                            else "IN_PROGRESS"
+                        ),
+                    },
+                    "pace": {
+                        "best_recent_seconds_per_100m": self._number(best_pace),
+                        "target_seconds_per_100m": self._number(target_pace),
+                        "gap_seconds_per_100m": self._number(pace_gap),
+                        "achievement_ratio": self._number(pace_ratio),
+                        "status": (
+                            "ACHIEVED"
+                            if best_pace is not None and best_pace <= target_pace
+                            else "IN_PROGRESS"
+                        ),
+                    },
+                    "consistency": {
+                        "analyzed_swims": len(samples),
+                        "pace_coefficient_of_variation": self._number(pace_variation),
+                        "score": self._number(consistency_score),
+                        "status": "AVAILABLE" if consistency_score is not None else "LIMITED",
+                    },
+                    "confidence": {
+                        "sample_size": len(samples),
+                        "score": self._number(confidence_score),
+                        "level": confidence_level,
+                    },
+                },
             },
             warnings=(
                 []

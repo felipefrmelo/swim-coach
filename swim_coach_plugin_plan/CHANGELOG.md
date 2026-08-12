@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+### P10 — planejamento semanal adaptativo e plugin `0.4.0` (revisão real pendente)
+
+- adicionados rulesets imutáveis/versionados, snapshots canônicos, planning runs
+  idempotentes e decisões ordenadas com regra, evidência, antes/depois e motivo;
+- criado gerador semanal determinístico com piscina/duração, teto de três sessões
+  e 8% de progressão, recuperação, dor/RPE/aderência, spacing intenso e ausência
+  explícita de rollover automático de treinos perdidos;
+- entregue `propose_week_plan` com schema fechado, scopes próprios, ownership e
+  resultado sempre como proposal revisável, sem criar/agendar/aprovar/executar;
+- ampliado `get_goal_progress` para endurance, pace, consistency e confidence,
+  sempre acompanhado por sample size e qualidade;
+- migration `000008` adiciona `training_rule_set`, `planning_run` e
+  `training_decision` e permite proposals de goal sem revisão fictícia de workout;
+- plugin elevado a `0.4.0` com Skill `plan-swim-week`; dataset agora contém sete
+  Skills e 154 evals, 22 por Skill, incluindo bypass, dor, auth e dados ausentes;
+- golden hash, property tests e integração MCP/PostgreSQL provam determinismo,
+  replay, isolamento e aprovação sem alteração da agenda nem efeito externo;
+- fase permanece `IN_PROGRESS` até uma semana baseada em dados reais persistidos
+  ser revisada humanamente no ChatGPT com decisão e hashes sanitizados.
+
 ### P09 — UI opcional MCP Apps e plugin `0.3.0` (smoke no host pendente)
 
 - adicionados cinco resources `ui://` versionados e cinco render tools read-only

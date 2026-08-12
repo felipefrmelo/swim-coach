@@ -12,6 +12,7 @@ from swim_coach.application.services.activity_data import ActivityDataService
 from swim_coach.application.services.garmin_publish import GarminActionDetail, GarminPublishService
 from swim_coach.application.services.garmin_sync import GarminSyncService
 from swim_coach.application.services.mcp_read import McpPrincipal, McpResult
+from swim_coach.application.services.planning import PlanningService
 from swim_coach.application.services.workouts import WorkoutService
 from swim_coach.domain.actions import ActionApproval, ActionDecision, ActionProposal
 from swim_coach.domain.operations import (
@@ -21,6 +22,7 @@ from swim_coach.domain.operations import (
     JobStatus,
     OutboxEvent,
 )
+from swim_coach.domain.planning import PlanningPreferences
 from swim_coach.domain.shared.errors import (
     DomainError,
     ResourceNotFoundError,
@@ -55,6 +57,7 @@ MCP_WRITE_TOOLS = (
     "execute_approved_action",
     "retry_failed_job",
 )
+MCP_PLANNING_TOOLS = ("propose_week_plan",)
 
 
 class McpWriteService:
@@ -69,16 +72,67 @@ class McpWriteService:
         activity_data: ActivityDataService,
         garmin_sync: GarminSyncService | None,
         garmin_publish: GarminPublishService,
+        planning: PlanningService | None,
     ) -> None:
         self._uow_factory = uow_factory
         self._workouts = workouts
         self._activity_data = activity_data
         self._garmin_sync = garmin_sync
         self._garmin_publish = garmin_publish
+        self._planning = planning
 
     @property
     def garmin_write_enabled(self) -> bool:
         return self._garmin_publish.write_enabled
+
+    @property
+    def planning_enabled(self) -> bool:
+        return self._planning is not None
+
+    async def propose_week_plan(
+        self,
+        principal: McpPrincipal,
+        request_id: str,
+        *,
+        week_start: date,
+        constraints: dict[str, Any],
+        user_notes: str | None,
+        correlation_id: CorrelationId,
+    ) -> McpResult:
+        if self._planning is None:
+            raise DomainError("PLANNING_DISABLED", "Adaptive weekly planning is disabled.")
+        preferences = PlanningPreferences.model_validate(constraints)
+        run, proposal, replayed = await self._planning.propose_week(
+            principal.user_id,
+            actor_id=principal.subject,
+            week_start=week_start,
+            preferences=preferences,
+            user_notes_present=bool(user_notes and user_notes.strip()),
+            correlation_id=correlation_id,
+        )
+        week = run.output_plan
+        return McpResult(
+            request_id=request_id,
+            status="OK",
+            data={
+                "planning_run_id": str(run.id),
+                "proposal_id": str(proposal.id),
+                "action_type": proposal.action_type,
+                "status": proposal.status.value,
+                "action_hash": proposal.action_hash,
+                "expires_at": proposal.expires_at.isoformat(),
+                "required_action_scope": "planning:write",
+                "input_hash": run.input_hash,
+                "replayed": replayed,
+                "week": week,
+                "impact": proposal.impact,
+                "execution": None,
+            },
+            human_summary=(
+                "Generated a reproducible weekly plan proposal for review. No workout, "
+                "calendar entry, approval, execution, or Garmin state was changed."
+            ),
+        )
 
     async def get_action_proposal(
         self, principal: McpPrincipal, request_id: str, proposal_id: EntityId
@@ -553,11 +607,11 @@ class McpWriteService:
 
     @staticmethod
     def required_action_scope(action_type: str) -> str:
-        return (
-            "garmin:publish"
-            if action_type == GarminPublishService.ACTION_TYPE
-            else "workouts:write"
-        )
+        if action_type == GarminPublishService.ACTION_TYPE:
+            return "garmin:publish"
+        if action_type == PlanningService.ACTION_TYPE:
+            return "planning:write"
+        return "workouts:write"
 
     async def _proposal_detail(
         self, principal: McpPrincipal, proposal_id: EntityId

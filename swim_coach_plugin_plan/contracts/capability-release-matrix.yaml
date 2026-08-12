@@ -215,7 +215,9 @@ skills:
   required_tools:
   - get_training_context
   - get_week_plan
+  - list_recent_swims
   - get_goal_progress
+  - get_sync_status
   - propose_week_plan
   - get_action_proposal
 ui_resources:

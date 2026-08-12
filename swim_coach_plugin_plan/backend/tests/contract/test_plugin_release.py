@@ -46,6 +46,15 @@ SKILLS = {
         "get_swim_activity",
         "record_session_feedback",
     ),
+    "plan-swim-week": (
+        "get_training_context",
+        "get_week_plan",
+        "list_recent_swims",
+        "get_goal_progress",
+        "get_sync_status",
+        "propose_week_plan",
+        "get_action_proposal",
+    ),
 }
 CATEGORY_COUNTS = {
     "direct": 5,
@@ -73,18 +82,18 @@ def load_eval_cases() -> list[dict[str, Any]]:
     return cases
 
 
-def test_p09_manifest_app_marketplace_and_release_matrix_add_optional_ui() -> None:
+def test_p10_manifest_app_marketplace_and_release_matrix_add_planning() -> None:
     manifest = load_json(PLUGIN_ROOT / ".codex-plugin/plugin.json")
     app_mapping = load_json(PLUGIN_ROOT / ".app.json")
     marketplace = load_json(ROOT / ".agents/plugins/marketplace.json")
     release_matrix = load_yaml(ROOT / "contracts/capability-release-matrix.yaml")
 
     assert manifest["name"] == "swim-coach"
-    assert manifest["version"] == "0.3.0"
+    assert manifest["version"] == "0.4.0"
     assert manifest["skills"] == "./skills/"
     assert manifest["apps"] == "./.app.json"
     assert manifest["interface"]["capabilities"] == ["Read", "Write"]
-    assert len(manifest["interface"]["defaultPrompt"]) == 6
+    assert len(manifest["interface"]["defaultPrompt"]) == 7
 
     assert app_mapping == {
         "apps": {
@@ -109,10 +118,13 @@ def test_p09_manifest_app_marketplace_and_release_matrix_add_optional_ui() -> No
     p09_release = next(item for item in release_matrix["plugin_releases"] if item["phase"] == "P09")
     assert p09_release["version"] == "0.3.0"
     assert p09_release["mode"] == "optional-ui"
+    p10_release = next(item for item in release_matrix["plugin_releases"] if item["phase"] == "P10")
+    assert p10_release["version"] == "0.4.0"
+    assert p10_release["mode"] == "adaptive-planning"
     released_skills = {
         item["name"]
         for item in release_matrix["skills"]
-        if item.get("introduced") in {"P06", "P08"}
+        if item.get("introduced") in {"P06", "P08", "P10"}
     }
     assert released_skills == set(SKILLS)
     assert {item["name"] for item in release_matrix["ui_resources"]} == {
@@ -124,7 +136,7 @@ def test_p09_manifest_app_marketplace_and_release_matrix_add_optional_ui() -> No
     }
 
 
-def test_p09_skill_frontmatter_workflows_and_ui_metadata_are_valid() -> None:
+def test_p10_skill_frontmatter_workflows_and_ui_metadata_are_valid() -> None:
     skill_files = sorted((PLUGIN_ROOT / "skills").glob("*/SKILL.md"))
     assert {path.parent.name for path in skill_files} == set(SKILLS)
 
@@ -151,14 +163,14 @@ def test_p09_skill_frontmatter_workflows_and_ui_metadata_are_valid() -> None:
         assert f"${skill_name}" in interface["default_prompt"]
 
 
-def test_p09_eval_dataset_validates_selection_order_and_confirmation_boundaries() -> None:
+def test_p10_eval_dataset_validates_selection_order_and_confirmation_boundaries() -> None:
     schema = load_json(ROOT / "contracts/plugin-eval-case.schema.json")
     validator = Draft202012Validator(schema)
     tool_catalog = load_yaml(ROOT / "contracts/mcp-tools.yaml")
     tool_names = {item["name"] for item in tool_catalog["tools"]}
     cases = load_eval_cases()
 
-    assert len(cases) == 132
+    assert len(cases) == 154
     assert len({case["id"] for case in cases}) == len(cases)
     assert Counter(case["skill"] for case in cases) == Counter(
         {skill_name: 22 for skill_name in SKILLS}
@@ -186,6 +198,10 @@ def test_p09_eval_dataset_validates_selection_order_and_confirmation_boundaries(
             and "auth" not in case.get("fixtures", {})
         ):
             assert expected["requires_confirmation"] is True
+        if case["skill"] == "plan-swim-week":
+            assert "approve_action_proposal" not in sequence
+            assert "execute_approved_action" not in sequence
+            assert "preview_garmin_publish" not in sequence
 
     for skill_name in SKILLS:
         skill_cases = [case for case in cases if case["skill"] == skill_name]

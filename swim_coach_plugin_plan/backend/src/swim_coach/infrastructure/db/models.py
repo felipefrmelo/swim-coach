@@ -1105,8 +1105,8 @@ class ActionProposalModel(Base):
     action_type: Mapped[str] = mapped_column(String(100), nullable=False)
     target_type: Mapped[str] = mapped_column(String(100), nullable=False)
     target_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    target_revision_id: Mapped[UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("workout_revision.id", ondelete="RESTRICT"), nullable=False
+    target_revision_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("workout_revision.id", ondelete="RESTRICT")
     )
     payload_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     impact_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
@@ -1152,6 +1152,93 @@ class ActionApprovalModel(Base):
         UniqueConstraint("proposal_id", name="uq_action_approval_proposal"),
         CheckConstraint("decision IN ('APPROVE','REJECT')", name="ck_action_approval_decision"),
         Index("ix_action_approval_user_created", "user_id", "created_at"),
+    )
+
+
+class TrainingRuleSetModel(Base):
+    __tablename__ = "training_rule_set"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    version: Mapped[str] = mapped_column(String(40), nullable=False)
+    rules_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    schema_version: Mapped[str] = mapped_column(String(20), nullable=False)
+    effective_from: Mapped[date] = mapped_column(Date, nullable=False)
+    effective_until: Mapped[date | None] = mapped_column(Date)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("name", "version", name="uq_training_rule_set_name_version"),
+        UniqueConstraint("content_hash", name="uq_training_rule_set_hash"),
+        CheckConstraint(
+            "effective_until IS NULL OR effective_until >= effective_from",
+            name="ck_training_rule_set_effective_range",
+        ),
+        Index("ix_training_rule_set_effective", "effective_from", "effective_until"),
+    )
+
+
+class PlanningRunModel(Base):
+    __tablename__ = "planning_run"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
+    )
+    goal_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("training_goal.id", ondelete="RESTRICT"), nullable=False
+    )
+    rule_set_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("training_rule_set.id", ondelete="RESTRICT"), nullable=False
+    )
+    week_start: Mapped[date] = mapped_column(Date, nullable=False)
+    input_snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    input_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    output_plan_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    output_proposal_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("action_proposal.id", ondelete="SET NULL")
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    warnings_json: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "rule_set_id", "input_hash", name="uq_planning_run_reproducible_input"
+        ),
+        CheckConstraint("status IN ('COMPLETED','FAILED')", name="ck_planning_run_status"),
+        Index("ix_planning_run_user_week", "user_id", "week_start", "created_at"),
+    )
+
+
+class TrainingDecisionModel(Base):
+    __tablename__ = "training_decision"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
+    )
+    planning_run_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("planning_run.id", ondelete="CASCADE"), nullable=False
+    )
+    order_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    decision_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    rule_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    effective_date: Mapped[date] = mapped_column(Date, nullable=False)
+    evidence_refs_json: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    before_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    after_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    rationale: Mapped[str] = mapped_column(String(1000), nullable=False)
+    actor_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    actor_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("planning_run_id", "order_index", name="uq_training_decision_run_order"),
+        CheckConstraint("order_index >= 1", name="ck_training_decision_order"),
+        Index("ix_training_decision_user_date", "user_id", "effective_date"),
     )
 
 

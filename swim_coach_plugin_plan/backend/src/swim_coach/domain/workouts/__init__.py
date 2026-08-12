@@ -9,7 +9,10 @@ from swim_coach.domain.workouts.entities import (
 )
 from swim_coach.domain.workouts.schema import (
     CanonicalWorkout,
+    DistanceEnd,
+    PaceTarget,
     RepeatNode,
+    StandardStroke,
     StepNode,
     ValidationIssue,
     WorkoutTotals,
@@ -20,9 +23,12 @@ from swim_coach.domain.workouts.schema import (
 
 __all__ = [
     "CanonicalWorkout",
+    "DistanceEnd",
+    "PaceTarget",
     "PlannedWorkout",
     "PlannedWorkoutStatus",
     "RepeatNode",
+    "StandardStroke",
     "StepNode",
     "ValidationIssue",
     "WorkoutRevision",

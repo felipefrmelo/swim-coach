@@ -1,7 +1,7 @@
 {
   "name": "swim-coach",
-  "version": "0.3.0",
-  "description": "Review pool swims with optional accessible cards and safely perform exact-confirmed actions.",
+  "version": "0.4.0",
+  "description": "Review pool swims and propose reproducible, explainable weekly training plans safely.",
   "author": {
     "name": "Felipe"
   },
@@ -16,7 +16,7 @@
   "interface": {
     "displayName": "Swim Coach",
     "shortDescription": "Review and safely update swim training",
-    "longDescription": "Review authenticated swims, goals, workouts, proposals, and sync status with optional accessible MCP Apps cards while retaining complete headless workflows and exact-hash confirmation boundaries.",
+    "longDescription": "Review authenticated swims, goals, workouts, proposals, and sync status; generate reproducible weekly plan proposals with versioned rules and ordered decisions; and retain complete headless workflows plus exact-hash confirmation boundaries.",
     "developerName": "Felipe",
     "category": "Health & Fitness",
     "capabilities": [
@@ -29,7 +29,8 @@
       "Use Swim Coach to explain why my latest swim is missing.",
       "Use Swim Coach to adapt my next swim.",
       "Use Swim Coach to publish my workout to Garmin safely.",
-      "Use Swim Coach to record my post-swim feedback."
+      "Use Swim Coach to record my post-swim feedback.",
+      "Use Swim Coach to propose my next swim-training week for review."
     ]
   }
 }

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from types import TracebackType
 from typing import Any, Self, cast
@@ -69,6 +69,13 @@ from swim_coach.domain.operations import (
     McpToolInvocation,
     OutboxEvent,
 )
+from swim_coach.domain.planning import (
+    PlanningRules,
+    PlanningRun,
+    PlanningRunStatus,
+    TrainingDecisionRecord,
+    TrainingRuleSet,
+)
 from swim_coach.domain.shared.errors import RevisionConflictError
 from swim_coach.domain.shared.types import JsonObject
 from swim_coach.domain.shared.value_objects import (
@@ -117,12 +124,15 @@ from swim_coach.infrastructure.db.models import (
     OidcLoginAttemptModel,
     OutboxEventModel,
     PlannedWorkoutModel,
+    PlanningRunModel,
     PoolModel,
     RawProviderPayloadModel,
     SessionFeedbackModel,
     SyncCursorModel,
     SyncRunModel,
+    TrainingDecisionModel,
     TrainingGoalModel,
+    TrainingRuleSetModel,
     WebSessionModel,
     WorkoutExecutionMatchModel,
     WorkoutRevisionModel,
@@ -366,7 +376,9 @@ def _action_proposal(model: ActionProposalModel) -> ActionProposal:
         action_type=model.action_type,
         target_type=model.target_type,
         target_id=EntityId(model.target_id),
-        target_revision_id=EntityId(model.target_revision_id),
+        target_revision_id=(
+            EntityId(model.target_revision_id) if model.target_revision_id else None
+        ),
         payload=_json(model.payload_json),
         impact=_json(model.impact_json),
         action_hash=model.action_hash,
@@ -392,6 +404,59 @@ def _action_execution(model: ActionExecutionModel) -> ActionExecution:
         created_at=model.created_at,
         updated_at=model.updated_at,
         version=model.version,
+    )
+
+
+def _training_rule_set(model: TrainingRuleSetModel) -> TrainingRuleSet:
+    return TrainingRuleSet(
+        id=EntityId(model.id),
+        name=model.name,
+        version=model.version,
+        rules=PlanningRules.model_validate(model.rules_json),
+        content_hash=model.content_hash,
+        effective_from=model.effective_from,
+        effective_until=model.effective_until,
+        schema_version=model.schema_version,
+        created_at=model.created_at,
+    )
+
+
+def _planning_run(model: PlanningRunModel) -> PlanningRun:
+    return PlanningRun(
+        id=EntityId(model.id),
+        user_id=UserId(model.user_id),
+        goal_id=EntityId(model.goal_id),
+        rule_set_id=EntityId(model.rule_set_id),
+        week_start=model.week_start,
+        input_snapshot=_json(model.input_snapshot_json),
+        input_hash=model.input_hash,
+        output_plan=_json(model.output_plan_json),
+        output_proposal_id=(
+            EntityId(model.output_proposal_id) if model.output_proposal_id else None
+        ),
+        status=PlanningRunStatus(model.status),
+        warnings=tuple(model.warnings_json),
+        created_at=model.created_at,
+        completed_at=model.completed_at,
+    )
+
+
+def _training_decision(model: TrainingDecisionModel) -> TrainingDecisionRecord:
+    return TrainingDecisionRecord(
+        id=EntityId(model.id),
+        user_id=UserId(model.user_id),
+        planning_run_id=EntityId(model.planning_run_id),
+        order_index=model.order_index,
+        decision_type=model.decision_type,
+        rule_id=model.rule_id,
+        effective_date=model.effective_date,
+        evidence_refs=tuple(model.evidence_refs_json),
+        before=_json(model.before_json),
+        after=_json(model.after_json),
+        rationale=model.rationale,
+        actor_type=model.actor_type,
+        actor_id=model.actor_id,
+        created_at=model.created_at,
     )
 
 
@@ -2074,7 +2139,9 @@ class SqlAlchemyActionProposalsRepository:
                 action_type=proposal.action_type,
                 target_type=proposal.target_type,
                 target_id=proposal.target_id.value,
-                target_revision_id=proposal.target_revision_id.value,
+                target_revision_id=(
+                    proposal.target_revision_id.value if proposal.target_revision_id else None
+                ),
                 payload_json=proposal.payload,
                 impact_json=proposal.impact,
                 action_hash=proposal.action_hash,
@@ -2176,6 +2243,126 @@ class SqlAlchemyActionExecutionsRepository:
         )
         if (await self._session.scalar(statement)) is None:
             raise RevisionConflictError(expected_version)
+
+
+class SqlAlchemyTrainingRuleSetsRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_active(self, effective_on: date) -> TrainingRuleSet | None:
+        statement = (
+            select(TrainingRuleSetModel)
+            .where(
+                TrainingRuleSetModel.effective_from <= effective_on,
+                or_(
+                    TrainingRuleSetModel.effective_until.is_(None),
+                    TrainingRuleSetModel.effective_until >= effective_on,
+                ),
+            )
+            .order_by(
+                TrainingRuleSetModel.effective_from.desc(), TrainingRuleSetModel.version.desc()
+            )
+            .limit(1)
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _training_rule_set(model) if model else None
+
+    async def get_by_hash(self, content_hash: str) -> TrainingRuleSet | None:
+        statement = select(TrainingRuleSetModel).where(
+            TrainingRuleSetModel.content_hash == content_hash
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _training_rule_set(model) if model else None
+
+    async def add(self, rule_set: TrainingRuleSet) -> None:
+        self._session.add(
+            TrainingRuleSetModel(
+                id=rule_set.id.value,
+                name=rule_set.name,
+                version=rule_set.version,
+                rules_json=rule_set.rules.model_dump(mode="json"),
+                schema_version=rule_set.schema_version,
+                effective_from=rule_set.effective_from,
+                effective_until=rule_set.effective_until,
+                content_hash=rule_set.content_hash,
+                created_at=rule_set.created_at,
+            )
+        )
+
+
+class SqlAlchemyPlanningRunsRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_by_input(
+        self, user_id: UserId, rule_set_id: EntityId, input_hash: str
+    ) -> PlanningRun | None:
+        statement = select(PlanningRunModel).where(
+            PlanningRunModel.user_id == user_id.value,
+            PlanningRunModel.rule_set_id == rule_set_id.value,
+            PlanningRunModel.input_hash == input_hash,
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _planning_run(model) if model else None
+
+    async def add(self, run: PlanningRun) -> None:
+        self._session.add(
+            PlanningRunModel(
+                id=run.id.value,
+                user_id=run.user_id.value,
+                goal_id=run.goal_id.value,
+                rule_set_id=run.rule_set_id.value,
+                week_start=run.week_start,
+                input_snapshot_json=run.input_snapshot,
+                input_hash=run.input_hash,
+                output_plan_json=run.output_plan,
+                output_proposal_id=(
+                    run.output_proposal_id.value if run.output_proposal_id else None
+                ),
+                status=run.status.value,
+                warnings_json=list(run.warnings),
+                created_at=run.created_at,
+                completed_at=run.completed_at,
+            )
+        )
+
+
+class SqlAlchemyTrainingDecisionsRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, decision: TrainingDecisionRecord) -> None:
+        self._session.add(
+            TrainingDecisionModel(
+                id=decision.id.value,
+                user_id=decision.user_id.value,
+                planning_run_id=decision.planning_run_id.value,
+                order_index=decision.order_index,
+                decision_type=decision.decision_type,
+                rule_id=decision.rule_id,
+                effective_date=decision.effective_date,
+                evidence_refs_json=list(decision.evidence_refs),
+                before_json=decision.before,
+                after_json=decision.after,
+                rationale=decision.rationale,
+                actor_type=decision.actor_type,
+                actor_id=decision.actor_id,
+                created_at=decision.created_at,
+            )
+        )
+
+    async def list_for_run(
+        self, user_id: UserId, planning_run_id: EntityId
+    ) -> Sequence[TrainingDecisionRecord]:
+        statement = (
+            select(TrainingDecisionModel)
+            .where(
+                TrainingDecisionModel.user_id == user_id.value,
+                TrainingDecisionModel.planning_run_id == planning_run_id.value,
+            )
+            .order_by(TrainingDecisionModel.order_index)
+        )
+        return [_training_decision(model) for model in await self._session.scalars(statement)]
 
 
 class SqlAlchemyExternalWorkoutBindingsRepository:
@@ -2712,6 +2899,9 @@ class SqlAlchemyUnitOfWork:
         self.action_proposals = SqlAlchemyActionProposalsRepository(self._session)
         self.action_approvals = SqlAlchemyActionApprovalsRepository(self._session)
         self.action_executions = SqlAlchemyActionExecutionsRepository(self._session)
+        self.training_rule_sets = SqlAlchemyTrainingRuleSetsRepository(self._session)
+        self.planning_runs = SqlAlchemyPlanningRunsRepository(self._session)
+        self.training_decisions = SqlAlchemyTrainingDecisionsRepository(self._session)
         self.external_workout_bindings = SqlAlchemyExternalWorkoutBindingsRepository(self._session)
         self.jobs = SqlAlchemyJobsRepository(self._session)
         self.outbox = SqlAlchemyOutboxRepository(self._session)

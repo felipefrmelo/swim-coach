@@ -2,8 +2,8 @@
   "schema_version": "1.0",
   "project": "swim-coach",
   "plan_version": "1.0",
-  "updated_at": "2026-08-12T12:03:03-03:00",
-  "active_phase": "P09",
+  "updated_at": "2026-08-12T12:44:37-03:00",
+  "active_phase": "P10",
   "phases": [
     {
       "id": "P00",
@@ -223,8 +223,20 @@
     },
     {
       "id": "P10",
-      "status": "NOT_STARTED",
-      "evidence": [],
+      "status": "IN_PROGRESS",
+      "evidence": [
+        "local:branch:p10-adaptive-planning",
+        "docs/evidence/p10-adaptive-planning.md",
+        "docs/handoffs/p10.md",
+        "local:migration-000008:testcontainers-up-down-up",
+        "local:planning:golden-output-hash:property-40-examples",
+        "local:mcp-streamable-http:closed-schema-scopes-ownership-replay",
+        "local:proposal-approval:no-workout-no-schedule-no-external-effect",
+        "local:goal-progress:four-dimensions-confidence-sample-size",
+        "local:plugin-0.4.0:7-skills:154-evals",
+        "local:release-candidate:releases/plugin-0.4.0.json",
+        "pending:real-athlete-week-human-review-chatgpt"
+      ],
       "commit": null
     },
     {

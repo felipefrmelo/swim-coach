@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     oauth_jwks_cache_seconds: int = Field(default=300, ge=30, le=3_600)
     mcp_write_enabled: bool = False
     mcp_ui_enabled: bool = False
+    planning_enabled: bool = False
     pwa_base_url: HttpUrl = HttpUrl("http://127.0.0.1:14173")
     oidc_issuer: HttpUrl | None = None
     oidc_client_id: str | None = None
@@ -63,6 +64,8 @@ class Settings(BaseSettings):
             raise ValueError("mcp_write_enabled requires OAuth issuer and resource metadata")
         if self.mcp_ui_enabled and not self.mcp_write_enabled:
             raise ValueError("mcp_ui_enabled requires the complete controlled-write surface")
+        if self.planning_enabled and not self.mcp_write_enabled:
+            raise ValueError("planning_enabled requires the complete controlled-write surface")
         if self.oauth_issuer is not None and self.oauth_issuer.scheme != "https":
             raise ValueError("oauth_issuer must use HTTPS")
         if self.oauth_resource is not None and self.oauth_resource.scheme != "https":

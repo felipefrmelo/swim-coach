@@ -73,6 +73,8 @@ class ActionProposalResponse(StrictModel):
             device_id = UUID(cast(str, payload["device_id"]))
         except (KeyError, TypeError, ValueError) as exc:
             raise DomainError("INTERNAL_ERROR", "Action proposal payload is invalid.") from exc
+        if proposal.target_revision_id is None:
+            raise DomainError("INTERNAL_ERROR", "Garmin proposal revision is missing.")
         return cls(
             id=proposal.id.value,
             action_type=proposal.action_type,

@@ -20,7 +20,7 @@
 | P07 | IN_PROGRESS | P04 | publicação Garmin pela PWA com aprovação | [draft PR #5](https://github.com/felipefrmelo/swim-coach/pull/5) |
 | P08 | IN_PROGRESS | P06,P07 | escrita MCP com scopes/hash/auditoria | [draft PR #9](https://github.com/felipefrmelo/swim-coach/pull/9) |
 | P09 | IN_PROGRESS | P08 | UI MCP opcional e fallback headless | [draft PR #10](https://github.com/felipefrmelo/swim-coach/pull/10) |
-| P10 | NOT_STARTED | P03,P04,P08 | semana adaptativa explicável | — |
+| P10 | IN_PROGRESS | P03,P04,P08 | semana adaptativa explicável | branch `p10-adaptive-planning` |
 | P11 | NOT_STARTED | P10 | automações recuperáveis e PWA offline | — |
 | P12 | NOT_STARTED | P11 | restore testado e release pessoal | — |
 
@@ -309,8 +309,22 @@
 
 ### P10
 
-- Estado: `NOT_STARTED`
+- Estado: `IN_PROGRESS`
+- Início: 2026-08-12T12:15:00-03:00
+- Escopo: P10-T01..T10 implementado localmente; gate automatizado aprovado e
+  revisão humana com dados reais pendente.
 - Evidências:
+  - [`docs/evidence/p10-adaptive-planning.md`](docs/evidence/p10-adaptive-planning.md)
+  - [`docs/handoffs/p10.md`](docs/handoffs/p10.md)
+  - migration `000008` em `up/down/up` com ruleset, planning run e decisões;
+  - gerador puro com golden hash fixo, 40 casos property e limites conservadores;
+  - MCP Streamable HTTP + PostgreSQL provaram schema/scopes/ownership/replay e
+    aprovação sem criar treino, agenda, execução ou efeito Garmin;
+  - progresso da meta separado em endurance, pace, consistency e confidence;
+  - plugin `0.4.0` com sete Skills e 154 evals, 22 por Skill;
+  - release candidate [`releases/plugin-0.4.0.json`](releases/plugin-0.4.0.json).
+- Gate pendente: proposta gerada de atividades reais persistidas, revisada
+  humanamente no ChatGPT com decision trace e hashes sanitizados.
 
 ### P11
 

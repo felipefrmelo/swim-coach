@@ -137,7 +137,22 @@ tools:
     description: Generate and persist a reviewable weekly plan proposal from current data and versioned training rules; never approves or publishes it.
     scopes: [planning:write, proposals:write]
     annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
-    input: {type: object, additionalProperties: false, required: [week_start], properties: {week_start: {type: string, format: date}, constraints: {type: object}, user_notes: {type: [string, "null"], maxLength: 1000}}}
+    input:
+      type: object
+      additionalProperties: false
+      required: [week_start]
+      properties:
+        week_start: {type: string, format: date}
+        constraints:
+          type: [object, "null"]
+          additionalProperties: false
+          properties:
+            session_count: {type: [integer, "null"], minimum: 1, maximum: 7}
+            max_session_duration_minutes: {type: [integer, "null"], minimum: 20, maximum: 120}
+            focus: {type: string, enum: [BALANCED, TECHNIQUE, ENDURANCE, GOAL_PACE], default: BALANCED}
+            avoid_high_intensity: {type: boolean, default: false}
+            preserve_technique: {type: boolean, default: true}
+        user_notes: {type: [string, "null"], maxLength: 1000}
   - name: propose_workout_change
     title: Propose a workout change
     description: Create a new validated revision and proposal showing before-and-after impact; never alters a published revision in place.

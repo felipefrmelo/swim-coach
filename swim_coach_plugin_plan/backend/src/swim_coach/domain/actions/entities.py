@@ -71,7 +71,7 @@ def canonical_action_hash(
     action_type: str,
     target_type: str,
     target_id: EntityId,
-    target_revision_id: EntityId,
+    target_revision_id: EntityId | None,
     payload: JsonObject,
     impact: JsonObject,
 ) -> str:
@@ -81,7 +81,7 @@ def canonical_action_hash(
         "action_type": action_type,
         "target_type": target_type,
         "target_id": str(target_id),
-        "target_revision_id": str(target_revision_id),
+        "target_revision_id": str(target_revision_id) if target_revision_id else None,
         "payload": payload,
         "impact": impact,
     }
@@ -95,7 +95,7 @@ class ActionProposal:
     action_type: str
     target_type: str
     target_id: EntityId
-    target_revision_id: EntityId
+    target_revision_id: EntityId | None
     payload: JsonObject
     impact: JsonObject
     action_hash: str
@@ -132,7 +132,7 @@ class ActionProposal:
         action_type: str,
         target_type: str,
         target_id: EntityId,
-        target_revision_id: EntityId,
+        target_revision_id: EntityId | None,
         payload: JsonObject,
         impact: JsonObject,
         expires_at: datetime,

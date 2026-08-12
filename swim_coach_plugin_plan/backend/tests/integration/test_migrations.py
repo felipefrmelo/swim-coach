@@ -48,6 +48,9 @@ async def test_migration_up_down_up_and_constraints(
         "workout_execution_match",
         "session_feedback",
         "mcp_tool_invocation",
+        "training_rule_set",
+        "planning_run",
+        "training_decision",
     }
     assert expected_tables <= round_trip.tables_after_upgrade
     assert expected_tables.isdisjoint(round_trip.tables_after_downgrade)
@@ -70,7 +73,7 @@ async def test_migration_up_down_up_and_constraints(
     finally:
         await database.dispose()
 
-    assert revision == "000007"
+    assert revision == "000008"
     assert immutable_trigger == 1
     assert {item["name"] for item in constraints} >= {
         "ck_pool_length_positive",
