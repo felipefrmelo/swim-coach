@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "project": "swim-coach",
   "plan_version": "1.0",
-  "updated_at": "2026-08-12T17:04:00-03:00",
+  "updated_at": "2026-08-12T14:59:30-03:00",
   "active_phase": "P12",
   "phases": [
     {
@@ -277,7 +277,8 @@
         "local:sbom:744-components",
         "local:release-candidate:releases/plugin-1.0.0.json",
         "local:plugin-personal:1.0.0+codex.20260812170215:enabled",
-        "github:ready-pr:13:base-main",
+        "github:merged-pr:13:main:a81d30c",
+        "github:actions:31624985510:main-quality-pass",
         "github:commit:aa98d80:personal-release-hardening",
         "pending:new-thread-plugin-smoke-and-earlier-real-gates"
       ],
