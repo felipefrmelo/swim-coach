@@ -4,6 +4,11 @@ State: local implementation and automated gate complete; real host/Garmin gate p
 
 Publication: commit `ee728f0`, draft PR #9, based on `p06-plugin-read-only`.
 
+CI run `31608025063` exposed an outdated `FailingGarminSync` test double after
+the real service gained `from_date`/`force`; production code and the other 98
+tests passed. Commit `c12e85a` aligned the fake with the service contract, and
+the focused retry/lease integration passed 2/2 locally.
+
 ## Implemented
 
 - independent `SWIM_COACH_MCP_WRITE_ENABLED` kill switch, which requires a
