@@ -620,9 +620,15 @@ class Worker:
         proposal_version = proposal.version
         execution_version = execution.version
         binding_version = binding.version
-        if proposal.status is ActionProposalStatus.EXECUTING:
+        if proposal.status in {
+            ActionProposalStatus.QUEUED,
+            ActionProposalStatus.EXECUTING,
+        }:
             proposal.fail(now)
-        if execution.status is ActionExecutionStatus.EXECUTING:
+        if execution.status in {
+            ActionExecutionStatus.QUEUED,
+            ActionExecutionStatus.EXECUTING,
+        }:
             execution.fail(now, error)
         if binding.status in {
             ExternalWorkoutBindingStatus.CREATING,

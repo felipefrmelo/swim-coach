@@ -1,6 +1,6 @@
 """P07 REST approval, worker idempotency and ambiguous-result reconciliation."""
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 import httpx
 
@@ -152,5 +152,27 @@ async def test_proposal_approval_ambiguous_reconciliation_and_replay(
             assert result.status_code == 200
             assert result.json()["status"] == "SUCCEEDED"
             assert result.json()["execution"]["status"] == "SUCCEEDED"
+            assert provider.create_calls == 1
+            assert provider.schedule_calls == 1
+
+            current = await client.get(f"/api/v1/workouts/{workout['id']}")
+            rescheduled = await client.post(
+                f"/api/v1/workouts/{workout['id']}/schedule",
+                headers={"X-CSRF-Token": csrf, "If-Match": current.headers["etag"]},
+                json={
+                    "scheduled_date": (date.today() + timedelta(days=1)).isoformat(),
+                    "scheduled_start_time": "19:00:00",
+                    "timezone": "America/Sao_Paulo",
+                    "pool_id": pool["id"],
+                },
+            )
+            assert rescheduled.status_code == 200, rescheduled.text
+            duplicate_preview = await client.post(
+                f"/api/v1/workouts/{workout['id']}/garmin-proposals",
+                headers={"X-CSRF-Token": csrf, "If-Match": rescheduled.headers["etag"]},
+                json={"device_id": None},
+            )
+            assert duplicate_preview.status_code == 409, duplicate_preview.text
+            assert duplicate_preview.json()["code"] == "GARMIN_REVISION_ALREADY_BOUND"
             assert provider.create_calls == 1
             assert provider.schedule_calls == 1

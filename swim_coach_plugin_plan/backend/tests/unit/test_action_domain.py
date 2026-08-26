@@ -5,6 +5,8 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from swim_coach.domain.actions import (
+    ActionExecution,
+    ActionExecutionStatus,
     ActionProposal,
     ActionProposalStatus,
     canonical_action_hash,
@@ -103,3 +105,26 @@ def test_execution_state_distinguishes_ambiguous_outcome() -> None:
     item.start(now)
     item.fail(now, ambiguous=True)
     assert item.status is ActionProposalStatus.NEEDS_RECONCILIATION
+
+
+def test_queued_action_and_execution_can_fail_before_external_work_starts() -> None:
+    item = proposal()
+    now = item.created_at + timedelta(minutes=1)
+    item.approve(action_hash=item.action_hash, now=now)
+    item.queue(now)
+    execution = ActionExecution(
+        id=EntityId.new(),
+        proposal_id=item.id,
+        user_id=item.user_id,
+        idempotency_key="queued-terminal-failure",
+        created_at=now,
+        updated_at=now,
+    )
+
+    item.fail(now)
+    execution.fail(now, {"code": "BINDING_STATE_CONFLICT"})
+
+    assert item.status is ActionProposalStatus.FAILED
+    assert execution.status is ActionExecutionStatus.FAILED
+    assert execution.started_at is None
+    assert execution.finished_at == now

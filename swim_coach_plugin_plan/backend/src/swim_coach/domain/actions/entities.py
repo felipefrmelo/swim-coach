@@ -209,7 +209,15 @@ class ActionProposal:
         self._transition(ActionProposalStatus.SUCCEEDED, now)
 
     def fail(self, now: datetime, *, ambiguous: bool = False) -> None:
-        self._require(ActionProposalStatus.EXECUTING)
+        if self.status not in {
+            ActionProposalStatus.QUEUED,
+            ActionProposalStatus.EXECUTING,
+        }:
+            raise DomainError(
+                "ACTION_STATE_CONFLICT",
+                "The action state changed.",
+                details={"status": self.status.value},
+            )
         self._transition(
             ActionProposalStatus.NEEDS_RECONCILIATION if ambiguous else ActionProposalStatus.FAILED,
             now,
@@ -292,8 +300,11 @@ class ActionExecution:
         self.version += 1
 
     def fail(self, now: datetime, error: JsonObject, *, ambiguous: bool = False) -> None:
-        if self.status is not ActionExecutionStatus.EXECUTING:
-            raise DomainError("ACTION_STATE_CONFLICT", "Execution is not running.")
+        if self.status not in {
+            ActionExecutionStatus.QUEUED,
+            ActionExecutionStatus.EXECUTING,
+        }:
+            raise DomainError("ACTION_STATE_CONFLICT", "Execution is not queued or running.")
         self.status = (
             ActionExecutionStatus.NEEDS_RECONCILIATION
             if ambiguous

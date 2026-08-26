@@ -94,6 +94,10 @@ class GarminPublishService:
             device_name = selected.name if selected else "Relógio simulado"
             device_model = selected.model if selected else "Garmin fake local"
             compiled = self._compiler.compile(revision)
+            binding = await uow.external_workout_bindings.get_by_revision_hash(
+                user_id, "garmin", revision.id, compiled.compiled_hash
+            )
+            self._assert_revision_unbound(binding)
             payload = cast(
                 JsonObject,
                 {
@@ -196,6 +200,10 @@ class GarminPublishService:
             compiled = self._compiler.compile(revision)
             if compiled.compiled_hash != proposal.payload.get("compiled_hash"):
                 raise DomainError("REVISION_CONFLICT", "The compiled workout changed since review.")
+            binding = await uow.external_workout_bindings.get_by_revision_hash(
+                user_id, "garmin", revision.id, compiled.compiled_hash
+            )
+            self._assert_revision_unbound(binding)
             previous_version = proposal.version
             proposal.approve(action_hash=action_hash, now=now)
             recorded_verb = (
@@ -283,18 +291,18 @@ class GarminPublishService:
             binding = await uow.external_workout_bindings.get_by_revision_hash(
                 user_id, "garmin", revision.id, compiled.compiled_hash
             )
-            if binding is None:
-                binding = ExternalWorkoutBinding(
-                    id=EntityId.new(),
-                    user_id=user_id,
-                    workout_id=workout.id,
-                    revision_id=revision.id,
-                    provider="garmin",
-                    compiled_hash=compiled.compiled_hash,
-                    created_at=now,
-                    updated_at=now,
-                )
-                await uow.external_workout_bindings.add(binding)
+            self._assert_revision_unbound(binding)
+            binding = ExternalWorkoutBinding(
+                id=EntityId.new(),
+                user_id=user_id,
+                workout_id=workout.id,
+                revision_id=revision.id,
+                provider="garmin",
+                compiled_hash=compiled.compiled_hash,
+                created_at=now,
+                updated_at=now,
+            )
+            await uow.external_workout_bindings.add(binding)
             job = Job(
                 id=EntityId.new(),
                 user_id=user_id,
@@ -402,6 +410,20 @@ class GarminPublishService:
             raise DomainError("REVISION_CONFLICT", "The workout revision changed since review.")
         if proposal.payload.get("scheduled_date") != schedule.scheduled_date.isoformat():
             raise DomainError("REVISION_CONFLICT", "The workout schedule changed since review.")
+
+    @staticmethod
+    def _assert_revision_unbound(binding: ExternalWorkoutBinding | None) -> None:
+        if binding is None:
+            return
+        details: dict[str, str] = {"binding_status": binding.status.value}
+        if binding.scheduled_date is not None:
+            details["scheduled_date"] = binding.scheduled_date.isoformat()
+        raise DomainError(
+            "GARMIN_REVISION_ALREADY_BOUND",
+            "This exact workout revision already has Garmin publication state. "
+            "Use its existing operation instead of publishing it again.",
+            details=details,
+        )
 
     @staticmethod
     def _idempotency_key(proposal: ActionProposal, client_key: str) -> str:
