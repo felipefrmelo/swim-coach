@@ -393,5 +393,9 @@
 - Evidência local completa: `make check` com 130 Python e 4 Vitest, build das
   quatro imagens, 9 Playwright, dependency/Gitleaks limpos, SBOM e Trivy com zero
   HIGH/CRITICAL.
-- Gate pendente: commit/push/deploy, scope `coach` no
-  Auth0, reconexão do conector e smoke em conversa nova.
+- Publicado na `main` em `4bf2cec`; hotfix do worker em `0887f96`, ambos com CI
+  verde (`32966318411` e `32966938164`).
+- Deploy saudável na VM pessoal: MCP v2/planejamento/Garmin live ativos, oito
+  tools exatas, Auth0 aceitando `coach`, API/worker sem reinícios e sem bindings
+  Garmin duplicados.
+- Gate pendente: reconexão do conector e smoke autenticado em conversa nova.

@@ -2,7 +2,7 @@
 
 > **Versão do plano:** 1.0
 > **Data-base:** 11 de agosto de 2026
-> **Estado:** P13 ChatGPT-first implementado localmente; validação/deploy em andamento
+> **Estado:** P13 ChatGPT-first implantado na VM pessoal; reconexão/smoke no ChatGPT pendentes
 > **Uso inicial:** pessoal
 > **Atleta inicial:** Felipe
 > **Dispositivo:** Garmin Forerunner 265

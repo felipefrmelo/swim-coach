@@ -55,7 +55,7 @@
     "secret_scan": "passed-no-leaks",
     "sbom": "generated",
     "image_scan": "passed-zero-high-critical-after-no-cache-rebuild",
-    "production_smoke": "pending"
+    "production_smoke": "public-runtime-passed-authenticated-chatgpt-pending"
   },
   "personal_install": {
     "marketplace": "personal",
@@ -63,9 +63,18 @@
     "validation": "passed",
     "enabled": true
   },
+  "deployment": {
+    "url": "https://swim-coach.ozix.com.br",
+    "implementation_commit": "4bf2ceca48a18abf403196e8ba75ec8e6ec8b3b5",
+    "hotfix_commit": "0887f965f374b72ade141cd8b173a3998c1cf4a8",
+    "ci_run": 32966938164,
+    "services_healthy": true,
+    "runtime_tool_count": 8,
+    "oauth_scope_check": "coach-accepted",
+    "garmin_mode": "live"
+  },
   "pending_gates": [
-    "production deployment",
-    "Auth0 coach permission and ChatGPT connector reconnect",
+    "ChatGPT connector reconnect",
     "fresh-conversation host smoke"
   ]
 }

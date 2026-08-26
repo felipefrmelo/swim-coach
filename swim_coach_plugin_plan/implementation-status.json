@@ -301,9 +301,14 @@
         "local:e2e:9-playwright",
         "local:build:4-images",
         "local:security:dependency-secret-image-scans-zero",
-        "pending:deploy-chatgpt-reconnect-smoke"
+        "github:commit:4bf2cec:chatgpt-first-direct-commands",
+        "github:commit:0887f96:planning-worker-hotfix",
+        "github:actions:32966938164:quality-pass",
+        "production:healthy:8-tools:coach-scope:garmin-live",
+        "production:api-worker:restart-count-zero",
+        "pending:chatgpt-reconnect-fresh-conversation-smoke"
       ],
-      "commit": null
+      "commit": "0887f965f374b72ade141cd8b173a3998c1cf4a8"
     }
   ]
 }

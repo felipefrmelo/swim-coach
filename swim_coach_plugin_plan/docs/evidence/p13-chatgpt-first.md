@@ -43,10 +43,27 @@ A integração PostgreSQL com provider fake comprovou:
 - dependências sem vulnerabilidades conhecidas e Gitleaks sem vazamentos;
 - SBOM gerado e Trivy com zero HIGH/CRITICAL nas quatro imagens após rebuild
   sem cache com as correções Alpine atuais;
-- smoke de produção será anexado ao concluir o gate.
+- smoke público e de runtime em produção concluído; autenticação pelo host
+  ChatGPT permanece como gate manual.
+
+## Produção pessoal
+
+- implementação publicada na `main` em `4bf2cec` e hotfix do worker em
+  `0887f96`; CI `32966318411` e `32966938164` verdes;
+- API, PostgreSQL, worker e web saudáveis na VM `201.54.11.232`;
+- `https://swim-coach.ozix.com.br` retorna 200, login retorna 303 para Auth0 e
+  `/mcp/` sem token retorna 401;
+- protected-resource metadata pública anuncia somente `coach`;
+- Auth0 aceitou uma autorização não interativa com `coach` e respondeu apenas
+  `login_required`, sem `invalid_scope`;
+- runtime da imagem: MCP v2, planejamento e Garmin write live ativos; exatamente
+  as oito tools P13 registradas;
+- API e worker com `RestartCount=0` e sem erros recentes após o hotfix;
+- banco pessoal: 1 usuário, 1 conexão Garmin ativa, 2 dispositivos, 4 treinos e
+  zero treinos com bindings Garmin duplicados.
 
 ## Limite
 
-Uma conversa já aberta não recarrega Skills/MCP. Após deploy e reconexão OAuth,
-o smoke final deve ser feito em conversa nova e sem criar treino descartável no
-Garmin do usuário.
+Uma conversa já aberta não recarrega Skills/MCP. Após reconexão OAuth, o smoke
+final deve ser feito em conversa nova e sem criar treino descartável no Garmin
+do usuário.

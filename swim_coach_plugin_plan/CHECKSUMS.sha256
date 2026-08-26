@@ -6,14 +6,14 @@ dd2f96d4c60cdaf2ed752a91333872a95b5eb42f9a2bed2ff4d1258963fa8b2f  ./.editorconfi
 68ca3fba3b7e864770cb61aeb306d4bd4354b68ab4dd38450860c5d823e42a53  ./.node-version
 7b55f8e67b5623c4bef3fa691288da9437d79d3aba156de48d481db32ac7d16d  ./.python-version
 55345747169a5dfd613d6c6a76dba4772f0367a211f9b9c8405b0109abbc8f3c  ./AGENTS.md
-b4d2fdba91cfe0005dab3f46702ffcdf672546f680cb612537f0271aa7d49b78  ./CHANGELOG.md
+3936304da8df0df0515499d7846cece85fc89e3c2696b5f8e4e986cf0ba328cc  ./CHANGELOG.md
 c1bf521458387f7f6b2c3a85ed8e4040ff03d10ca7ab4b2dcf9c36c53a092260  ./FILE_INDEX.md
-571460e7f73b5b9c418f586334d26ccc096376d6f113a5b89de38d174e727996  ./IMPLEMENTATION_STATUS.md
+0794776ac93f06046ece4b4005378ebbb5d4710b46b710cd1e357e2ee96d3c5a  ./IMPLEMENTATION_STATUS.md
 d527a9882dedf6a1b4d79c593a910aeb37475c3286d55cdc533aa6f1656cb046  ./LLM_START_HERE.md
 1115ff22ef21f15732a1c521ae716a551e1a9f26838e881592225213cf20011a  ./MASTER_PLAN.md
 16fe3b54498903c041f7939be1c4387c89f0e4632bf7f464a345c69cc52b92d6  ./Makefile
 356d68cd2e54f938e0cb5b122f8d34e421a70d4306901099d3ad6fc7c6db1f6a  ./PLAN_VALIDATION_REPORT.md
-4950e0b6198ac7369bcec0551e138b1f13ca5fa4d5b0d2b80c2493995a9fab39  ./README.md
+c02ec804fd951f110a0691077336f674bd4bc85cb5bde55c624c817f3b8f0138  ./README.md
 72c11f399edf22b6814b1699b277d55e8a3a3a01b39a7a7f69b003e89ec0e662  ./TASK_INDEX.md
 727561659b620ddf0ed4ce18e0a39537afe3de441ab861781528761053a1db37  ./adrs/ADR-0001-plugin-first.md
 0f634be2b98216f34bf941049e70f537fccc5ca2a9364d92127770d62d7759bc  ./adrs/ADR-0002-modular-monolith.md
@@ -277,7 +277,7 @@ a0a5c43a387756d785575efb2096ffaf6c4a5dbd60235e0eb954e3f7f70f10dc  ./docs/evidenc
 c9cb63383000d1f882846398ab0d6bf979d03f38336bc7778d71d7bb70575e9f  ./docs/evidence/p10-adaptive-planning.md
 563b509973b09164e3b12bef2f9286a03dc4e49c5ac9e65a41576b25d59b3ae9  ./docs/evidence/p11-automation-offline.md
 9fbf8d54f50cada71f9c7d9cabd60b0fd497de12913317a48f1e2b1a6c1daea4  ./docs/evidence/p12-production-hardening-release.md
-cbad04220964b07f13c5278fb919e459d2b83210f0581cf3c8a6973b043faa8d  ./docs/evidence/p13-chatgpt-first.md
+1130ae20e0b537a25d56f9baaee288b6543939cdaafa6115fde52ccf77c3e430  ./docs/evidence/p13-chatgpt-first.md
 9b78955f5b9075c71ae85ef36eab7ad881d51ab7545e7008ca5a32d150b75b8c  ./docs/handoffs/p00.md
 74c7bacc55937c5efd212a91dcb7a92d1cf0fea4a51b07e4ed8c4465f68bdfb1  ./docs/handoffs/p01.md
 444ef1407ed7b452fe4b72a6c7e7158e8b4af841dba82d664eab90ce8b939466  ./docs/handoffs/p03.md
@@ -290,7 +290,7 @@ b18672ac72b05a2dc78b35815c4be3e1091f6caed78f2d62e831f7bf98c50548  ./docs/handoff
 32f6634e48c8643d073c0fae56391faf5b1e81357f3e77fe7df5967fcccdc0d3  ./docs/handoffs/p10.md
 a8f9a4a0ca51674d8a5cf142c13bd6f08d17eddebafae68aeaae4a7fed4fdda6  ./docs/handoffs/p11.md
 b52c39f3f695ce9a7302d4cbf8ab7447cd5bb5f71ba4e9b206d2bd998597b704  ./docs/handoffs/p12.md
-7db939105424600e0e620539c04c32921e68a1e89b7353b992193f0b506e0cbf  ./docs/handoffs/p13.md
+0edfee7af62887250efb50159f952968732cb5362c0e221f74da1c4383f10222  ./docs/handoffs/p13.md
 4dde286597b0d595be2b16cfdf4cf9acd820187e377dd59fa84c3cc38244ecc9  ./docs/operations/p07-garmin-write-reconciliation.md
 0a1a2645d606014699bcc8a1d0069b5fdfcb122801818c5057431954396a61db  ./docs/public-readiness.md
 d05f02f734d7d30ede82b5996a5460303e637afe27d94e692e5eb5c5d9106532  ./docs/runbooks/p11-job-operations.md
@@ -322,7 +322,7 @@ d4a0cc48f4a9c5bf9390021dcfa9165bceb60ee87a46cf35ea73990841b68579  ./examples/wor
 589ad673add619fe6874b596fb2765ad19cc2fb3cf1761c04f3beeea47db286a  ./examples/workouts/speed-1000m.json
 5eb974921e2ba72d3e80583885321a1597b2b87040641fb394f3b03d6fc5414a  ./examples/workouts/technique-800m.json
 7cc081768d2c785adf13e2e3807eeab4e2881d315a247c7abebb4ce5e07fdf21  ./examples/workouts/test-1200m.json
-afd03c32a86216bc5c11ec451b8574b5cce4040ec0d44bc197d5730905f9d106  ./implementation-status.json
+cffc0ec46a639b5e416b8398374d9422ff5c8eeecee25674b249a32c1d6bcdb5  ./implementation-status.json
 8e4b95311b3b6355f5be380dfd357c631d6856ce88c5e6550c69386b58d338bc  ./ops/alerts.yaml
 ea58f087bddd5ab9bcdeb75d7227a038be43a8d57a2c598d8d98e656914d5613  ./package.json
 baabfa99c45f3041617bec8a088622eae460d1e36de20dd590e6e5670a4ddefa  ./phases/README.md
@@ -339,7 +339,7 @@ de553769df0b3893d67790a5c1183fce167ed827443484b76251c3d8e7f4db0a  ./phases/p06-p
 9ce4d849d814f3c86f1cc7228523fafc3a4ea40d2eb6d703f004e16874fc8fea  ./phases/p10-adaptive-planning.md
 bc9fae6de1a0b96177fdceddb1dd885637d9a188ff07b734be165c77e828fdcf  ./phases/p11-automation-pwa-hardening.md
 73c480499f27b436e89f81c21f42b8c7d5d217debf9096a0840ced0b10401af9  ./phases/p12-production-hardening-release.md
-6233258e9eb0d8d3714f4e13ca3ead338cd2c9987b6127ad11316b0a8dec716b  ./phases/p13-chatgpt-first-simplification.md
+b7a6068f8d79eafab9ed0245c49102a0bcaa0b9a8975fa2de4a76ad306b798e8  ./phases/p13-chatgpt-first-simplification.md
 4e335f6f2b0d6d304040b85244353f3f28bff32b4e62659b111ea624146a601e  ./plan-manifest.json
 a345b4f56bf56cf0320e15c294e6c4edcfd63daf49d03c064e8c3d688000cab3  ./plugin-blueprint/.codex-plugin/plugin.json
 9b911a72df6766311a094326d28ca9bb59a92f53c1fc4cf9014e56d3637d8f90  ./plugin-blueprint/.gitignore
@@ -394,7 +394,7 @@ bf32a5c7a9fd24755bfb1581170c92a7fafdc6439a7f15ccbfbda0c6295a15fa  ./prompts/p11.
 86f71c5feb80eb124b71ae14a4dd819f35eedf894a54abad43be6f4f4df76cbb  ./releases/plugin-0.3.0.json
 725e7ef0c8365eb754db8a44d767ce9f7a3ad69445218ad8d91fe97adfec1948  ./releases/plugin-0.4.0.json
 63d995499a4158cf5ebbbfa228ad41a8a077e243eed522fd57e4a2243c1ca925  ./releases/plugin-1.0.0.json
-c8ed3488bf5ed31e47caf8c4908ccfcef37edb808e3967caab293d6bd332b3ca  ./releases/plugin-2.0.0.json
+fee3b8b5370e4c3ffc6715e7d3c0eb066e137fa088f0c3fd555c33c6ed56ed3d  ./releases/plugin-2.0.0.json
 c490bba5daf387fdd7de6c401adfcad8dce223a1bd06dc81dabc35fb592a7a9a  ./tests/e2e/p01-auth-context.spec.ts
 0e6d45cdaab3a105f54a66b17f2328f8a500e71fc08d037e54a46326dae60d98  ./tests/e2e/p02-garmin-status.spec.ts
 69ab8f5d0354a5559a620b94bbecffdd46959cdc9223392865e59dac9387940f  ./tests/e2e/p03-activity-detail.spec.ts

@@ -11,6 +11,12 @@ orientada a intenção, mantendo as garantias técnicas invisíveis.
 - ADR-0011 aceita;
 - Garmin e OAuth pessoais já conectados.
 
+## Estado
+
+Implementação, validação, CI e deploy pessoal concluídos nos commits `4bf2cec` e
+`0887f96`. O gate final depende apenas de reconectar o conector e exercitar as
+oito tools em uma conversa nova do ChatGPT.
+
 ## Entregáveis
 
 - contrato MCP v2 com oito tools e escopo `coach`;

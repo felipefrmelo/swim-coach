@@ -13,7 +13,14 @@
 - removido o modo canário e isolado o router REST legado quando v2 está ativo;
 - PWA reduzida a “Salvar” e “Salvar e enviar ao Garmin”;
 - sete Skills e 42 evals atualizadas; plugin pessoal
-  `2.0.0+codex.20260826113352` validado e reinstalado.
+  `2.0.0+codex.20260826113352` validado e reinstalado;
+- `make check`, build, 9 Playwright, dependency/Gitleaks/SBOM/Trivy e os dois
+  runs de CI da `main` passaram;
+- release implantada em `swim-coach.ozix.com.br` com MCP v2, planejamento e
+  Garmin live; um hotfix desacoplou o worker de OAuth/MCP e deixou API/worker
+  estáveis sem reinícios;
+- Auth0 aceita o escopo `coach`, metadata pública anuncia apenas esse scope e a
+  imagem de produção registra exatamente as oito tools P13.
 
 ### P12 — hardening, privacidade e release pessoal `1.0.0` (candidate)
 
