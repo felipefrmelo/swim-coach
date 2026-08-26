@@ -14,7 +14,12 @@ from swim_coach.application.services.garmin_sync import GarminSyncService
 from swim_coach.application.services.mcp_read import McpPrincipal, McpResult
 from swim_coach.application.services.planning import PlanningService
 from swim_coach.application.services.workouts import WorkoutService
-from swim_coach.domain.actions import ActionApproval, ActionDecision, ActionProposal
+from swim_coach.domain.actions import (
+    ActionApproval,
+    ActionDecision,
+    ActionExecution,
+    ActionProposal,
+)
 from swim_coach.domain.operations import (
     ApiIdempotencyRecord,
     AuditEvent,
@@ -30,7 +35,14 @@ from swim_coach.domain.shared.errors import (
 )
 from swim_coach.domain.shared.types import JsonObject
 from swim_coach.domain.shared.value_objects import CorrelationId, EntityId
-from swim_coach.domain.workouts import CanonicalWorkout, validate_workout
+from swim_coach.domain.workouts import (
+    CanonicalWorkout,
+    PlannedWorkoutStatus,
+    WorkoutRevision,
+    WorkoutSchedule,
+    canonical_content_hash,
+    validate_workout,
+)
 
 MCP_WRITE_SCOPES = (
     "proposals:read",
@@ -366,8 +378,25 @@ class McpWriteService:
         correlation_id: CorrelationId,
     ) -> McpResult:
         detail = await self._workouts.get_workout(principal.user_id, workout_id)
+        if detail.workout.approved_revision_id != detail.workout.current_revision_id:
+            raise DomainError(
+                "APPROVAL_REQUIRED",
+                "Apply and approve the current workout revision before scheduling it.",
+            )
         if detail.schedule is None:
-            raise DomainError("SCHEDULE_REQUIRED", "The workout must already be scheduled.")
+            async with self._uow_factory() as uow:
+                user = await uow.users.get(principal.user_id)
+            if user is None:
+                raise ResourceNotFoundError("user")
+            timezone = user.timezone
+            pool_id = detail.workout.pool_id
+            before_date: str | None = None
+            operation = "schedule"
+        else:
+            timezone = detail.schedule.timezone
+            pool_id = detail.schedule.pool_id
+            before_date = detail.schedule.scheduled_date.isoformat()
+            operation = "reschedule"
         proposal = await self._create_local_proposal(
             principal,
             action_type=self.RESCHEDULE_ACTION,
@@ -377,15 +406,16 @@ class McpWriteService:
                 {
                     "new_date": new_date.isoformat(),
                     "local_time": local_time.isoformat() if local_time else None,
-                    "timezone": detail.schedule.timezone,
-                    "pool_id": str(detail.schedule.pool_id),
+                    "timezone": timezone,
+                    "pool_id": str(pool_id),
                     "expected_workout_version": detail.workout.version,
                 },
             ),
             impact=cast(
                 JsonObject,
                 {
-                    "before_date": detail.schedule.scheduled_date.isoformat(),
+                    "operation": operation,
+                    "before_date": before_date,
                     "after_date": new_date.isoformat(),
                     "recovery_warning": "Review adjacent sessions before approval.",
                     "external_effects": [],
@@ -514,10 +544,18 @@ class McpWriteService:
                 "The approved action requires an additional action-specific scope.",
                 details={"scope": required_scope},
             )
+        if proposal.action_type in {self.CHANGE_ACTION, self.RESCHEDULE_ACTION}:
+            executed = await self._execute_local_action(
+                principal,
+                proposal.id,
+                idempotency_key=idempotency_key,
+                correlation_id=correlation_id,
+            )
+            return self._proposal_result(request_id, executed)
         if proposal.action_type != GarminPublishService.ACTION_TYPE:
             raise DomainError(
                 "ACTION_EXECUTION_UNAVAILABLE",
-                "This local proposal is reviewable in P08 but execution remains disabled.",
+                "This proposal type does not have an execution handler.",
             )
         queued = await self._garmin_publish.execute(
             principal.user_id,
@@ -531,6 +569,305 @@ class McpWriteService:
                 job = await uow.jobs.get_by_idempotency_key(queued.execution.idempotency_key)
             result.data["job_id"] = str(job.id) if job else None
         return result
+
+    async def _execute_local_action(
+        self,
+        principal: McpPrincipal,
+        proposal_id: EntityId,
+        *,
+        idempotency_key: str,
+        correlation_id: CorrelationId,
+    ) -> GarminActionDetail:
+        """Apply an approved local proposal atomically and without external effects."""
+
+        if not 8 <= len(idempotency_key.strip()) <= 200:
+            raise DomainError(
+                "VALIDATION_FAILED", "idempotency_key must contain between 8 and 200 characters."
+            )
+        now = datetime.now(UTC)
+        async with self._uow_factory() as uow:
+            proposal = await uow.action_proposals.get_for_update(principal.user_id, proposal_id)
+            if proposal is None:
+                raise ResourceNotFoundError("action_proposal")
+            existing = await uow.action_executions.get_by_proposal(principal.user_id, proposal.id)
+            if existing is not None:
+                return GarminActionDetail(proposal, existing)
+
+            previous_proposal_version = proposal.version
+            proposal.queue(now)
+            proposal.start(now)
+            execution = ActionExecution(
+                id=EntityId.new(),
+                proposal_id=proposal.id,
+                user_id=principal.user_id,
+                idempotency_key=self._local_idempotency_key(proposal, idempotency_key),
+                created_at=now,
+                updated_at=now,
+            )
+            execution.start(now)
+
+            if proposal.action_type == self.CHANGE_ACTION:
+                result = await self._apply_local_change(
+                    uow,
+                    principal,
+                    proposal,
+                    correlation_id=correlation_id,
+                    now=now,
+                )
+            elif proposal.action_type == self.RESCHEDULE_ACTION:
+                result = await self._apply_local_schedule(
+                    uow,
+                    principal,
+                    proposal,
+                    correlation_id=correlation_id,
+                    now=now,
+                )
+            else:
+                raise DomainError(
+                    "ACTION_EXECUTION_UNAVAILABLE",
+                    "This proposal type does not have a local execution handler.",
+                )
+
+            proposal.succeed(now)
+            execution.succeed(now, result)
+            await uow.action_executions.add(execution)
+            await uow.action_proposals.update(proposal, expected_version=previous_proposal_version)
+            await self._record_proposal(
+                uow,
+                proposal,
+                correlation_id,
+                "swim_coach.actions.local_succeeded.v1",
+                "actions.local_succeeded",
+                metadata={"external_effects": []},
+            )
+            await uow.commit()
+        return GarminActionDetail(proposal, execution)
+
+    async def _apply_local_change(
+        self,
+        uow: Any,
+        principal: McpPrincipal,
+        proposal: ActionProposal,
+        *,
+        correlation_id: CorrelationId,
+        now: datetime,
+    ) -> JsonObject:
+        workout, revisions, schedule = await self._local_workout_input(uow, principal, proposal)
+        if workout.status in {PlannedWorkoutStatus.CANCELLED, PlannedWorkoutStatus.ARCHIVED}:
+            raise DomainError(
+                "VALIDATION_FAILED", "Cancelled or archived workouts cannot be revised."
+            )
+        raw_definition = proposal.payload.get("definition")
+        if not isinstance(raw_definition, dict):
+            raise DomainError("VALIDATION_FAILED", "The approved workout definition is missing.")
+        definition = CanonicalWorkout.model_validate(raw_definition)
+        validation = validate_workout(definition)
+        if not validation.valid:
+            raise DomainError("VALIDATION_FAILED", "The approved workout definition is invalid.")
+        pool = await uow.pools.get(principal.user_id, workout.pool_id)
+        if pool is None:
+            raise ResourceNotFoundError("pool")
+        if pool.length.meters != definition.pool_length_m:
+            raise DomainError(
+                "POOL_DISTANCE_MISMATCH",
+                "Workout pool length does not match the selected pool.",
+                details={"expected_length_m": pool.length.meters},
+            )
+        revision = WorkoutRevision(
+            id=EntityId.new(),
+            workout_id=workout.id,
+            revision_number=max(item.revision_number for item in revisions) + 1,
+            definition=definition,
+            totals=validation.totals,
+            validation=validation.model_dump(mode="json"),
+            content_hash=canonical_content_hash(definition),
+            change_reason=str(proposal.payload.get("change_reason") or "Approved MCP proposal")[
+                :500
+            ],
+            created_by_type="mcp",
+            created_by_id=principal.subject,
+            created_at=now,
+        )
+        await uow.workout_revisions.add(revision)
+        await uow.flush()
+        previous_workout_version = workout.version
+        workout.title = definition.title
+        workout.purpose = definition.purpose
+        workout.current_revision_id = revision.id
+        workout.approved_revision_id = revision.id
+        workout.status = (
+            PlannedWorkoutStatus.SCHEDULED if schedule else PlannedWorkoutStatus.APPROVED
+        )
+        workout.updated_at = now
+        workout.version += 1
+        await uow.workouts.update(workout, expected_version=previous_workout_version)
+        await self._record_workout_effect(
+            uow,
+            principal,
+            workout,
+            correlation_id,
+            event_type="swim_coach.workouts.approved_change_applied.v1",
+            action="workouts.approved_change_applied",
+        )
+        return cast(
+            JsonObject,
+            {
+                "workout_id": str(workout.id),
+                "revision": revision.revision_number,
+                "content_hash": revision.content_hash,
+                "status": workout.status.value,
+                "scheduled_date": schedule.scheduled_date.isoformat() if schedule else None,
+                "external_effects": [],
+            },
+        )
+
+    async def _apply_local_schedule(
+        self,
+        uow: Any,
+        principal: McpPrincipal,
+        proposal: ActionProposal,
+        *,
+        correlation_id: CorrelationId,
+        now: datetime,
+    ) -> JsonObject:
+        workout, _, current_schedule = await self._local_workout_input(uow, principal, proposal)
+        if workout.approved_revision_id != workout.current_revision_id:
+            raise DomainError(
+                "APPROVAL_REQUIRED", "Approve the current revision before scheduling."
+            )
+        try:
+            scheduled_date = date.fromisoformat(str(proposal.payload["new_date"]))
+            raw_time = proposal.payload.get("local_time")
+            scheduled_start_time = time.fromisoformat(str(raw_time)) if raw_time else None
+            timezone = str(proposal.payload["timezone"])
+            pool_id = EntityId.parse(str(proposal.payload["pool_id"]))
+        except (KeyError, TypeError, ValueError) as error:
+            raise DomainError(
+                "VALIDATION_FAILED", "The approved schedule payload is invalid."
+            ) from error
+        revision = next(
+            (
+                item
+                for item in await uow.workout_revisions.list(principal.user_id, workout.id)
+                if item.id == workout.current_revision_id
+            ),
+            None,
+        )
+        if revision is None:
+            raise DomainError("REVISION_CONFLICT", "The current workout revision is missing.")
+        pool = await uow.pools.get(principal.user_id, pool_id)
+        if pool is None:
+            raise ResourceNotFoundError("pool")
+        if pool.length.meters != revision.definition.pool_length_m:
+            raise DomainError(
+                "POOL_DISTANCE_MISMATCH",
+                "Workout pool length does not match the selected pool.",
+                details={"expected_length_m": pool.length.meters},
+            )
+        schedule = WorkoutSchedule(
+            id=current_schedule.id if current_schedule else EntityId.new(),
+            workout_id=workout.id,
+            scheduled_date=scheduled_date,
+            scheduled_start_time=scheduled_start_time,
+            timezone=timezone,
+            pool_id=pool_id,
+            created_at=now,
+        )
+        await uow.workout_schedules.upsert(schedule)
+        previous_workout_version = workout.version
+        workout.pool_id = pool_id
+        workout.schedule = schedule
+        workout.status = PlannedWorkoutStatus.SCHEDULED
+        workout.updated_at = now
+        workout.version += 1
+        await uow.workouts.update(workout, expected_version=previous_workout_version)
+        await self._record_workout_effect(
+            uow,
+            principal,
+            workout,
+            correlation_id,
+            event_type="swim_coach.workouts.approved_schedule_applied.v1",
+            action="workouts.approved_schedule_applied",
+        )
+        return cast(
+            JsonObject,
+            {
+                "workout_id": str(workout.id),
+                "status": workout.status.value,
+                "scheduled_date": scheduled_date.isoformat(),
+                "scheduled_start_time": (
+                    scheduled_start_time.isoformat() if scheduled_start_time else None
+                ),
+                "timezone": timezone,
+                "external_effects": [],
+            },
+        )
+
+    @staticmethod
+    async def _local_workout_input(
+        uow: Any, principal: McpPrincipal, proposal: ActionProposal
+    ) -> tuple[Any, Any, Any]:
+        workout = await uow.workouts.get(principal.user_id, proposal.target_id)
+        if workout is None:
+            raise ResourceNotFoundError("workout")
+        expected_version = proposal.payload.get("expected_workout_version")
+        if not isinstance(expected_version, int) or isinstance(expected_version, bool):
+            raise DomainError("VALIDATION_FAILED", "The expected workout version is missing.")
+        if workout.version != expected_version:
+            raise RevisionConflictError(workout.version)
+        if workout.current_revision_id != proposal.target_revision_id:
+            raise DomainError("REVISION_CONFLICT", "The workout revision changed since review.")
+        revisions = await uow.workout_revisions.list(principal.user_id, workout.id)
+        schedule = await uow.workout_schedules.get(principal.user_id, workout.id)
+        if not revisions:
+            raise DomainError("REVISION_CONFLICT", "The workout has no current revision.")
+        return workout, revisions, schedule
+
+    @staticmethod
+    def _local_idempotency_key(proposal: ActionProposal, client_key: str) -> str:
+        client_digest = hashlib.sha256(client_key.strip().encode()).hexdigest()
+        return f"local:{proposal.action_type}:{proposal.id}:{client_digest}"
+
+    @staticmethod
+    async def _record_workout_effect(
+        uow: Any,
+        principal: McpPrincipal,
+        workout: Any,
+        correlation_id: CorrelationId,
+        *,
+        event_type: str,
+        action: str,
+    ) -> None:
+        payload: JsonObject = {
+            "workout_id": str(workout.id),
+            "workout_version": workout.version,
+            "status": workout.status.value,
+        }
+        await uow.outbox.add(
+            OutboxEvent(
+                id=EntityId.new(),
+                aggregate_type="PlannedWorkout",
+                aggregate_id=workout.id,
+                aggregate_version=workout.version,
+                event_type=event_type,
+                payload=payload,
+                user_id=principal.user_id,
+                correlation_id=correlation_id,
+            )
+        )
+        await uow.audit.add(
+            AuditEvent(
+                id=EntityId.new(),
+                user_id=principal.user_id,
+                actor_type="mcp",
+                actor_id=principal.subject,
+                action=action,
+                entity_type="PlannedWorkout",
+                entity_id=workout.id,
+                correlation_id=correlation_id,
+                after=payload,
+            )
+        )
 
     async def retry_failed_job(
         self,

@@ -25,7 +25,7 @@
     "plugins/swim-coach/skills/post-swim-checkin/SKILL.md": "fd5823d8e22b6bb236fd91cfb2c72f54c4005ed8d0d4519ef4476379bdaf0c3e",
     "plugins/swim-coach/skills/publish-to-garmin/SKILL.md": "456ff94bc9d68d611f398c1abb668ebf86fa286e92ec9aa13c5763d970ce37a2",
     "plugins/swim-coach/skills/review-latest-swim/SKILL.md": "52b16d1f462a406a0442d391108fa302fc63e953d44c03cdbdf82f885e073e6b",
-    "contracts/mcp-tools.yaml": "2ffb835c60f28f99301e3a064bba75d720fdce79164e40e946ee74ba807d74b7",
+    "contracts/mcp-tools.yaml": "2ad42a853390320e1b5f52f71538417b95e3c1168b0bf391c1f70fdc5545c0f2",
     "contracts/capability-release-matrix.yaml": "7019d0267d15d51a25e40200e46bd792526a01767ba855dd3e32aa37cd92b6f1",
     "contracts/openapi-skeleton.yaml": "4ceb5c5fc3750db11f1b4602e017cbcd96933e46ae81f6259468da5dafac6e26",
     "backend/alembic/versions/000010_p12_privacy.py": "cccfc7c472068a6ffc139a5083fe06261a89e37c92a532c72868d358bb24a932",

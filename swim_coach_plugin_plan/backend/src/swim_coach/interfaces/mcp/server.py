@@ -853,7 +853,7 @@ def _register_write_tools(
 
     @server.tool(
         name="propose_workout_reschedule",
-        title="Propose rescheduling a workout",
+        title="Propose scheduling or rescheduling a workout",
         description="Persist a calendar-impact proposal without changing any schedule.",
         annotations=LOCAL_WRITE,
         structured_output=True,
@@ -988,7 +988,10 @@ def _register_write_tools(
     @server.tool(
         name="execute_approved_action",
         title="Execute an approved action",
-        description="Queue a separately approved exact action with its dynamic action scope.",
+        description=(
+            "Apply an approved local action or queue an approved Garmin action with its "
+            "dynamic action scope."
+        ),
         annotations=OPEN_WORLD_WRITE,
         structured_output=True,
     )

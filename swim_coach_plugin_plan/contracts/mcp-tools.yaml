@@ -160,8 +160,8 @@ tools:
     annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
     input: {type: object, additionalProperties: false, required: [workout_id, expected_revision, change_request], properties: {workout_id: {type: string, format: uuid}, expected_revision: {type: integer, minimum: 1}, change_request: {type: object}}}
   - name: propose_workout_reschedule
-    title: Propose rescheduling a workout
-    description: Create a proposal to move a workout, showing calendar and recovery impact; does not change local or Garmin schedules.
+    title: Propose scheduling or rescheduling a workout
+    description: Create a proposal to schedule or move a workout, showing calendar and recovery impact; does not change local or Garmin schedules.
     scopes: [workouts:write, proposals:write]
     annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
     input: {type: object, additionalProperties: false, required: [workout_id, new_date], properties: {workout_id: {type: string, format: uuid}, new_date: {type: string, format: date}, local_time: {type: [string, "null"]}}}
@@ -185,7 +185,7 @@ tools:
     input: {type: object, additionalProperties: false, required: [proposal_id, expected_action_hash, decision, confirmation_text], properties: {proposal_id: {type: string, format: uuid}, expected_action_hash: {type: string}, decision: {type: string, enum: [APPROVE, REJECT]}, confirmation_text: {type: string, minLength: 1, maxLength: 1000}}}
   - name: execute_approved_action
     title: Execute an approved action
-    description: Queue execution of an approved, unexpired, hash-matching proposal; may call Garmin and returns a job.
+    description: Atomically apply an approved local proposal or queue an approved Garmin proposal; Garmin execution returns a job.
     scopes: [proposals:approve]
     dynamic_action_scope: true
     annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: true}

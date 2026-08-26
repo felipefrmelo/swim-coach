@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time, timedelta
 
 import httpx
 import pytest
@@ -52,6 +52,146 @@ class WriteTokenVerifier:
             resource="https://swim.example.test/mcp",
             subject=subject,
         )
+
+
+async def test_approved_local_change_and_initial_schedule_execute_once(
+    database: Database, app_settings: Settings
+) -> None:
+    settings = app_settings.model_copy(
+        update={
+            "oauth_issuer": "https://tenant.example.test",
+            "oauth_resource": "https://swim.example.test/mcp",
+            "mcp_write_enabled": True,
+        }
+    )
+    services = build_services(settings, database)
+    owner = await services.identity.ensure_identity(
+        provider="oidc",
+        subject="mcp-local-owner",
+        email="first@example.test",
+        display_name="Local Owner",
+        claims_snapshot={"email_verified": True},
+        correlation_id=CorrelationId.new(),
+    )
+    pool = (await services.context.list_pools(owner.id))[0]
+    draft = await services.workouts.create_draft(
+        owner.id,
+        CanonicalWorkout.model_validate(canonical_workout()),
+        pool_id=pool.id,
+        correlation_id=CorrelationId.new(),
+    )
+    assert services.mcp_write is not None
+    principal = McpPrincipal(
+        owner.id,
+        "mcp-local-owner",
+        frozenset((*MCP_READ_SCOPES, *MCP_WRITE_SCOPES)),
+    )
+
+    corrected = canonical_workout()
+    corrected["description"] = "Exact approved local revision."
+    proposed_change = await services.mcp_write.propose_workout_change(
+        principal,
+        "local-change-propose",
+        workout_id=draft.workout.id,
+        expected_revision=draft.current_revision.revision_number,
+        change_request={"definition": corrected, "reason": "Correct the draft"},
+        correlation_id=CorrelationId.new(),
+    )
+    change_id = EntityId.parse(proposed_change.data["proposal_id"])
+    approved_change = await services.mcp_write.approve_action_proposal(
+        principal,
+        "local-change-approve",
+        proposal_id=change_id,
+        expected_action_hash=str(proposed_change.data["action_hash"]),
+        decision="APPROVE",
+        confirmation_text="Aprovo exatamente esta correção local.",
+        correlation_id=CorrelationId.new(),
+    )
+    assert approved_change.data["status"] == "APPROVED"
+
+    missing_workout_scope = McpPrincipal(
+        owner.id,
+        "mcp-local-owner",
+        frozenset(scope for scope in principal.scopes if scope != "workouts:write"),
+    )
+    with pytest.raises(DomainError) as scope_error:
+        await services.mcp_write.execute_approved_action(
+            missing_workout_scope,
+            "local-change-missing-scope",
+            proposal_id=change_id,
+            idempotency_key="local-change-missing-scope",
+            correlation_id=CorrelationId.new(),
+        )
+    assert scope_error.value.code == "SCOPE_REQUIRED"
+
+    executed_change, replayed_change = await asyncio.gather(
+        services.mcp_write.execute_approved_action(
+            principal,
+            "local-change-execute",
+            proposal_id=change_id,
+            idempotency_key="local-change-execute-0001",
+            correlation_id=CorrelationId.new(),
+        ),
+        services.mcp_write.execute_approved_action(
+            principal,
+            "local-change-replay",
+            proposal_id=change_id,
+            idempotency_key="local-change-execute-0002",
+            correlation_id=CorrelationId.new(),
+        ),
+    )
+    assert executed_change.data["status"] == "SUCCEEDED"
+    assert (
+        executed_change.data["execution"]["execution_id"]
+        == replayed_change.data["execution"]["execution_id"]
+    )
+    revised = await services.workouts.get_workout(owner.id, draft.workout.id)
+    assert revised.current_revision.revision_number == 2
+    assert revised.workout.current_revision_id == revised.workout.approved_revision_id
+    assert revised.workout.status.value == "approved"
+    assert revised.schedule is None
+
+    scheduled_date = date.today() + timedelta(days=4)
+    proposed_schedule = await services.mcp_write.propose_workout_reschedule(
+        principal,
+        "local-schedule-propose",
+        workout_id=draft.workout.id,
+        new_date=scheduled_date,
+        local_time=time(19, 0),
+        correlation_id=CorrelationId.new(),
+    )
+    assert proposed_schedule.data["impact"]["operation"] == "schedule"
+    assert proposed_schedule.data["impact"]["before_date"] is None
+    schedule_id = EntityId.parse(proposed_schedule.data["proposal_id"])
+    await services.mcp_write.approve_action_proposal(
+        principal,
+        "local-schedule-approve",
+        proposal_id=schedule_id,
+        expected_action_hash=str(proposed_schedule.data["action_hash"]),
+        decision="APPROVE",
+        confirmation_text="Aprovo este agendamento local.",
+        correlation_id=CorrelationId.new(),
+    )
+    executed_schedule = await services.mcp_write.execute_approved_action(
+        principal,
+        "local-schedule-execute",
+        proposal_id=schedule_id,
+        idempotency_key="local-schedule-execute-0001",
+        correlation_id=CorrelationId.new(),
+    )
+    assert executed_schedule.data["status"] == "SUCCEEDED"
+    scheduled = await services.workouts.get_workout(owner.id, draft.workout.id)
+    assert scheduled.workout.status.value == "scheduled"
+    assert scheduled.schedule is not None
+    assert scheduled.schedule.scheduled_date == scheduled_date
+    assert scheduled.schedule.scheduled_start_time == time(19, 0)
+    assert scheduled.schedule.timezone == "America/Sao_Paulo"
+
+    async with database.session_factory() as session:
+        execution_count = await session.scalar(
+            select(func.count()).select_from(ActionExecutionModel)
+        )
+    assert execution_count == 2
 
 
 async def test_mcp_preview_approve_execute_requires_two_boundaries_and_replays_once(
