@@ -71,8 +71,6 @@ class Settings(BaseSettings):
             raise ValueError("mcp_write_enabled requires OAuth issuer and resource metadata")
         if self.mcp_ui_enabled and not self.mcp_write_enabled:
             raise ValueError("mcp_ui_enabled requires the complete controlled-write surface")
-        if self.planning_enabled and not self.mcp_write_enabled:
-            raise ValueError("planning_enabled requires the complete controlled-write surface")
         if self.oauth_issuer is not None and self.oauth_issuer.scheme != "https":
             raise ValueError("oauth_issuer must use HTTPS")
         if self.oauth_resource is not None and self.oauth_resource.scheme != "https":

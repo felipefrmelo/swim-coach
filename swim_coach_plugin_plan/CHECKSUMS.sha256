@@ -171,7 +171,7 @@ e2f9304643a01e93d8edf41000daf7ba80865bf3b51f2ebe0add7b322d5686cd  ./backend/src/
 f0f1cb061aed3a4a1fe7c09ca1a2e817b2df079c908d2085e5b965c136fcd8e2  ./backend/src/swim_coach/interfaces/rest/workouts.py
 c3a1595228fafa1131c3a5971e6cffb5c15de13951ba6be91a3cf95e957d4360  ./backend/src/swim_coach/interfaces/worker/__init__.py
 5131d28de88c54ffd3515d81099aa118e97c33ef2e5cff6f52702b6c5ce4836b  ./backend/src/swim_coach/interfaces/worker/main.py
-13ccfab1cc90abd9b3ab97f8f89829967c0e65e2fb29565a1a03064f4abbbd62  ./backend/src/swim_coach/settings.py
+5662a57ac21f2387b288f4383bd34272c593272d021e27ae183865c447b1279e  ./backend/src/swim_coach/settings.py
 12b4b2a1f736500797da5c863f763a3989c3f8c7dfe96bc013b4dc35be6a9b52  ./backend/tests/contract/test_canonical_workout_schema.py
 fdfbcd5dd7b6d984a47d0702b59a3a2c3df33bc3372c2e71a5c114157051472e  ./backend/tests/contract/test_mcp_tools.py
 e64c5a3688edfac54883c080dfc587bb63c73d847152b4fd190e92f0f7df8aaf  ./backend/tests/contract/test_mcp_ui.py
@@ -201,7 +201,7 @@ df037f3320c64a903a4fc28e7fc2fd4a5b8f2f02e18b22d963d2c952d3a55aeb  ./backend/test
 52370c9a4a755af3cf927c627435d31e04523f349507c8789aa530962340b883  ./backend/tests/unit/test_action_domain.py
 7f4cb2583cff5c48c6dc693af8a7bf3f055f0457e80d9207883e2e479d2f2919  ./backend/tests/unit/test_activity_analytics.py
 d548494bbaff87f4d4304bd11fe430b8237ec6e0b82fe5a211af22ebdacbf4f1  ./backend/tests/unit/test_activity_storage.py
-f5227c3230a4a66a15cef22c693b8f70c1ff0f86862ab0cff6f6cbe27d6e310d  ./backend/tests/unit/test_auth_settings.py
+0da9de80df1ad4ad8dbd70b880bb9354ce44795c1aabc61389fb5ca907e36e62  ./backend/tests/unit/test_auth_settings.py
 a3602b28e896f9e9412976e320573ae611ac928e337d26d9027fb564b2550461  ./backend/tests/unit/test_automation.py
 a08697494b327d66422aebd5e43f49eeb2336bbd5ed857213dd17dffc6d6de17  ./backend/tests/unit/test_backup.py
 87bccb3939c73aa949bfd6a5d9a6eaf1abeea61f6dfd4d62dd01b63f7775eb37  ./backend/tests/unit/test_capabilities.py

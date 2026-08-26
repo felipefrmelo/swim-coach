@@ -93,15 +93,7 @@ def test_mcp_ui_requires_complete_controlled_write_surface() -> None:
     assert settings.mcp_ui_enabled is True
 
 
-def test_adaptive_planning_requires_complete_controlled_write_surface() -> None:
-    with pytest.raises(ValidationError):
-        Settings(_env_file=None, planning_enabled=True)
-
-    settings = Settings(
-        _env_file=None,
-        oauth_issuer="https://issuer.example.com",
-        oauth_resource="https://swim.example.com/mcp",
-        mcp_write_enabled=True,
-        planning_enabled=True,
-    )
+def test_adaptive_planning_is_independent_from_mcp_transport() -> None:
+    settings = Settings(_env_file=None, planning_enabled=True)
     assert settings.planning_enabled is True
+    assert settings.mcp_write_enabled is False
