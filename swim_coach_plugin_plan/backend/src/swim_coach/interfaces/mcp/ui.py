@@ -20,13 +20,16 @@ MCP_UI_RESOURCE_URIS: Final = {
     "proposal": "ui://swim-coach/proposal-confirmation-card/v1.html",
     "sync": "ui://swim-coach/sync-status-card/v1.html",
 }
-MCP_UI_TOOLS: Final = (
-    "render_workout_card",
-    "render_activity_comparison_card",
-    "render_goal_progress_card",
-    "render_proposal_confirmation_card",
-    "render_sync_status_card",
-)
+MCP_UI_TOOL_SCOPES: Final = {
+    "render_workout_card": ("workouts:read",),
+    "render_activity_comparison_card": ("activities:read", "analytics:read"),
+    "render_goal_progress_card": ("goals:read", "analytics:read"),
+    "render_proposal_confirmation_card": ("proposals:read",),
+    # operations:read is conditional on job_id, but advertising it up front keeps
+    # the connector authorization sufficient for every valid invocation shape.
+    "render_sync_status_card": ("sync:read", "operations:read"),
+}
+MCP_UI_TOOLS: Final = tuple(MCP_UI_TOOL_SCOPES)
 
 
 def register_ui_resources(server: FastMCP, *, pwa_base_url: str) -> None:

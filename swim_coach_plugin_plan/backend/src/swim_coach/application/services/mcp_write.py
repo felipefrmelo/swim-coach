@@ -43,21 +43,25 @@ MCP_WRITE_SCOPES = (
     "proposals:approve",
     "operations:retry",
 )
-MCP_WRITE_TOOLS = (
-    "get_action_proposal",
-    "get_job_status",
-    "sync_garmin_activities",
-    "record_session_feedback",
-    "create_workout_draft",
-    "propose_workout_change",
-    "propose_workout_reschedule",
-    "preview_garmin_publish",
-    "cancel_action_proposal",
-    "approve_action_proposal",
-    "execute_approved_action",
-    "retry_failed_job",
-)
-MCP_PLANNING_TOOLS = ("propose_week_plan",)
+MCP_WRITE_TOOL_SCOPES: dict[str, tuple[str, ...]] = {
+    "get_action_proposal": ("proposals:read",),
+    "get_job_status": ("operations:read",),
+    "sync_garmin_activities": ("sync:run",),
+    "record_session_feedback": ("feedback:write",),
+    "create_workout_draft": ("workouts:write",),
+    "propose_workout_change": ("workouts:write", "proposals:write"),
+    "propose_workout_reschedule": ("workouts:write", "proposals:write"),
+    "preview_garmin_publish": ("garmin:publish", "proposals:write"),
+    "cancel_action_proposal": ("proposals:write",),
+    "approve_action_proposal": ("proposals:approve",),
+    "execute_approved_action": ("proposals:approve",),
+    "retry_failed_job": ("operations:retry",),
+}
+MCP_PLANNING_TOOL_SCOPES: dict[str, tuple[str, ...]] = {
+    "propose_week_plan": ("planning:write", "proposals:write"),
+}
+MCP_WRITE_TOOLS = tuple(MCP_WRITE_TOOL_SCOPES)
+MCP_PLANNING_TOOLS = tuple(MCP_PLANNING_TOOL_SCOPES)
 
 
 class McpWriteService:

@@ -91,6 +91,26 @@ def test_p09_render_tools_are_optional_read_only_and_match_catalog() -> None:
         assert set(tool.parameters["properties"]) == set(expected[name]["input"]["properties"])
 
 
+@pytest.mark.asyncio
+async def test_authenticated_tools_advertise_exact_oauth_security_schemes() -> None:
+    server = ui_server()
+    catalog = yaml.safe_load((ROOT / "contracts/mcp-tools.yaml").read_text(encoding="utf-8"))
+    expected = {item["name"]: item for item in catalog["tools"]}
+
+    listed = {tool.name: tool for tool in await server.list_tools()}
+
+    assert set(listed) == set(server._tool_manager._tools)
+    for name, tool in listed.items():
+        contract = expected[name]
+        scopes = list(contract["scopes"])
+        for conditional in contract.get("conditional_scopes", {}).values():
+            scopes.extend(scope for scope in conditional if scope not in scopes)
+        security_schemes = [{"type": "oauth2", "scopes": scopes}]
+        assert tool.securitySchemes == security_schemes
+        assert tool.meta is not None
+        assert tool.meta["securitySchemes"] == security_schemes
+
+
 def test_p09_ui_disabled_preserves_exact_p08_headless_surface() -> None:
     server = create_mcp_server(
         read_service=cast(McpReadService, object()),

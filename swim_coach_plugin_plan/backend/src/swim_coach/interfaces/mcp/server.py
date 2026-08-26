@@ -8,7 +8,8 @@ from collections.abc import Awaitable, Callable
 from datetime import date as LocalDate
 from datetime import datetime, time
 from time import perf_counter
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, cast
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from mcp.server.auth.middleware.auth_context import get_access_token
@@ -18,7 +19,8 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.server.fastmcp.server import Settings as FastMCPSettings
 from mcp.server.transport_security import TransportSecuritySettings
-from mcp.types import ToolAnnotations
+from mcp.types import CallToolResult, TextContent, ToolAnnotations
+from mcp.types import Tool as McpTool
 from pydantic import AnyHttpUrl, Field
 
 from swim_coach.application.queries.get_capabilities import (
@@ -27,14 +29,25 @@ from swim_coach.application.queries.get_capabilities import (
 from swim_coach.application.queries.get_capabilities import (
     get_capabilities as p00_capabilities,
 )
-from swim_coach.application.services.mcp_read import McpPrincipal, McpReadService, McpResult
-from swim_coach.application.services.mcp_write import MCP_PLANNING_TOOLS, McpWriteService
+from swim_coach.application.services.mcp_read import (
+    MCP_READ_TOOL_SCOPES,
+    McpPrincipal,
+    McpReadService,
+    McpResult,
+)
+from swim_coach.application.services.mcp_write import (
+    MCP_PLANNING_TOOL_SCOPES,
+    MCP_PLANNING_TOOLS,
+    MCP_WRITE_TOOL_SCOPES,
+    McpWriteService,
+)
 from swim_coach.domain.planning import PlanningPreferences
 from swim_coach.domain.shared.errors import DomainError
 from swim_coach.domain.shared.value_objects import CorrelationId, EntityId
 from swim_coach.domain.workouts import CanonicalWorkout
 from swim_coach.interfaces.mcp.ui import (
     MCP_UI_RESOURCE_URIS,
+    MCP_UI_TOOL_SCOPES,
     MCP_UI_TOOLS,
     activity_card,
     goal_card,
@@ -69,6 +82,21 @@ DESTRUCTIVE_LOCAL_WRITE = ToolAnnotations(
     idempotentHint=True,
     openWorldHint=False,
 )
+
+
+class SwimCoachFastMCP(FastMCP):
+    """Expose standard securitySchemes and its ChatGPT compatibility mirror."""
+
+    async def list_tools(self) -> list[McpTool]:
+        tools = await super().list_tools()
+        advertised: list[McpTool] = []
+        for tool in tools:
+            security_schemes = (tool.meta or {}).get("securitySchemes")
+            payload = tool.model_dump(mode="json", by_alias=True, exclude_none=True)
+            if security_schemes is not None:
+                payload["securitySchemes"] = security_schemes
+            advertised.append(McpTool.model_validate(payload))
+        return advertised
 
 
 def create_mcp_server(
@@ -118,7 +146,7 @@ def create_mcp_server(
             "do not infer private-data or product readiness."
         )
     )
-    server = FastMCP(
+    server = SwimCoachFastMCP(
         name="swim-coach",
         instructions=instructions,
         streamable_http_path="/",
@@ -143,6 +171,7 @@ def create_mcp_server(
         return server
     if read_service is None:  # Defensive; oauth_enabled already guarantees this.
         raise RuntimeError("MCP read service is missing")
+    configured_oauth_resource = cast(str, oauth_resource)
 
     async def execute(
         tool_name: str,
@@ -154,8 +183,14 @@ def create_mcp_server(
         request_id = _safe_request_id(ctx.request_id)
         access_token = get_access_token()
         if access_token is None or not access_token.subject:
-            raise ToolError(
-                _error("AUTH_REQUIRED", "OAuth authentication is required.", request_id)
+            return cast(
+                McpResult,
+                _authorization_error_result(
+                    code="AUTH_REQUIRED",
+                    message="OAuth authentication is required.",
+                    request_id=request_id,
+                    oauth_resource=configured_oauth_resource,
+                ),
             )
         principal: McpPrincipal | None = None
         started_at = perf_counter()
@@ -188,6 +223,17 @@ def create_mcp_server(
                     outcome="NOT_FOUND" if error.code == "RESOURCE_NOT_FOUND" else "FAILED",
                     error_code=error.code,
                 )
+            if error.code in {"AUTH_REQUIRED", "SCOPE_REQUIRED"}:
+                return cast(
+                    McpResult,
+                    _authorization_error_result(
+                        code=error.code,
+                        message=error.message,
+                        request_id=request_id,
+                        oauth_resource=configured_oauth_resource,
+                        details=error.details,
+                    ),
+                )
             raise ToolError(_error(error.code, error.message, request_id, error.details)) from error
 
     async def execute_write(
@@ -208,8 +254,14 @@ def create_mcp_server(
         request_id = _safe_request_id(ctx.request_id)
         access_token = get_access_token()
         if access_token is None or not access_token.subject:
-            raise ToolError(
-                _error("AUTH_REQUIRED", "OAuth authentication is required.", request_id)
+            return cast(
+                McpResult,
+                _authorization_error_result(
+                    code="AUTH_REQUIRED",
+                    message="OAuth authentication is required.",
+                    request_id=request_id,
+                    oauth_resource=configured_oauth_resource,
+                ),
             )
         principal: McpPrincipal | None = None
         correlation_id = CorrelationId.new()
@@ -245,6 +297,17 @@ def create_mcp_server(
                     correlation_id=correlation_id,
                     causation_id=_argument_causation(arguments),
                     error_code=error.code,
+                )
+            if error.code in {"AUTH_REQUIRED", "SCOPE_REQUIRED"}:
+                return cast(
+                    McpResult,
+                    _authorization_error_result(
+                        code=error.code,
+                        message=error.message,
+                        request_id=request_id,
+                        oauth_resource=configured_oauth_resource,
+                        details=error.details,
+                    ),
                 )
             raise ToolError(_error(error.code, error.message, request_id, error.details)) from error
 
@@ -551,6 +614,7 @@ def create_mcp_server(
             pwa_base_url=pwa_base_url,
         )
 
+    _apply_tool_security_schemes(server)
     _harden_tool_schemas(server)
     return server
 
@@ -1230,6 +1294,27 @@ def _register_p00_capabilities(server: FastMCP) -> None:
         return p00_capabilities()
 
 
+def _apply_tool_security_schemes(server: SwimCoachFastMCP) -> None:
+    """Advertise exact per-tool OAuth scopes on the standard and compatibility surfaces."""
+
+    scope_catalog = {
+        **MCP_READ_TOOL_SCOPES,
+        **MCP_WRITE_TOOL_SCOPES,
+        **MCP_PLANNING_TOOL_SCOPES,
+        **MCP_UI_TOOL_SCOPES,
+    }
+    for name, tool in server._tool_manager._tools.items():
+        try:
+            scopes = scope_catalog[name]
+        except KeyError as error:  # pragma: no cover - startup invariant
+            raise RuntimeError(f"OAuth scope metadata is missing for MCP tool {name!r}") from error
+        security_schemes = [{"type": "oauth2", "scopes": list(scopes)}]
+        tool.meta = {
+            **(tool.meta or {}),
+            "securitySchemes": security_schemes,
+        }
+
+
 def _harden_tool_schemas(server: FastMCP) -> None:
     """Keep FastMCP's generated function schemas closed to unknown arguments."""
 
@@ -1237,6 +1322,80 @@ def _harden_tool_schemas(server: FastMCP) -> None:
         tool.parameters["additionalProperties"] = False
         tool.fn_metadata.arg_model.model_config["extra"] = "forbid"
         tool.fn_metadata.arg_model.model_rebuild(force=True)
+
+
+def _authorization_error_result(
+    *,
+    code: str,
+    message: str,
+    request_id: str,
+    oauth_resource: str,
+    details: dict[str, str | int | bool] | None = None,
+) -> CallToolResult:
+    """Return an MCP OAuth challenge while preserving a model-readable error envelope."""
+
+    safe_details = details or {}
+    raw_scope = safe_details.get("scope")
+    required_scopes = raw_scope.split() if isinstance(raw_scope, str) else []
+    structured = McpResult(
+        request_id=request_id,
+        status="PARTIAL",
+        data={
+            "authorization": {
+                "status": "NEEDS_AUTHORIZATION",
+                "code": code,
+                "required_scopes": required_scopes,
+            }
+        },
+        human_summary=message,
+    )
+    return CallToolResult(
+        content=[
+            TextContent(
+                type="text",
+                text=_error(code, message, request_id, safe_details),
+            )
+        ],
+        structuredContent=structured.model_dump(mode="json"),
+        isError=True,
+        _meta={
+            "mcp/www_authenticate": [
+                _authorization_challenge(
+                    code=code,
+                    message=message,
+                    oauth_resource=oauth_resource,
+                    required_scopes=required_scopes,
+                )
+            ]
+        },
+    )
+
+
+def _authorization_challenge(
+    *,
+    code: str,
+    message: str,
+    oauth_resource: str,
+    required_scopes: list[str],
+) -> str:
+    parameters = [
+        f'resource_metadata="{_quote_auth_parameter(_resource_metadata_url(oauth_resource))}"',
+        f'error="{"insufficient_scope" if code == "SCOPE_REQUIRED" else "invalid_token"}"',
+        f'error_description="{_quote_auth_parameter(message)}"',
+    ]
+    if required_scopes:
+        parameters.append(f'scope="{_quote_auth_parameter(" ".join(required_scopes))}"')
+    return "Bearer " + ", ".join(parameters)
+
+
+def _resource_metadata_url(oauth_resource: str) -> str:
+    parsed = urlsplit(oauth_resource)
+    resource_path = parsed.path.rstrip("/")
+    return f"{parsed.scheme}://{parsed.netloc}/.well-known/oauth-protected-resource{resource_path}"
+
+
+def _quote_auth_parameter(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
 def _error(

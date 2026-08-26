@@ -34,16 +34,17 @@ MCP_READ_SCOPES = (
     "analytics:read",
     "sync:read",
 )
-MCP_READ_TOOLS = (
-    "get_capabilities",
-    "get_training_context",
-    "get_today_workout",
-    "get_week_plan",
-    "list_recent_swims",
-    "get_swim_activity",
-    "get_goal_progress",
-    "get_sync_status",
-)
+MCP_READ_TOOL_SCOPES: dict[str, tuple[str, ...]] = {
+    "get_capabilities": (),
+    "get_training_context": ("profile:read", "goals:read"),
+    "get_today_workout": ("workouts:read",),
+    "get_week_plan": ("workouts:read",),
+    "list_recent_swims": ("activities:read",),
+    "get_swim_activity": ("activities:read", "analytics:read"),
+    "get_goal_progress": ("goals:read", "analytics:read"),
+    "get_sync_status": ("sync:read",),
+}
+MCP_READ_TOOLS = tuple(MCP_READ_TOOL_SCOPES)
 
 
 class McpModel(BaseModel):

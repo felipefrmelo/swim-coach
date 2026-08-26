@@ -25,6 +25,7 @@ from swim_coach.infrastructure.db import Database
 from swim_coach.infrastructure.db.models import (
     ActionApprovalModel,
     ActionExecutionModel,
+    ActionProposalModel,
     JobModel,
 )
 from swim_coach.interfaces.mcp.server import create_mcp_server
@@ -151,6 +152,52 @@ async def test_mcp_preview_approve_execute_requires_two_boundaries_and_replays_o
     transport = httpx.ASGITransport(app=app)
 
     async with app.router.lifespan_context(app):
+        async with database.session_factory() as db_session:
+            proposal_count_before = await db_session.scalar(
+                select(func.count()).select_from(ActionProposalModel)
+            )
+
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://127.0.0.1",
+            headers={"Authorization": "Bearer no-garmin"},
+        ) as client:
+            async with streamable_http_client("http://127.0.0.1/", http_client=client) as streams:
+                async with ClientSession(streams[0], streams[1]) as session:
+                    await session.initialize()
+                    insufficient_scope = await session.call_tool(
+                        "preview_garmin_publish",
+                        {
+                            "workout_id": str(workout.workout.id),
+                            "revision": workout.current_revision.revision_number,
+                            "schedule_date": today.isoformat(),
+                            "idempotency_key": "preview-p08-scope-check",
+                        },
+                    )
+                    assert insufficient_scope.isError is True
+                    assert "SCOPE_REQUIRED" in insufficient_scope.content[0].text
+                    assert insufficient_scope.structuredContent is not None
+                    assert insufficient_scope.structuredContent["data"]["authorization"] == {
+                        "status": "NEEDS_AUTHORIZATION",
+                        "code": "SCOPE_REQUIRED",
+                        "required_scopes": ["garmin:publish"],
+                    }
+                    assert insufficient_scope.meta == {
+                        "mcp/www_authenticate": [
+                            'Bearer resource_metadata="https://swim.example.test/'
+                            '.well-known/oauth-protected-resource/mcp", '
+                            'error="insufficient_scope", '
+                            'error_description="Additional authorization scope is required.", '
+                            'scope="garmin:publish"'
+                        ]
+                    }
+
+        async with database.session_factory() as db_session:
+            proposal_count_after = await db_session.scalar(
+                select(func.count()).select_from(ActionProposalModel)
+            )
+        assert proposal_count_after == proposal_count_before
+
         async with httpx.AsyncClient(
             transport=transport,
             base_url="http://127.0.0.1",
@@ -159,6 +206,19 @@ async def test_mcp_preview_approve_execute_requires_two_boundaries_and_replays_o
             async with streamable_http_client("http://127.0.0.1/", http_client=client) as streams:
                 async with ClientSession(streams[0], streams[1]) as session:
                     await session.initialize()
+                    listed = await session.list_tools()
+                    preview_tool = next(
+                        tool for tool in listed.tools if tool.name == "preview_garmin_publish"
+                    )
+                    expected_security = [
+                        {
+                            "type": "oauth2",
+                            "scopes": ["garmin:publish", "proposals:write"],
+                        }
+                    ]
+                    assert preview_tool.securitySchemes == expected_security
+                    assert preview_tool.meta is not None
+                    assert preview_tool.meta["securitySchemes"] == expected_security
                     resources = await session.list_resources()
                     assert [str(item.uri) for item in resources.resources] == list(
                         MCP_UI_RESOURCE_URIS.values()
