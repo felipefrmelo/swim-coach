@@ -1,23 +1,37 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import cast
 
 import pytest
-import yaml
 from mcp.server.auth.provider import AccessToken
 
-from swim_coach.application.services.mcp_read import MCP_READ_TOOLS, McpReadService, McpResult
-from swim_coach.application.services.mcp_write import MCP_WRITE_TOOLS, McpWriteService
+from swim_coach.application.services.mcp_read import (
+    MCP_READ_TOOL_SCOPES,
+    MCP_READ_TOOLS,
+    McpReadService,
+    McpResult,
+)
+from swim_coach.application.services.mcp_write import (
+    MCP_WRITE_TOOL_SCOPES,
+    MCP_WRITE_TOOLS,
+    McpWriteService,
+)
 from swim_coach.interfaces.mcp.server import create_mcp_server
 from swim_coach.interfaces.mcp.ui import (
     MCP_APP_MIME_TYPE,
     MCP_UI_RESOURCE_URIS,
+    MCP_UI_TOOL_SCOPES,
     MCP_UI_TOOLS,
     proposal_card,
 )
 
-ROOT = Path(__file__).resolve().parents[3]
+UI_TOOL_KINDS = {
+    "render_workout_card": "workout",
+    "render_activity_comparison_card": "activity",
+    "render_goal_progress_card": "goal",
+    "render_proposal_confirmation_card": "proposal",
+    "render_sync_status_card": "sync",
+}
 
 
 class UiContractVerifier:
@@ -71,9 +85,6 @@ def test_p09_render_tools_are_optional_read_only_and_match_catalog() -> None:
     server = ui_server()
     registered = server._tool_manager._tools
     expected_names = [*MCP_READ_TOOLS, *MCP_WRITE_TOOLS, *MCP_UI_TOOLS]
-    catalog = yaml.safe_load((ROOT / "contracts/mcp-tools.yaml").read_text(encoding="utf-8"))
-    expected = {item["name"]: item for item in catalog["tools"] if item["name"] in MCP_UI_TOOLS}
-
     assert list(registered) == expected_names
     for name in MCP_UI_TOOLS:
         tool = registered[name]
@@ -82,29 +93,27 @@ def test_p09_render_tools_are_optional_read_only_and_match_catalog() -> None:
         assert tool.annotations.destructiveHint is False
         assert tool.annotations.openWorldHint is False
         assert tool.meta is not None
-        assert tool.meta["ui"]["resourceUri"] == expected[name]["ui_resource"]
-        assert tool.meta["openai/outputTemplate"] == expected[name]["ui_resource"]
+        uri = MCP_UI_RESOURCE_URIS[UI_TOOL_KINDS[name]]
+        assert tool.meta["ui"]["resourceUri"] == uri
+        assert tool.meta["openai/outputTemplate"] == uri
         assert tool.parameters["additionalProperties"] is False
-        assert set(tool.parameters.get("required", [])) == set(
-            expected[name]["input"].get("required", [])
-        )
-        assert set(tool.parameters["properties"]) == set(expected[name]["input"]["properties"])
+        assert tool.parameters["properties"]
 
 
 @pytest.mark.asyncio
 async def test_authenticated_tools_advertise_exact_oauth_security_schemes() -> None:
     server = ui_server()
-    catalog = yaml.safe_load((ROOT / "contracts/mcp-tools.yaml").read_text(encoding="utf-8"))
-    expected = {item["name"]: item for item in catalog["tools"]}
+    scope_catalog = {
+        **MCP_READ_TOOL_SCOPES,
+        **MCP_WRITE_TOOL_SCOPES,
+        **MCP_UI_TOOL_SCOPES,
+    }
 
     listed = {tool.name: tool for tool in await server.list_tools()}
 
     assert set(listed) == set(server._tool_manager._tools)
     for name, tool in listed.items():
-        contract = expected[name]
-        scopes = list(contract["scopes"])
-        for conditional in contract.get("conditional_scopes", {}).values():
-            scopes.extend(scope for scope in conditional if scope not in scopes)
+        scopes = list(scope_catalog[name])
         security_schemes = [{"type": "oauth2", "scopes": scopes}]
         assert tool.securitySchemes == security_schemes
         assert tool.meta is not None

@@ -6,21 +6,21 @@ O produto completo será um treinador pessoal de natação com quatro superfíci
 
 1. **ChatGPT/Codex:** interface conversacional principal, por meio do plugin `swim-coach`.
 2. **Garmin Forerunner 265:** execução dos treinos estruturados e captura das atividades.
-3. **PWA:** interface operacional para calendário, editor, configurações, feedback, auditoria e contingência.
+3. **PWA:** ferramenta auxiliar para calendário, editor, configurações, feedback e contingência.
 4. **Backend/MCP:** fonte de verdade, regras determinísticas, integrações, segurança e automações.
 
 O plugin terá:
 
 - Skills versionados para os workflows recorrentes;
 - um servidor MCP remoto com ferramentas tipadas;
-- UI MCP opcional para revisar treinos, comparar sessões e confirmar ações;
+- oito comandos MCP de intenção, úteis sem UI customizada;
 - pacote local/pessoal primeiro;
 - preparação para publicação pública futura, sem transformar isso em requisito do MVP.
 
 ## 2. Princípios não negociáveis
 
 - **A conversa interpreta; o domínio decide o que é válido.**
-- **Ações externas são propostas antes de serem executadas.**
+- **Ações externas são diretas no contrato v2 e idempotentes/reconciliáveis por baixo.**
 - **Toda distância de etapa termina na parede da piscina configurada.**
 - **O Garmin fica atrás de uma porta de provider.**
 - **O banco, não a conversa, é a memória do produto.**
@@ -65,6 +65,7 @@ flowchart TB
 | P10 | Planejamento adaptativo | semana proposta a partir de dados e regras | explicabilidade e limites de carga |
 | P11 | Automações e resiliência UX | sync, feedback, notificações e offline | jobs recuperáveis e estado coerente |
 | P12 | Hardening e release pessoal | backup/restore, segurança, observabilidade e release | checklist operacional completo |
+| P13 | ChatGPT-first direto | oito tools, escopo único, PWA auxiliar e Garmin upsert | fluxo completo sem cerimônia técnica visível |
 
 ## 5. Fatias de valor
 
@@ -101,7 +102,7 @@ Incluído:
 - PWA responsiva;
 - plugin Skills + MCP;
 - OAuth 2.1 para acesso remoto a dados privados;
-- proposta/aprovação para escritas;
+- comandos diretos com revisões/idempotência internas;
 - jobs, outbox e auditoria;
 - backup e exportação.
 
@@ -118,18 +119,18 @@ Adiado:
 
 ## 7. Critérios de conclusão do produto pessoal
 
-O plano estará completo quando todos os gates P00–P12 estiverem concluídos e for possível demonstrar, sem manipulação manual do banco:
+O plano estará completo quando o gate P13 estiver concluído e for possível demonstrar, sem manipulação manual do banco:
 
 1. instalar o plugin pessoal;
 2. autenticar;
 3. consultar treino de hoje e últimas atividades;
-4. criar um rascunho de semana;
-5. revisar o impacto de uma alteração;
-6. confirmar e publicar no Garmin;
+4. gerar e salvar uma semana;
+5. editar ou mover um treino por conversa;
+6. publicar/atualizar diretamente no Garmin;
 7. sincronizar a atividade realizada;
 8. comparar planejado versus executado;
 9. registrar RPE/técnica/dor;
-10. gerar a proposta seguinte com justificativa;
+10. gerar a semana seguinte com justificativa;
 11. recuperar o sistema a partir de backup testado.
 
 ## 8. Navegação para implementação

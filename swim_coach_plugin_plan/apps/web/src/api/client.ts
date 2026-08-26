@@ -13,8 +13,8 @@ import type {
   SwimActivityDetail,
   CanonicalWorkout,
   Workout,
+  WorkoutSaveResult,
   WorkoutValidation,
-  GarminActionProposal,
   OperationsSnapshot,
   OperationsJob,
   AppNotification,
@@ -164,52 +164,21 @@ export const api = {
     request<GarminConnection>("/integrations/garmin", { method: "DELETE" }),
   workouts: () => request<Workout[]>("/workouts"),
   workout: (id: string) => request<Workout>(`/workouts/${id}`),
+  saveWorkout: (payload: {
+    workout_id: string | null;
+    pool_id: string;
+    definition: CanonicalWorkout;
+    scheduled_date: string | null;
+    scheduled_start_time: string | null;
+    change_reason: string | null;
+    publish_to_garmin: boolean;
+  }) => request<WorkoutSaveResult>("/workouts/save", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  }),
   validateWorkout: (definition: CanonicalWorkout) =>
     request<WorkoutValidation>("/workouts/validate", {
       method: "POST",
       body: JSON.stringify(definition),
-    }),
-  createWorkout: (poolId: string, definition: CanonicalWorkout) =>
-    request<Workout>("/workouts", {
-      method: "POST",
-      headers: { "Idempotency-Key": crypto.randomUUID() },
-      body: JSON.stringify({ pool_id: poolId, definition }),
-    }),
-  reviseWorkout: (workout: Workout, definition: CanonicalWorkout, changeReason: string) =>
-    request<Workout>(`/workouts/${workout.id}/revisions`, {
-      method: "POST",
-      headers: { "If-Match": `"${workout.version}"` },
-      body: JSON.stringify({ definition, change_reason: changeReason || null }),
-    }),
-  approveWorkout: (workout: Workout) =>
-    request<Workout>(`/workouts/${workout.id}/approve-local`, {
-      method: "POST",
-      headers: { "If-Match": `"${workout.version}"` },
-      body: JSON.stringify({ content_hash: workout.current_revision.content_hash }),
-    }),
-  scheduleWorkout: (workout: Workout, scheduledDate: string, startTime: string | null, timezone: string) =>
-    request<Workout>(`/workouts/${workout.id}/schedule`, {
-      method: "POST",
-      headers: { "If-Match": `"${workout.version}"` },
-      body: JSON.stringify({ scheduled_date: scheduledDate, scheduled_start_time: startTime, timezone, pool_id: workout.pool_id }),
-    }),
-  previewGarminPublish: (workout: Workout, deviceId: string | null = null) =>
-    request<GarminActionProposal>(`/workouts/${workout.id}/garmin-proposals`, {
-      method: "POST",
-      headers: { "If-Match": `"${workout.version}"` },
-      body: JSON.stringify({ device_id: deviceId }),
-    }),
-  action: (id: string) => request<GarminActionProposal>(`/actions/${id}`),
-  approveAction: (proposal: GarminActionProposal) =>
-    request<GarminActionProposal>(`/actions/${proposal.id}/approve`, {
-      method: "POST",
-      headers: { "If-Match": `"${proposal.version}"` },
-      body: JSON.stringify({ action_hash: proposal.action_hash }),
-    }),
-  rejectAction: (proposal: GarminActionProposal) =>
-    request<GarminActionProposal>(`/actions/${proposal.id}/reject`, {
-      method: "POST",
-      headers: { "If-Match": `"${proposal.version}"` },
-      body: JSON.stringify({ action_hash: proposal.action_hash }),
     }),
 };

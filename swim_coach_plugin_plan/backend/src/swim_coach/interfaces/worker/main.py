@@ -15,6 +15,7 @@ from swim_coach.application.ports.repositories import UnitOfWorkFactory
 from swim_coach.application.services import (
     ActivityDataService,
     AutomationService,
+    CoachCommandService,
     GarminSyncService,
     PlanningService,
     PrivacyService,
@@ -48,6 +49,7 @@ class Worker:
     GARMIN_SYNC_JOB_TYPE = "garmin.sync_activities"
     GARMIN_PUBLISH_JOB_TYPE = "workout.publish_garmin"
     GARMIN_SCHEDULE_JOB_TYPE = "workout.schedule_garmin"
+    GARMIN_UPSERT_JOB_TYPE = "workout.upsert_garmin"
     ACTIVITY_FETCH_FILE_JOB_TYPE = "activity.fetch_file"
     PLANNING_JOB_TYPE = "planning.generate_week"
     PRIVACY_DELETE_JOB_TYPE = "privacy.delete_user"
@@ -61,6 +63,7 @@ class Worker:
         *,
         activity_data: ActivityDataService | None = None,
         automation: AutomationService | None = None,
+        coach_commands: CoachCommandService | None = None,
         planning: PlanningService | None = None,
         privacy: PrivacyService | None = None,
         worker_id: str = "worker-p01",
@@ -72,6 +75,7 @@ class Worker:
         self._garmin_write_enabled = garmin_write_enabled
         self._activity_data = activity_data
         self._automation = automation
+        self._coach_commands = coach_commands
         self._planning = planning
         self._privacy = privacy
         self._worker_id = worker_id
@@ -86,7 +90,13 @@ class Worker:
         if self._garmin_sync is not None:
             job_types.add(self.GARMIN_SYNC_JOB_TYPE)
         if self._garmin_writer is not None:
-            job_types.update({self.GARMIN_PUBLISH_JOB_TYPE, self.GARMIN_SCHEDULE_JOB_TYPE})
+            job_types.update(
+                {
+                    self.GARMIN_PUBLISH_JOB_TYPE,
+                    self.GARMIN_SCHEDULE_JOB_TYPE,
+                    self.GARMIN_UPSERT_JOB_TYPE,
+                }
+            )
         if self._activity_data is not None:
             job_types.add(self.ACTIVITY_FETCH_FILE_JOB_TYPE)
         if self._planning is not None:
@@ -108,6 +118,8 @@ class Worker:
             return await self._run_garmin_publish(job)
         if job.job_type == self.GARMIN_SCHEDULE_JOB_TYPE:
             return await self._run_garmin_schedule(job)
+        if job.job_type == self.GARMIN_UPSERT_JOB_TYPE:
+            return await self._run_garmin_upsert(job)
         if job.job_type == self.ACTIVITY_FETCH_FILE_JOB_TYPE:
             return await self._run_activity_fetch_file(job)
         if job.job_type == self.PLANNING_JOB_TYPE:
@@ -152,14 +164,33 @@ class Worker:
         if week_start is None:
             return await self._finish_failure(job, "PLANNING_JOB_INVALID", retryable=False)
         try:
-            _run, proposal, _replayed = await self._planning.propose_week(
-                job.user_id,
-                actor_id="automation:p11",
-                week_start=week_start,
-                preferences=PlanningPreferences(),
-                user_notes_present=False,
-                correlation_id=CorrelationId.new(),
-            )
+            if self._coach_commands is not None:
+                generated = await self._coach_commands.generate_week(
+                    job.user_id,
+                    actor_id="automation:p13",
+                    week_start=week_start,
+                    preferences=PlanningPreferences(),
+                    correlation_id=CorrelationId.new(),
+                )
+                notification_type = "WEEK_READY"
+                dedupe_key = f"planning-ready:{generated.planning_run_id}"
+                title = "Sua próxima semana foi salva"
+                body = f"{len(generated.workout_ids)} treinos estão no calendário."
+                link = "/calendar"
+            else:
+                _run, proposal, _replayed = await self._planning.propose_week(
+                    job.user_id,
+                    actor_id="automation:p11",
+                    week_start=week_start,
+                    preferences=PlanningPreferences(),
+                    user_notes_present=False,
+                    correlation_id=CorrelationId.new(),
+                )
+                notification_type = "WEEK_PROPOSAL_READY"
+                dedupe_key = f"planning-ready:{proposal.id}"
+                title = "Sua próxima semana está pronta para revisão"
+                body = "A proposta é apenas um rascunho: revise antes de aprovar qualquer treino."
+                link = f"/actions/{proposal.id}"
         except DomainError as exc:
             return await self._finish_failure(job, exc.code, retryable=False)
         async with self._uow_factory() as uow:
@@ -167,13 +198,11 @@ class Worker:
                 Notification(
                     id=EntityId.new(),
                     user_id=job.user_id,
-                    notification_type="WEEK_PROPOSAL_READY",
-                    dedupe_key=f"planning-ready:{proposal.id}",
-                    title="Sua próxima semana está pronta para revisão",
-                    body=(
-                        "A proposta é apenas um rascunho: revise antes de aprovar qualquer treino."
-                    ),
-                    link=f"/actions/{proposal.id}",
+                    notification_type=notification_type,
+                    dedupe_key=dedupe_key,
+                    title=title,
+                    body=body,
+                    link=link,
                 )
             )
             finished = await uow.jobs.mark_succeeded(job.id, self._worker_id, datetime.now(UTC))
@@ -343,6 +372,196 @@ class Worker:
             return await self._mark_write_terminal(
                 job, proposal_id, binding_id, "GARMIN_PUBLISH_INTERNAL"
             )
+
+    async def _run_garmin_upsert(self, job: Job) -> bool:
+        """Create/update one Garmin template and move its single calendar binding."""
+
+        if (
+            not self._garmin_write_enabled
+            or self._garmin_writer is None
+            or self._uow_factory is None
+            or job.user_id is None
+        ):
+            return await self._finish_failure(job, "GARMIN_WRITE_DISABLED", retryable=False)
+        try:
+            workout_id = EntityId.parse(cast(str, job.payload["workout_id"]))
+            revision_id = EntityId.parse(cast(str, job.payload["revision_id"]))
+            binding_id = EntityId.parse(cast(str, job.payload["binding_id"]))
+            scheduled_date = date.fromisoformat(cast(str, job.payload["scheduled_date"]))
+            compiled = self._compiled_payload(job.payload)
+        except (KeyError, TypeError, ValueError):
+            return await self._finish_failure(job, "GARMIN_JOB_INVALID", retryable=False)
+
+        async with self._uow_factory() as uow:
+            workout = await uow.workouts.get(job.user_id, workout_id)
+            binding = await uow.external_workout_bindings.get(job.user_id, binding_id)
+        if workout is None or binding is None or workout.current_revision_id != revision_id:
+            return await self._finish_failure(job, "GARMIN_JOB_STALE", retryable=False)
+
+        try:
+            external_id = binding.external_workout_id
+            if external_id is None:
+                found = await self._garmin_writer.find_workout_by_source_hash(
+                    job.user_id, compiled.source_revision_hash
+                )
+                if found is None:
+                    try:
+                        found = await self._garmin_writer.create_workout(job.user_id, compiled)
+                    except GarminProviderError as exc:
+                        if exc.outcome_ambiguous:
+                            found = await self._garmin_writer.find_workout_by_source_hash(
+                                job.user_id, compiled.source_revision_hash
+                            )
+                            if found is None:
+                                return await self._finish_upsert_failure(
+                                    job, binding_id, exc, ambiguous=True
+                                )
+                        else:
+                            return await self._finish_upsert_failure(job, binding_id, exc)
+                external_id = found.external_workout_id
+            elif binding.compiled_hash != compiled.compiled_hash:
+                updated = None
+                try:
+                    updated = await self._garmin_writer.update_workout(
+                        job.user_id, external_id, compiled
+                    )
+                except GarminProviderError as exc:
+                    if exc.outcome_ambiguous:
+                        updated = await self._garmin_writer.find_workout_by_source_hash(
+                            job.user_id, compiled.source_revision_hash
+                        )
+                        if updated is None or updated.external_workout_id != external_id:
+                            return await self._finish_upsert_failure(
+                                job, binding_id, exc, ambiguous=True
+                            )
+                    else:
+                        return await self._finish_upsert_failure(job, binding_id, exc)
+                if updated is None:
+                    return await self._finish_failure(
+                        job, "GARMIN_UPDATE_UNCONFIRMED", retryable=False
+                    )
+                external_id = updated.external_workout_id
+
+            if (
+                binding.scheduled_date is not None
+                and binding.scheduled_date != scheduled_date
+                and binding.external_schedule_id is not None
+            ):
+                try:
+                    await self._garmin_writer.unschedule_workout(
+                        job.user_id, binding.external_schedule_id
+                    )
+                except GarminProviderError as exc:
+                    return await self._finish_upsert_failure(job, binding_id, exc)
+
+            schedule = await self._garmin_writer.find_schedule(
+                job.user_id, external_id, scheduled_date
+            )
+            if schedule is None:
+                try:
+                    schedule = await self._garmin_writer.schedule_workout(
+                        job.user_id, external_id, scheduled_date
+                    )
+                except GarminProviderError as exc:
+                    if exc.outcome_ambiguous:
+                        schedule = await self._garmin_writer.find_schedule(
+                            job.user_id, external_id, scheduled_date
+                        )
+                        if schedule is None:
+                            return await self._finish_upsert_failure(
+                                job, binding_id, exc, ambiguous=True
+                            )
+                    else:
+                        return await self._finish_upsert_failure(job, binding_id, exc)
+
+            now = datetime.now(UTC)
+            async with self._uow_factory() as uow:
+                stored_binding = await uow.external_workout_bindings.get(job.user_id, binding_id)
+                stored_workout = await uow.workouts.get(job.user_id, workout_id)
+                if stored_binding is None or stored_workout is None:
+                    raise ResourceNotFoundError("garmin_upsert_context")
+                if stored_workout.current_revision_id != revision_id:
+                    raise DomainError("GARMIN_JOB_STALE", "A newer workout revision exists.")
+                binding_version = stored_binding.version
+                workout_version = stored_workout.version
+                stored_binding.revision_id = revision_id
+                stored_binding.compiled_hash = compiled.compiled_hash
+                stored_binding.external_workout_id = external_id
+                stored_binding.external_schedule_id = schedule.external_schedule_id
+                stored_binding.scheduled_date = scheduled_date
+                stored_binding.status = ExternalWorkoutBindingStatus.SCHEDULED
+                stored_binding.last_error = None
+                stored_binding.updated_at = now
+                stored_binding.version += 1
+                stored_workout.status = PlannedWorkoutStatus.PUBLISHED
+                stored_workout.updated_at = now
+                stored_workout.version += 1
+                await uow.external_workout_bindings.update(
+                    stored_binding, expected_version=binding_version
+                )
+                await uow.workouts.update(stored_workout, expected_version=workout_version)
+                finished = await uow.jobs.mark_succeeded(job.id, self._worker_id, now)
+                await uow.commit()
+            return finished
+        except GarminProviderError as exc:
+            return await self._finish_upsert_failure(job, binding_id, exc)
+        except DomainError as exc:
+            return await self._finish_failure(job, exc.code, retryable=False)
+        except Exception:
+            logger.exception("garmin_upsert_internal_failure", extra={"job_id": str(job.id)})
+            return await self._finish_failure(job, "GARMIN_UPSERT_INTERNAL", retryable=False)
+
+    async def _finish_upsert_failure(
+        self,
+        job: Job,
+        binding_id: EntityId,
+        error: GarminProviderError,
+        *,
+        ambiguous: bool = False,
+    ) -> bool:
+        if self._uow_factory is None or job.user_id is None:
+            return False
+        now = datetime.now(UTC)
+        details: JsonObject = {
+            "code": error.category.value,
+            "retryable": bool(error.retryable and not ambiguous),
+            "outcome_ambiguous": ambiguous,
+        }
+        async with self._uow_factory() as uow:
+            binding = await uow.external_workout_bindings.get(job.user_id, binding_id)
+            if binding is not None:
+                version = binding.version
+                binding.status = (
+                    ExternalWorkoutBindingStatus.NEEDS_RECONCILIATION
+                    if ambiguous
+                    else ExternalWorkoutBindingStatus.FAILED
+                )
+                binding.last_error = details
+                binding.updated_at = now
+                binding.version += 1
+                await uow.external_workout_bindings.update(binding, expected_version=version)
+            if ambiguous:
+                finished = await uow.jobs.mark_needs_reconciliation(
+                    job.id, self._worker_id, now, error=details
+                )
+            else:
+                retry_at = (
+                    now
+                    + timedelta(
+                        seconds=error.retry_after_seconds or min(3600, (2**job.attempts) * 30)
+                    )
+                    if error.retryable and job.attempts < job.max_attempts
+                    else None
+                )
+                finished = await uow.jobs.mark_failed(
+                    job.id,
+                    self._worker_id,
+                    now,
+                    error=details,
+                    retry_at=retry_at,
+                )
+            await uow.commit()
+        return finished
 
     async def _run_garmin_schedule(self, job: Job) -> bool:
         if not self._garmin_write_enabled or self._garmin_writer is None:
@@ -680,6 +899,7 @@ async def run_worker() -> None:
             garmin_write_enabled=settings.garmin_write_enabled,
             activity_data=services.activity_data,
             automation=services.automation,
+            coach_commands=services.coach_commands,
             planning=services.planning,
             privacy=services.privacy,
         ).run(stop_event)

@@ -2,6 +2,12 @@
 
 A estratégia mede correção de domínio, segurança de efeitos externos e comportamento do plugin. Cobertura numérica isolada não substitui gates por risco.
 
+Na P13, os gates centrais são: catálogo MCP com exatamente oito tools e scope
+`coach`; save/generate sem registros de proposta; publish repetido sem duplicar;
+edição atualizando o mesmo ID Garmin; mudança de data rescheduling; Skills sem
+protocolo antigo; e PWA com um único comando de save/publicação. Os 42 casos P13
+cobrem seis categorias por Skill; datasets P06/P08/P10 ficam históricos.
+
 ## 1. Camadas de teste
 
 ### 1.1 Unitários
@@ -365,7 +371,7 @@ Evals com host real e instalação completa podem ser nightly/manual conforme di
 
 A release é bloqueada se houver:
 
-- possível bypass de confirmação;
+- comando ambíguo executado sem identificação suficiente;
 - duplicação de efeito externo;
 - segredo/PII em log ou resultado;
 - tool de escrita sem scope/annotation/owner check;

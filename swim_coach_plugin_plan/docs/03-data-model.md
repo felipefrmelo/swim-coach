@@ -2,7 +2,13 @@
 
 ## 1. Fonte de verdade e convenções
 
-O PostgreSQL guarda todo estado canônico. ChatGPT/Codex não são repositório de conversas do produto. O backend persiste apenas fatos de domínio, propostas, aprovações e telemetria sanitizada de ferramentas.
+O PostgreSQL guarda todo estado canônico. ChatGPT/Codex não são repositório de conversas do produto. O backend persiste fatos de domínio e telemetria sanitizada de ferramentas.
+
+Na P13, comandos novos não criam `ActionProposal`, `ActionApproval` nem
+`ActionExecution`. Essas tabelas são legado de transição. Revisões imutáveis,
+jobs, audit/outbox e `ExternalWorkoutBinding` continuam ativos. Há um binding
+Garmin estável por treino; editar troca sua revisão/hash compilado sem criar um
+novo treino externo.
 
 ## 2. Diagrama principal
 

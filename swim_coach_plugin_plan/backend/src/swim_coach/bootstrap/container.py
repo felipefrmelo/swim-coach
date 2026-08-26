@@ -10,10 +10,12 @@ from swim_coach.application.ports.garmin import GarminWorkoutProvider
 from swim_coach.application.services import (
     ActivityDataService,
     AutomationService,
+    CoachCommandService,
     ContextService,
     GarminConnectionService,
     GarminPublishService,
     GarminSyncService,
+    GarminUpsertService,
     IdentityService,
     McpReadService,
     McpWriteService,
@@ -48,11 +50,13 @@ class AppServices:
     garmin_connection: GarminConnectionService | None
     garmin_sync: GarminSyncService | None
     garmin_publish: GarminPublishService
+    garmin_upsert: GarminUpsertService
     garmin_writer: GarminWorkoutProvider | None
     workouts: WorkoutService
     activity_data: ActivityDataService
     mcp_read: McpReadService
     mcp_write: McpWriteService | None
+    coach_commands: CoachCommandService
     planning: PlanningService | None
     automation: AutomationService | None
     artifact_storage: FilesystemObjectStorage
@@ -135,11 +139,11 @@ def build_services(settings: Settings, database: Database | None = None) -> AppS
         uow_factory,
         write_enabled=settings.garmin_write_enabled,
         allow_fake_device=settings.garmin_write_mode == "fake",
-        canary_title_prefix=(
-            settings.garmin_write_canary_title_prefix
-            if settings.garmin_write_mode == "live" and settings.garmin_write_canary_only
-            else None
-        ),
+    )
+    garmin_upsert = GarminUpsertService(
+        uow_factory,
+        write_enabled=settings.garmin_write_enabled,
+        allow_fake_device=settings.garmin_write_mode == "fake",
     )
     mcp_read = McpReadService(
         uow_factory=uow_factory,
@@ -162,6 +166,12 @@ def build_services(settings: Settings, database: Database | None = None) -> AppS
         if settings.automation_enabled
         else None
     )
+    coach_commands = CoachCommandService(
+        uow_factory=uow_factory,
+        workouts=workouts,
+        garmin_upsert=garmin_upsert,
+        planning=planning,
+    )
     return AppServices(
         database=database,
         uow_factory=uow_factory,
@@ -172,6 +182,7 @@ def build_services(settings: Settings, database: Database | None = None) -> AppS
         garmin_connection=garmin_connection,
         garmin_sync=garmin_sync,
         garmin_publish=garmin_publish,
+        garmin_upsert=garmin_upsert,
         garmin_writer=garmin_writer,
         workouts=workouts,
         activity_data=activity_data,
@@ -192,4 +203,5 @@ def build_services(settings: Settings, database: Database | None = None) -> AppS
             if settings.mcp_write_enabled
             else None
         ),
+        coach_commands=coach_commands,
     )

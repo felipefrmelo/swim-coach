@@ -38,7 +38,13 @@ async def protected_resource_metadata() -> ProtectedResourceMetadata:
     return ProtectedResourceMetadata(
         resource=str(settings.oauth_resource).rstrip("/"),
         authorization_servers=[str(settings.oauth_issuer).rstrip("/")],
-        scopes_supported=list(
-            (*MCP_READ_SCOPES, *MCP_WRITE_SCOPES) if settings.mcp_write_enabled else MCP_READ_SCOPES
+        scopes_supported=(
+            ["coach"]
+            if settings.mcp_v2_enabled and settings.mcp_write_enabled
+            else list(
+                (*MCP_READ_SCOPES, *MCP_WRITE_SCOPES)
+                if settings.mcp_write_enabled
+                else MCP_READ_SCOPES
+            )
         ),
     )

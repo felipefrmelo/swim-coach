@@ -1,0 +1,71 @@
+{
+  "schema_version": "1.0",
+  "plugin": "swim-coach",
+  "version": "2.0.0+codex.20260826113352",
+  "base_version": "2.0.0",
+  "mode": "chatgpt-first-direct-commands",
+  "status": "release_candidate",
+  "created_at": "2026-08-26T08:33:52-03:00",
+  "registered_app": "plugin_asdk_app_6a7b7fbeceec819196c168888a9494b6",
+  "oauth_scopes": ["coach"],
+  "tools": [
+    "get_coach_context",
+    "get_workouts",
+    "get_swims",
+    "save_workout",
+    "publish_workout",
+    "generate_week",
+    "sync_garmin",
+    "save_feedback"
+  ],
+  "skills": [
+    "review-latest-swim",
+    "goal-progress",
+    "diagnose-sync",
+    "adapt-workout",
+    "publish-to-garmin",
+    "post-swim-checkin",
+    "plan-swim-week"
+  ],
+  "hashes": {
+    "plugins/swim-coach/.codex-plugin/plugin.json": "c4f3ffdfe5ec418a3ab330d56815ee71ed1bd42a1fd0fd50608e8cf83090c29c",
+    "plugins/swim-coach/.app.json": "c9a2762870f08690de4f94978addbedb2e05ec35215823d4773093c49909a7b9",
+    "plugins/swim-coach/skills/adapt-workout/SKILL.md": "a0d85e0c08925c32bd1904328d6009395093ffdcd1ca7707336fd3e7865d842e",
+    "plugins/swim-coach/skills/diagnose-sync/SKILL.md": "4b71aa8237d6cbc0dc2e4905a7de67537db50f974029a306f146ab1e527d22e4",
+    "plugins/swim-coach/skills/goal-progress/SKILL.md": "661ab8bd35ad31309a525943e574d18d2c40e54a8c688b6489f3abd31edab36e",
+    "plugins/swim-coach/skills/plan-swim-week/SKILL.md": "d482aa13c726f067a0bc8257e60069769ac32a4de3828fe19e1b2f1e3bd34d98",
+    "plugins/swim-coach/skills/post-swim-checkin/SKILL.md": "dd2407a9cfe41b77e1bfb9cabd07f4a7280cbb8a93b4aaa1e9ace44a3e761511",
+    "plugins/swim-coach/skills/publish-to-garmin/SKILL.md": "1b16cb3c4edd8e723f0cbd9309f63d2cfd061289ef42388bb17620c932142eae",
+    "plugins/swim-coach/skills/review-latest-swim/SKILL.md": "623c5c773a20709b5f3cd90ccedea01214c028bc66fc3b16898e56e681c082e6",
+    "contracts/mcp-tools.yaml": "14bc367765110f5879b18e99f19d46edc03f934990510ef2fdd12d73b411f895",
+    "contracts/oauth-scopes.md": "3f63e8aef7d1559480e28303a3d2f8096317ddff1351c109a167251151ca50f7",
+    "contracts/capability-release-matrix.yaml": "f7e5249cd3933ed8e770b582b6c04ce078defa1fefa38b5e4a309d962d2dff96",
+    "contracts/openapi-skeleton.yaml": "e1927fb17bc30dd84c250fd176999de8346bdb2bc6a1264c21dae95eab9892a8"
+  },
+  "verification": {
+    "skill_validation": 7,
+    "p13_evals": 42,
+    "focused_contract_unit_tests": 19,
+    "p13_postgresql_integration_tests": 2,
+    "web_tests": 4,
+    "browser_e2e_tests": 9,
+    "full_check": "130-python-and-4-web-passed",
+    "build": "web-and-4-compose-images-passed",
+    "dependency_scan": "passed-no-known-vulnerabilities",
+    "secret_scan": "passed-no-leaks",
+    "sbom": "generated",
+    "image_scan": "passed-zero-high-critical-after-no-cache-rebuild",
+    "production_smoke": "pending"
+  },
+  "personal_install": {
+    "marketplace": "personal",
+    "version": "2.0.0+codex.20260826113352",
+    "validation": "passed",
+    "enabled": true
+  },
+  "pending_gates": [
+    "production deployment",
+    "Auth0 coach permission and ChatGPT connector reconnect",
+    "fresh-conversation host smoke"
+  ]
+}

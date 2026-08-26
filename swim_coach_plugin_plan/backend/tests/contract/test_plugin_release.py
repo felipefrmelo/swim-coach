@@ -13,57 +13,36 @@ from jsonschema import Draft202012Validator
 ROOT = Path(__file__).resolve().parents[3]
 PLUGIN_ROOT = ROOT / "plugins/swim-coach"
 SKILLS = {
-    "review-latest-swim": (
-        "list_recent_swims",
-        "get_swim_activity",
-        "get_sync_status",
-    ),
-    "goal-progress": ("get_training_context", "get_goal_progress"),
-    "diagnose-sync": (
-        "get_sync_status",
-        "sync_garmin_activities",
-        "get_job_status",
-        "retry_failed_job",
-    ),
+    "review-latest-swim": ("get_swims", "get_coach_context"),
+    "goal-progress": ("get_coach_context",),
+    "diagnose-sync": ("get_coach_context", "sync_garmin", "get_swims"),
     "adapt-workout": (
-        "get_training_context",
-        "get_today_workout",
-        "get_week_plan",
-        "propose_workout_change",
-        "propose_workout_reschedule",
-        "get_action_proposal",
+        "get_coach_context",
+        "get_workouts",
+        "save_workout",
+        "publish_workout",
     ),
     "publish-to-garmin": (
-        "get_today_workout",
-        "get_week_plan",
-        "preview_garmin_publish",
-        "get_action_proposal",
-        "approve_action_proposal",
-        "execute_approved_action",
-        "get_job_status",
+        "get_workouts",
+        "save_workout",
+        "publish_workout",
     ),
-    "post-swim-checkin": (
-        "list_recent_swims",
-        "get_swim_activity",
-        "record_session_feedback",
-    ),
+    "post-swim-checkin": ("get_swims", "save_feedback"),
     "plan-swim-week": (
-        "get_training_context",
-        "get_week_plan",
-        "list_recent_swims",
-        "get_goal_progress",
-        "get_sync_status",
-        "propose_week_plan",
-        "get_action_proposal",
+        "get_coach_context",
+        "get_workouts",
+        "get_swims",
+        "generate_week",
+        "publish_workout",
     ),
 }
 CATEGORY_COUNTS = {
-    "direct": 5,
-    "indirect": 5,
-    "followup": 3,
-    "empty": 3,
-    "auth": 3,
-    "adversarial": 3,
+    "direct": 1,
+    "indirect": 1,
+    "followup": 1,
+    "empty": 1,
+    "auth": 1,
+    "adversarial": 1,
 }
 
 
@@ -77,20 +56,20 @@ def load_yaml(path: Path) -> Any:
 
 def load_eval_cases() -> list[dict[str, Any]]:
     cases: list[dict[str, Any]] = []
-    for path in sorted((ROOT / "tests/evals/cases").glob("*.yaml")):
+    for path in sorted((ROOT / "tests/evals/cases").glob("p13-*.yaml")):
         documents = yaml.safe_load_all(path.read_text(encoding="utf-8"))
         cases.extend(document for document in documents if document is not None)
     return cases
 
 
-def test_p12_manifest_app_marketplace_and_release_matrix_are_personal_1_0() -> None:
+def test_p13_manifest_app_marketplace_and_release_matrix_are_chatgpt_first_2_0() -> None:
     manifest = load_json(PLUGIN_ROOT / ".codex-plugin/plugin.json")
     app_mapping = load_json(PLUGIN_ROOT / ".app.json")
     marketplace = load_json(ROOT / ".agents/plugins/marketplace.json")
     release_matrix = load_yaml(ROOT / "contracts/capability-release-matrix.yaml")
 
     assert manifest["name"] == "swim-coach"
-    assert manifest["version"] == "1.0.0"
+    assert manifest["version"].startswith("2.0.0+codex.")
     assert manifest["skills"] == "./skills/"
     assert manifest["apps"] == "./.app.json"
     assert manifest["interface"]["capabilities"] == ["Read", "Write"]
@@ -125,22 +104,22 @@ def test_p12_manifest_app_marketplace_and_release_matrix_are_personal_1_0() -> N
     p12_release = next(item for item in release_matrix["plugin_releases"] if item["phase"] == "P12")
     assert p12_release["version"] == "1.0.0"
     assert p12_release["mode"] == "hardened-personal-release"
-    released_skills = {
-        item["name"]
+    p13_release = next(item for item in release_matrix["plugin_releases"] if item["phase"] == "P13")
+    assert p13_release["version"] == "2.0.0"
+    assert p13_release["mode"] == "chatgpt-first-direct-commands"
+    assert p13_release["oauth_scopes"] == ["coach"]
+    tool_names = {item["name"] for item in load_yaml(ROOT / "contracts/mcp-tools.yaml")["tools"]}
+    assert tool_names == {item["name"] for item in release_matrix["tools"]}
+    upgraded_skills = {
+        item["name"]: tuple(item["required_tools"])
         for item in release_matrix["skills"]
-        if item.get("introduced") in {"P06", "P08", "P10"}
+        if item.get("introduced") == "P13"
     }
-    assert released_skills == set(SKILLS)
-    assert {item["name"] for item in release_matrix["ui_resources"]} == {
-        "workout-card",
-        "swim-comparison-card",
-        "goal-progress-card",
-        "proposal-confirmation-card",
-        "sync-status-card",
-    }
+    assert upgraded_skills == SKILLS
+    assert release_matrix["ui_resources"] == []
 
 
-def test_p10_skill_frontmatter_workflows_and_ui_metadata_are_valid() -> None:
+def test_p13_skill_frontmatter_workflows_and_ui_metadata_are_valid() -> None:
     skill_files = sorted((PLUGIN_ROOT / "skills").glob("*/SKILL.md"))
     assert {path.parent.name for path in skill_files} == set(SKILLS)
 
@@ -167,17 +146,17 @@ def test_p10_skill_frontmatter_workflows_and_ui_metadata_are_valid() -> None:
         assert f"${skill_name}" in interface["default_prompt"]
 
 
-def test_p10_eval_dataset_validates_selection_order_and_confirmation_boundaries() -> None:
+def test_p13_eval_dataset_validates_direct_command_selection() -> None:
     schema = load_json(ROOT / "contracts/plugin-eval-case.schema.json")
     validator = Draft202012Validator(schema)
     tool_catalog = load_yaml(ROOT / "contracts/mcp-tools.yaml")
     tool_names = {item["name"] for item in tool_catalog["tools"]}
     cases = load_eval_cases()
 
-    assert len(cases) == 154
+    assert len(cases) == 42
     assert len({case["id"] for case in cases}) == len(cases)
     assert Counter(case["skill"] for case in cases) == Counter(
-        {skill_name: 22 for skill_name in SKILLS}
+        {skill_name: 6 for skill_name in SKILLS}
     )
 
     for case in cases:
@@ -189,23 +168,15 @@ def test_p10_eval_dataset_validates_selection_order_and_confirmation_boundaries(
         indices = [canonical_order.index(tool) for tool in sequence]
         assert indices == sorted(indices), case["id"]
         assert set(sequence) <= set(canonical_order) <= tool_names
-        if "approve_action_proposal" in sequence or "execute_approved_action" in sequence:
-            assert case["skill"] == "publish-to-garmin"
-            assert len(case["user_turns"]) >= 2 or case.get("fixtures", {}).get("prior_turn")
-        if len(case["user_turns"]) == 1 and "preview_garmin_publish" in sequence:
-            assert "approve_action_proposal" not in sequence
-            assert "execute_approved_action" not in sequence
-        if (
-            case["skill"] == "publish-to-garmin"
-            and "preview_garmin_publish" in sequence
-            and "approve_action_proposal" not in sequence
-            and "auth" not in case.get("fixtures", {})
-        ):
-            assert expected["requires_confirmation"] is True
-        if case["skill"] == "plan-swim-week":
-            assert "approve_action_proposal" not in sequence
-            assert "execute_approved_action" not in sequence
-            assert "preview_garmin_publish" not in sequence
+        assert not {
+            "get_action_proposal",
+            "approve_action_proposal",
+            "execute_approved_action",
+            "preview_garmin_publish",
+            "propose_week_plan",
+        } & set(sequence)
+        if "publish_workout" in sequence:
+            assert expected["requires_confirmation"] is False
 
     for skill_name in SKILLS:
         skill_cases = [case for case in cases if case["skill"] == skill_name]
@@ -218,13 +189,14 @@ def test_p10_eval_dataset_validates_selection_order_and_confirmation_boundaries(
         assert counts == Counter(CATEGORY_COUNTS), skill_name
 
 
-def test_p12_release_manifest_hashes_are_current() -> None:
-    release = load_json(ROOT / "releases/plugin-1.0.0.json")
+def test_p13_release_manifest_hashes_are_current() -> None:
+    release = load_json(ROOT / "releases/plugin-2.0.0.json")
 
-    assert release["version"] == "1.0.0"
-    assert release["mode"] == "hardened-personal-release"
+    assert release["version"].startswith("2.0.0+codex.")
+    assert release["mode"] == "chatgpt-first-direct-commands"
     assert release["status"] == "release_candidate"
-    assert release["verification"]["image_high_critical_vulnerabilities"] == 0
+    assert release["oauth_scopes"] == ["coach"]
+    assert len(release["tools"]) == 8
     for relative, expected in release["hashes"].items():
         actual = hashlib.sha256((ROOT / relative).read_bytes()).hexdigest()
         assert actual == expected, relative

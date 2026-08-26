@@ -29,6 +29,7 @@ from swim_coach.application.queries.get_capabilities import (
 from swim_coach.application.queries.get_capabilities import (
     get_capabilities as p00_capabilities,
 )
+from swim_coach.application.services.coach_commands import CoachCommandService
 from swim_coach.application.services.mcp_read import (
     MCP_READ_TOOL_SCOPES,
     McpPrincipal,
@@ -103,10 +104,12 @@ def create_mcp_server(
     *,
     read_service: McpReadService | None = None,
     write_service: McpWriteService | None = None,
+    coach_service: CoachCommandService | None = None,
     token_verifier: TokenVerifier | None = None,
     oauth_issuer: str | None = None,
     oauth_resource: str | None = None,
     ui_enabled: bool = False,
+    v2_enabled: bool = False,
     pwa_base_url: str = "http://127.0.0.1:14173",
     allowed_hosts: list[str] | None = None,
     allowed_origins: list[str] | None = None,
@@ -127,7 +130,12 @@ def create_mcp_server(
     write_enabled = bool(oauth_enabled and write_service)
     ui_enabled = bool(oauth_enabled and write_enabled and ui_enabled)
     instructions = (
-        "Swim Coach exposes authenticated, user-scoped swimming training data. "
+        "Swim Coach is a personal, ChatGPT-first swimming coach. Use the eight "
+        "intent-level tools directly. Local saves need no extra confirmation. Calling "
+        "publish_workout means the user asked to send that workout to Garmin; do not add "
+        "proposal, hash, approval, execution, revision, or idempotency ceremony."
+        if v2_enabled and oauth_enabled
+        else "Swim Coach exposes authenticated, user-scoped swimming training data. "
         + (
             "Controlled write tools are enabled. Preview never approves or executes. Approval "
             "must contain the exact persisted hash after a user-visible review, and execution "
@@ -310,6 +318,21 @@ def create_mcp_server(
                     ),
                 )
             raise ToolError(_error(error.code, error.message, request_id, error.details)) from error
+
+    if v2_enabled:
+        if write_service is None or coach_service is None:
+            raise RuntimeError("MCP v2 requires coach and write services")
+        _register_v2_tools(
+            server,
+            read_service=read_service,
+            write_service=write_service,
+            coach_service=coach_service,
+            execute=execute,
+            execute_write=execute_write,
+        )
+        _apply_v2_tool_security_schemes(server)
+        _harden_tool_schemas(server)
+        return server
 
     @server.tool(
         name="get_capabilities",
@@ -1272,6 +1295,411 @@ def _result_causation(result: McpResult) -> EntityId | None:
             except ValueError:
                 continue
     return None
+
+
+def _register_v2_tools(
+    server: SwimCoachFastMCP,
+    *,
+    read_service: McpReadService,
+    write_service: McpWriteService,
+    coach_service: CoachCommandService,
+    execute: Callable[..., Awaitable[McpResult]],
+    execute_write: Callable[..., Awaitable[McpResult]],
+) -> None:
+    """Register the complete public v2 surface: eight intent-level tools."""
+
+    scope = frozenset({"coach"})
+
+    @server.tool(
+        name="get_coach_context",
+        title="Get swim coach context",
+        description=(
+            "Return profile, goal, pool, availability, Garmin health, progress, and summary."
+        ),
+        annotations=READ_ONLY,
+        structured_output=True,
+    )
+    async def get_coach_context(
+        ctx: Context[Any, Any, Any], include_constraints: bool = True
+    ) -> McpResult:
+        args = {"include_constraints": include_constraints}
+
+        async def query(principal: McpPrincipal, request_id: str) -> McpResult:
+            training = await read_service.get_training_context(
+                principal, request_id, include_constraints=include_constraints
+            )
+            sync = await read_service.get_sync_status(principal, request_id)
+            try:
+                progress = await read_service.get_goal_progress(principal, request_id, goal_id=None)
+                progress_data: dict[str, Any] | None = progress.data
+            except DomainError as error:
+                if error.code != "RESOURCE_NOT_FOUND":
+                    raise
+                progress_data = None
+            return McpResult(
+                request_id=request_id,
+                status="OK",
+                data={
+                    "training": training.data,
+                    "goal_progress": progress_data,
+                    "garmin": sync.data,
+                    "capabilities": {
+                        "save_workout": True,
+                        "generate_week": coach_service.planning_enabled,
+                        "publish_workout": coach_service.garmin_write_enabled,
+                    },
+                },
+                warnings=[*training.warnings, *sync.warnings],
+                human_summary=(
+                    f"{training.human_summary} Garmin is "
+                    f"{sync.data.get('connection_status', 'unknown')}."
+                ),
+            )
+
+        return await execute("get_coach_context", ctx, scope, args, query)
+
+    @server.tool(
+        name="get_workouts",
+        title="Get swim workouts",
+        description="Return one workout or workouts for a date or week with schedule and steps.",
+        annotations=READ_ONLY,
+        structured_output=True,
+    )
+    async def get_workouts(
+        ctx: Context[Any, Any, Any],
+        workout_id: UUID | None = None,
+        date: LocalDate | None = None,
+        week_start: LocalDate | None = None,
+        include_steps: bool = True,
+    ) -> McpResult:
+        args = {
+            "workout_id": str(workout_id) if workout_id else None,
+            "date": date.isoformat() if date else None,
+            "week_start": week_start.isoformat() if week_start else None,
+            "include_steps": include_steps,
+        }
+        return await execute(
+            "get_workouts",
+            ctx,
+            scope,
+            args,
+            lambda principal, request_id: read_service.get_workouts(
+                principal,
+                request_id,
+                workout_id=EntityId(workout_id) if workout_id else None,
+                target_date=date,
+                week_start=week_start,
+                include_steps=include_steps,
+            ),
+        )
+
+    @server.tool(
+        name="get_swims",
+        title="Get pool swims",
+        description="Return one analyzed pool swim or a concise recent list.",
+        annotations=READ_ONLY,
+        structured_output=True,
+    )
+    async def get_swims(
+        ctx: Context[Any, Any, Any],
+        activity_id: UUID | None = None,
+        limit: Annotated[int, Field(ge=1, le=20)] = 5,
+        include_intervals: bool = True,
+    ) -> McpResult:
+        args = {
+            "activity_id": str(activity_id) if activity_id else None,
+            "limit": limit,
+            "include_intervals": include_intervals,
+        }
+
+        async def query(principal: McpPrincipal, request_id: str) -> McpResult:
+            if activity_id is not None:
+                return await read_service.get_swim_activity(
+                    principal,
+                    request_id,
+                    activity_id=EntityId(activity_id),
+                    include_intervals=include_intervals,
+                    include_lengths=False,
+                    max_intervals=50,
+                )
+            return await read_service.list_recent_swims(
+                principal,
+                request_id,
+                limit=limit,
+                before=None,
+                include_analysis_summary=True,
+            )
+
+        return await execute("get_swims", ctx, scope, args, query)
+
+    @server.tool(
+        name="save_workout",
+        title="Save and schedule a swim workout",
+        description=(
+            "Create or edit a canonical pool workout and optionally schedule it locally in "
+            "one call. Revisions and concurrency are managed by the server."
+        ),
+        annotations=LOCAL_WRITE,
+        structured_output=True,
+    )
+    async def save_workout(
+        ctx: Context[Any, Any, Any],
+        definition: CanonicalWorkout,
+        workout_id: UUID | None = None,
+        pool_id: UUID | None = None,
+        scheduled_date: LocalDate | None = None,
+        scheduled_start_time: time | None = None,
+        change_reason: Annotated[str | None, Field(max_length=500)] = None,
+    ) -> McpResult:
+        args = {
+            "workout_id": str(workout_id) if workout_id else None,
+            "pool_id": str(pool_id) if pool_id else None,
+            "scheduled_date": scheduled_date.isoformat() if scheduled_date else None,
+            "scheduled_start_time": scheduled_start_time.isoformat()
+            if scheduled_start_time
+            else None,
+            "definition": definition.model_dump(mode="json"),
+            "change_reason": change_reason,
+        }
+
+        async def command(
+            principal: McpPrincipal, request_id: str, correlation_id: CorrelationId
+        ) -> McpResult:
+            detail = await coach_service.save_workout(
+                principal.user_id,
+                definition,
+                workout_id=EntityId(workout_id) if workout_id else None,
+                pool_id=EntityId(pool_id) if pool_id else None,
+                scheduled_date=scheduled_date,
+                scheduled_start_time=scheduled_start_time,
+                change_reason=change_reason,
+                correlation_id=correlation_id,
+            )
+            revision = detail.current_revision
+            return McpResult(
+                request_id=request_id,
+                status="OK",
+                data={
+                    "workout_id": str(detail.workout.id),
+                    "title": detail.workout.title,
+                    "status": detail.workout.status.value,
+                    "revision": revision.revision_number,
+                    "distance_m": revision.totals.distance_m,
+                    "scheduled_date": detail.schedule.scheduled_date.isoformat()
+                    if detail.schedule
+                    else None,
+                    "scheduled_start_time": detail.schedule.scheduled_start_time.isoformat(
+                        timespec="minutes"
+                    )
+                    if detail.schedule and detail.schedule.scheduled_start_time
+                    else None,
+                },
+                human_summary=f"Saved {detail.workout.title} locally.",
+            )
+
+        return await execute_write("save_workout", ctx, scope, args, command)
+
+    @server.tool(
+        name="publish_workout",
+        title="Publish a swim workout to Garmin",
+        description=(
+            "Create or update the Garmin workout and calendar date idempotently. "
+            "Use when the user asks to send or publish a workout."
+        ),
+        annotations=OPEN_WORLD_WRITE,
+        structured_output=True,
+    )
+    async def publish_workout(
+        ctx: Context[Any, Any, Any],
+        workout_id: UUID,
+        scheduled_date: LocalDate | None = None,
+        scheduled_start_time: time | None = None,
+        target_device_id: UUID | None = None,
+    ) -> McpResult:
+        args = {
+            "workout_id": str(workout_id),
+            "scheduled_date": scheduled_date.isoformat() if scheduled_date else None,
+            "scheduled_start_time": scheduled_start_time.isoformat()
+            if scheduled_start_time
+            else None,
+            "target_device_id": str(target_device_id) if target_device_id else None,
+        }
+
+        async def command(
+            principal: McpPrincipal, request_id: str, correlation_id: CorrelationId
+        ) -> McpResult:
+            result = await coach_service.publish_workout(
+                principal.user_id,
+                EntityId(workout_id),
+                scheduled_date=scheduled_date,
+                scheduled_start_time=scheduled_start_time,
+                device_id=EntityId(target_device_id) if target_device_id else None,
+                correlation_id=correlation_id,
+            )
+            return McpResult(
+                request_id=request_id,
+                status="OK",
+                data={
+                    "workout_id": str(result.workout_id),
+                    "revision": result.revision,
+                    "scheduled_date": result.scheduled_date,
+                    "status": result.status,
+                    "job_id": str(result.job_id) if result.job_id else None,
+                    "replayed": result.replayed,
+                },
+                human_summary=(
+                    "Garmin publication is queued."
+                    if result.job_id
+                    else "This workout is already current on Garmin."
+                ),
+            )
+
+        return await execute_write("publish_workout", ctx, scope, args, command)
+
+    @server.tool(
+        name="generate_week",
+        title="Generate and save a swim week",
+        description="Generate a deterministic week and save its sessions to the local calendar.",
+        annotations=LOCAL_WRITE,
+        structured_output=True,
+    )
+    async def generate_week(
+        ctx: Context[Any, Any, Any],
+        week_start: LocalDate,
+        session_count: Annotated[int | None, Field(ge=1, le=7)] = None,
+        max_session_duration_minutes: Annotated[int | None, Field(ge=20, le=120)] = None,
+        focus: Literal["BALANCED", "TECHNIQUE", "ENDURANCE", "GOAL_PACE"] = "BALANCED",
+        avoid_high_intensity: bool = False,
+    ) -> McpResult:
+        args = {
+            "week_start": week_start.isoformat(),
+            "session_count": session_count,
+            "max_session_duration_minutes": max_session_duration_minutes,
+            "focus": focus,
+            "avoid_high_intensity": avoid_high_intensity,
+        }
+
+        async def command(
+            principal: McpPrincipal, request_id: str, correlation_id: CorrelationId
+        ) -> McpResult:
+            result = await coach_service.generate_week(
+                principal.user_id,
+                actor_id=principal.subject,
+                week_start=week_start,
+                preferences=PlanningPreferences(
+                    session_count=session_count,
+                    max_session_duration_minutes=max_session_duration_minutes,
+                    focus=focus,
+                    avoid_high_intensity=avoid_high_intensity,
+                ),
+                correlation_id=correlation_id,
+            )
+            sessions = result.week.get("sessions", [])
+            return McpResult(
+                request_id=request_id,
+                status="OK",
+                data={
+                    "planning_run_id": str(result.planning_run_id),
+                    "workout_ids": [str(item) for item in result.workout_ids],
+                    "week_start": week_start.isoformat(),
+                    "session_count": len(result.workout_ids),
+                    "target_volume_m": result.week.get("target_volume_m"),
+                    "sessions": sessions,
+                    "warnings": result.week.get("warnings", []),
+                    "replayed": result.replayed,
+                },
+                human_summary=f"Saved {len(result.workout_ids)} workouts for the week.",
+            )
+
+        return await execute_write("generate_week", ctx, scope, args, command)
+
+    @server.tool(
+        name="sync_garmin",
+        title="Sync Garmin activities",
+        description="Queue an idempotent Garmin activity sync and return the job state.",
+        annotations=OPEN_WORLD_WRITE,
+        structured_output=True,
+    )
+    async def sync_garmin(
+        ctx: Context[Any, Any, Any],
+        from_date: LocalDate | None = None,
+        force: bool = False,
+    ) -> McpResult:
+        args = {"from_date": from_date.isoformat() if from_date else None, "force": force}
+
+        async def command(
+            principal: McpPrincipal, request_id: str, correlation_id: CorrelationId
+        ) -> McpResult:
+            del correlation_id
+            bucket = datetime.now().strftime("%Y%m%d%H")
+            return await write_service.sync_garmin_activities(
+                principal,
+                request_id,
+                from_date=from_date,
+                force=force,
+                idempotency_key=f"coach-sync:{bucket}:{from_date}:{force}",
+            )
+
+        return await execute_write("sync_garmin", ctx, scope, args, command)
+
+    @server.tool(
+        name="save_feedback",
+        title="Save post-swim feedback",
+        description="Store effort, technique, pain signal, and notes for a pool swim.",
+        annotations=LOCAL_WRITE,
+        structured_output=True,
+    )
+    async def save_feedback(
+        ctx: Context[Any, Any, Any],
+        activity_id: UUID,
+        rpe: Annotated[int, Field(ge=1, le=10)],
+        technique: str = "ok",
+        pain_present: bool = False,
+        pain_location: Annotated[str | None, Field(max_length=120)] = None,
+        pain_intensity: Annotated[int | None, Field(ge=1, le=10)] = None,
+        notes: Annotated[str | None, Field(max_length=2000)] = None,
+    ) -> McpResult:
+        args = {
+            "activity_id": str(activity_id),
+            "rpe": rpe,
+            "technique": technique,
+            "pain_present": pain_present,
+            "pain_location": pain_location,
+            "pain_intensity": pain_intensity,
+            "notes": notes,
+        }
+
+        async def command(
+            principal: McpPrincipal, request_id: str, correlation_id: CorrelationId
+        ) -> McpResult:
+            digest = hashlib.sha256(
+                json.dumps(args, sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest()
+            return await write_service.record_session_feedback(
+                principal,
+                request_id,
+                activity_id=EntityId(activity_id),
+                rpe=rpe,
+                technique=technique,
+                pain={
+                    "present": pain_present,
+                    "location": pain_location,
+                    "intensity": pain_intensity,
+                },
+                notes=notes,
+                idempotency_key=f"coach-feedback:{digest}",
+                correlation_id=correlation_id,
+            )
+
+        return await execute_write("save_feedback", ctx, scope, args, command)
+
+
+def _apply_v2_tool_security_schemes(server: SwimCoachFastMCP) -> None:
+    for tool in server._tool_manager._tools.values():
+        tool.meta = {
+            **(tool.meta or {}),
+            "securitySchemes": [{"type": "oauth2", "scopes": ["coach"]}],
+        }
 
 
 def _argument_causation(arguments: dict[str, Any]) -> EntityId | None:

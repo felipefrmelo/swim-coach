@@ -205,7 +205,7 @@ class McpReadService:
         local_date = (
             target_date or datetime.now(UTC).astimezone(self._timezone(me.user.timezone)).date()
         )
-        details = await self._workouts.list_workouts(principal.user_id)
+        details = list(await self._workouts.list_workouts(principal.user_id))
         detail = next(
             (
                 item
@@ -260,6 +260,49 @@ class McpReadService:
                 "sessions": [self._workout(item, False, True) for item in selected],
             },
             human_summary=f"Week has {len(selected)} scheduled swims totaling {total_distance} m.",
+        )
+
+    async def get_workouts(
+        self,
+        principal: McpPrincipal,
+        request_id: str,
+        *,
+        workout_id: EntityId | None,
+        target_date: date | None,
+        week_start: date | None,
+        include_steps: bool,
+    ) -> McpResult:
+        details = list(await self._workouts.list_workouts(principal.user_id))
+        if workout_id is not None:
+            details = [item for item in details if item.workout.id == workout_id]
+        elif target_date is not None:
+            details = [
+                item
+                for item in details
+                if item.schedule is not None and item.schedule.scheduled_date == target_date
+            ]
+        elif week_start is not None:
+            week_end = week_start + timedelta(days=6)
+            details = [
+                item
+                for item in details
+                if item.schedule is not None
+                and week_start <= item.schedule.scheduled_date <= week_end
+            ]
+        details.sort(
+            key=lambda item: (
+                item.schedule.scheduled_date if item.schedule else date.max,
+                item.workout.created_at,
+            )
+        )
+        items = [self._workout(item, include_steps, True) for item in details]
+        for item in items:
+            item.pop("content_hash", None)
+        return McpResult(
+            request_id=request_id,
+            status="OK" if items else "NOT_FOUND",
+            data={"items": items, "count": len(items)},
+            human_summary=f"Found {len(items)} matching swim workout(s).",
         )
 
     async def list_recent_swims(

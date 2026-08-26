@@ -58,7 +58,7 @@ async def test_proposal_approval_ambiguous_reconciliation_and_replay(
     settings = app_settings.model_copy(
         update={"garmin_write_enabled": True, "garmin_write_mode": "fake"}
     )
-    app = create_app(settings, database)
+    app = create_app(settings.model_copy(update={"mcp_v2_enabled": False}), database)
     transport = httpx.ASGITransport(app=app)
     async with app.router.lifespan_context(app):
         async with httpx.AsyncClient(transport=transport, base_url="http://localhost") as client:

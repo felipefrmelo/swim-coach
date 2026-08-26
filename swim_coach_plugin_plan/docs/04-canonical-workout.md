@@ -2,6 +2,11 @@
 
 O modelo interno não deve copiar o formato do Garmin. Ele representa o significado do treino e é compilado para cada provider.
 
+Na interface P13, `save_workout` recebe a definição completa e o servidor decide
+se cria ou acrescenta uma revisão, valida a piscina e agenda. O cliente não envia
+`expected_version`, hash de conteúdo, aprovação local ou chave de idempotência.
+Esses detalhes continuam internos para preservar histórico e consistência.
+
 ## 1. Exemplo canônico
 
 ```json

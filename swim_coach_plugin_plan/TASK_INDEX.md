@@ -2,7 +2,7 @@
 
 Gerado de `phases/pXX-*.md`. O arquivo da fase continua sendo a fonte de aceite, testes, evidências e gate.
 
-**Total:** 115 tasks.
+**Total:** 123 tasks.
 
 | Task | Fase | Título | Especificação |
 |---|---|---|---|
@@ -121,3 +121,11 @@ Gerado de `phases/pXX-*.md`. O arquivo da fase continua sendo a fonte de aceite,
 | `P12-T08` | P12 | Release 1.0 pessoal | [`phases/p12-production-hardening-release.md`](phases/p12-production-hardening-release.md) |
 | `P12-T09` | P12 | Documentação operacional | [`phases/p12-production-hardening-release.md`](phases/p12-production-hardening-release.md) |
 | `P12-T10` | P12 | Public readiness assessment | [`phases/p12-production-hardening-release.md`](phases/p12-production-hardening-release.md) |
+| `P13-T01` | P13 | Fixar ADR e contratos públicos v2 | [`phases/p13-chatgpt-first-simplification.md`](phases/p13-chatgpt-first-simplification.md) |
+| `P13-T02` | P13 | Implementar comandos diretos de treino | [`phases/p13-chatgpt-first-simplification.md`](phases/p13-chatgpt-first-simplification.md) |
+| `P13-T03` | P13 | Implementar Garmin upsert | [`phases/p13-chatgpt-first-simplification.md`](phases/p13-chatgpt-first-simplification.md) |
+| `P13-T04` | P13 | Publicar a superfície MCP de oito tools | [`phases/p13-chatgpt-first-simplification.md`](phases/p13-chatgpt-first-simplification.md) |
+| `P13-T05` | P13 | Simplificar REST e PWA | [`phases/p13-chatgpt-first-simplification.md`](phases/p13-chatgpt-first-simplification.md) |
+| `P13-T06` | P13 | Atualizar plugin, Skills e evals | [`phases/p13-chatgpt-first-simplification.md`](phases/p13-chatgpt-first-simplification.md) |
+| `P13-T07` | P13 | Isolar o legado e atualizar documentação | [`phases/p13-chatgpt-first-simplification.md`](phases/p13-chatgpt-first-simplification.md) |
+| `P13-T08` | P13 | Validar e implantar | [`phases/p13-chatgpt-first-simplification.md`](phases/p13-chatgpt-first-simplification.md) |

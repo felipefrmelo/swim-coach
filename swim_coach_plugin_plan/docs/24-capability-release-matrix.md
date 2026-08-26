@@ -12,8 +12,23 @@ Esta matriz impede que uma Skill seja empacotada antes de suas tools existirem e
 | P09 | `0.3.0` | UI opcional | MCP Apps para revisar/comparar/confirmar, sem dependência de UI |
 | P10 | `0.4.0` | planejamento | proposta semanal adaptativa e explicável |
 | P12 | `1.0.0-personal` | hardened | release pessoal operável, recuperável e auditável |
+| P13 | `2.0.0` | ChatGPT-first | oito comandos diretos, scope `coach`, Garmin upsert e site auxiliar |
 
 As versões são alvos. A implementação pode ajustar SemVer por ADR, mas não pode antecipar capacidade de risco.
+
+### P13 — superfície pública vigente
+
+- `get_coach_context`;
+- `get_workouts`;
+- `get_swims`;
+- `save_workout`;
+- `publish_workout`;
+- `generate_week`;
+- `sync_garmin`;
+- `save_feedback`.
+
+Todas usam `coach`. Tools P00–P10 permanecem somente como histórico/compatibilidade
+interna e não são anunciadas quando `SWIM_COACH_MCP_V2_ENABLED=true`.
 
 ## 2. Tools por fase
 

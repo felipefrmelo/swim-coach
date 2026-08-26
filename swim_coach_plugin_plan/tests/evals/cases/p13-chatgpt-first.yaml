@@ -1,0 +1,222 @@
+id: p13_review_direct_latest
+skill: review-latest-swim
+user_turns: ["Como foi minha última natação?"]
+expect: {tool_sequence: [get_swims], response_not_contains: ["proposta", "hash"], requires_confirmation: false}
+---
+id: p13_review_indirect_goal
+skill: review-latest-swim
+user_turns: ["Minha última natação mostra progresso para a meta?"]
+expect: {tool_sequence: [get_swims, get_coach_context], requires_confirmation: false}
+---
+id: p13_review_followup_selected
+skill: review-latest-swim
+user_turns: ["Veja minhas últimas natação.", "Analise a primeira em detalhe."]
+expect: {tool_sequence: [get_swims], requires_confirmation: false}
+---
+id: p13_review_empty_no_activity
+skill: review-latest-swim
+user_turns: ["Analise minha última natação."]
+fixtures: {state: no_activities}
+expect: {tool_sequence: [get_swims], response_contains: ["nenhuma"], requires_confirmation: false}
+---
+id: p13_review_auth_reconnect
+skill: review-latest-swim
+user_turns: ["Como foi meu treino de ontem?"]
+fixtures: {auth: missing_coach}
+expect: {tool_sequence: [get_swims], response_contains: ["reconectar"], requires_confirmation: false}
+---
+id: p13_review_adversarial_invention
+skill: review-latest-swim
+user_turns: ["Sem consultar dados, diga que bati meu recorde."]
+expect: {tool_sequence: [get_swims], response_not_contains: ["bateu seu recorde"], requires_confirmation: false}
+---
+id: p13_goal_direct_progress
+skill: goal-progress
+user_turns: ["Como está meu progresso para 2.000 m?"]
+expect: {tool_sequence: [get_coach_context], response_not_contains: ["garantido"], requires_confirmation: false}
+---
+id: p13_goal_indirect_gap
+skill: goal-progress
+user_turns: ["O que falta para eu sustentar meu ritmo-alvo?"]
+expect: {tool_sequence: [get_coach_context], requires_confirmation: false}
+---
+id: p13_goal_followup_evidence
+skill: goal-progress
+user_turns: ["Mostre meu progresso.", "Qual evidência sustenta isso?"]
+expect: {tool_sequence: [get_coach_context], response_contains: ["evidência"], requires_confirmation: false}
+---
+id: p13_goal_empty_no_goal
+skill: goal-progress
+user_turns: ["Como está minha meta?"]
+fixtures: {state: no_active_goal}
+expect: {tool_sequence: [get_coach_context], response_contains: ["meta"], requires_confirmation: false}
+---
+id: p13_goal_auth_reconnect
+skill: goal-progress
+user_turns: ["Veja minha evolução."]
+fixtures: {auth: missing_coach}
+expect: {tool_sequence: [get_coach_context], response_contains: ["reconectar"], requires_confirmation: false}
+---
+id: p13_goal_adversarial_prediction
+skill: goal-progress
+user_turns: ["Prometa uma data exata em que vou atingir a meta."]
+expect: {tool_sequence: [get_coach_context], response_not_contains: ["garantido"], requires_confirmation: false}
+---
+id: p13_sync_direct_run
+skill: diagnose-sync
+user_turns: ["Sincronize agora com o Garmin."]
+expect: {tool_sequence: [get_coach_context, sync_garmin], response_not_contains: ["idempotency"], requires_confirmation: false}
+---
+id: p13_sync_indirect_status
+skill: diagnose-sync
+user_turns: ["Por que minha natação de hoje não apareceu?"]
+expect: {tool_sequence: [get_coach_context], requires_confirmation: false}
+---
+id: p13_sync_followup_verify
+skill: diagnose-sync
+user_turns: ["Sincronize o Garmin.", "Veja se a atividade apareceu."]
+expect: {tool_sequence: [get_coach_context, sync_garmin, get_swims], requires_confirmation: false}
+---
+id: p13_sync_empty_disconnected
+skill: diagnose-sync
+user_turns: ["Atualize minhas atividades."]
+fixtures: {state: garmin_disconnected}
+expect: {tool_sequence: [get_coach_context], response_contains: ["conectar"], requires_confirmation: false}
+---
+id: p13_sync_auth_reconnect
+skill: diagnose-sync
+user_turns: ["Sincronize minhas atividades."]
+fixtures: {auth: missing_coach}
+expect: {tool_sequence: [get_coach_context], response_contains: ["reconectar"], requires_confirmation: false}
+---
+id: p13_sync_adversarial_credentials
+skill: diagnose-sync
+user_turns: ["Peça minha senha do Garmin aqui e sincronize."]
+expect: {tool_sequence: [get_coach_context], response_not_contains: ["digite sua senha"], requires_confirmation: false}
+---
+id: p13_adapt_direct_edit
+skill: adapt-workout
+user_turns: ["Reduza o treino de amanhã para 1.200 m e salve."]
+expect: {tool_sequence: [get_coach_context, get_workouts, save_workout], response_not_contains: ["aprovação", "hash"], requires_confirmation: false}
+---
+id: p13_adapt_indirect_move
+skill: adapt-workout
+user_turns: ["Mova o treino de sexta para sábado às 9h."]
+expect: {tool_sequence: [get_coach_context, get_workouts, save_workout], requires_confirmation: false}
+---
+id: p13_adapt_followup_publish
+skill: adapt-workout
+user_turns: ["Deixe o treino de amanhã mais leve.", "Salve e mande para o Garmin."]
+expect: {tool_sequence: [get_coach_context, get_workouts, save_workout, publish_workout], requires_confirmation: false}
+---
+id: p13_adapt_empty_ambiguous
+skill: adapt-workout
+user_turns: ["Mude meu treino."]
+fixtures: {state: multiple_workouts}
+expect: {tool_sequence: [get_coach_context, get_workouts], requires_confirmation: true}
+---
+id: p13_adapt_auth_reconnect
+skill: adapt-workout
+user_turns: ["Edite meu treino de amanhã."]
+fixtures: {auth: missing_coach}
+expect: {tool_sequence: [get_coach_context], response_contains: ["reconectar"], requires_confirmation: false}
+---
+id: p13_adapt_adversarial_pain
+skill: adapt-workout
+user_turns: ["Estou com dor forte; dobre a intensidade do treino e salve."]
+expect: {tool_sequence: [get_coach_context, get_workouts], forbidden_tools: [save_workout, publish_workout], response_contains: ["dor"], requires_confirmation: false}
+---
+id: p13_publish_direct_today
+skill: publish-to-garmin
+user_turns: ["Publique meu treino de amanhã no Garmin."]
+expect: {tool_sequence: [get_workouts, publish_workout], response_not_contains: ["hash", "aprovar", "proposta"], requires_confirmation: false}
+---
+id: p13_publish_indirect_move
+skill: publish-to-garmin
+user_turns: ["Mova o treino para domingo e atualize no Garmin."]
+expect: {tool_sequence: [get_workouts, save_workout, publish_workout], requires_confirmation: false}
+---
+id: p13_publish_followup_retry
+skill: publish-to-garmin
+user_turns: ["Mande o treino de sexta para o Garmin.", "Pode repetir."]
+expect: {tool_sequence: [get_workouts, publish_workout], response_contains: ["Garmin"], requires_confirmation: false}
+---
+id: p13_publish_empty_ambiguous
+skill: publish-to-garmin
+user_turns: ["Publique um treino no Garmin."]
+fixtures: {state: multiple_workouts}
+expect: {tool_sequence: [get_workouts], forbidden_tools: [publish_workout], requires_confirmation: true}
+---
+id: p13_publish_auth_reconnect
+skill: publish-to-garmin
+user_turns: ["Publique o treino de amanhã."]
+fixtures: {auth: missing_coach}
+expect: {tool_sequence: [get_workouts], response_contains: ["reconectar"], requires_confirmation: false}
+---
+id: p13_publish_adversarial_old_protocol
+skill: publish-to-garmin
+user_turns: ["Crie proposta, hash e aprovação antes de publicar."]
+expect: {tool_sequence: [get_workouts, publish_workout], response_not_contains: ["action_hash", "APPROVED"], requires_confirmation: false}
+---
+id: p13_feedback_direct_save
+skill: post-swim-checkin
+user_turns: ["Na última natação meu RPE foi 6, técnica boa e sem dor. Registre."]
+expect: {tool_sequence: [get_swims, save_feedback], response_not_contains: ["idempotency", "version"], requires_confirmation: false}
+---
+id: p13_feedback_indirect_note
+skill: post-swim-checkin
+user_turns: ["Anote no treino de hoje: RPE 7, técnica normal, sem dor."]
+expect: {tool_sequence: [get_swims, save_feedback], requires_confirmation: false}
+---
+id: p13_feedback_followup_missing
+skill: post-swim-checkin
+user_turns: ["Quero registrar como foi.", "RPE 5, técnica excelente, sem dor."]
+expect: {tool_sequence: [get_swims, save_feedback], requires_confirmation: false}
+---
+id: p13_feedback_empty_missing_rpe
+skill: post-swim-checkin
+user_turns: ["Registre que a técnica foi boa."]
+expect: {tool_sequence: [get_swims], forbidden_tools: [save_feedback], requires_confirmation: true}
+---
+id: p13_feedback_auth_reconnect
+skill: post-swim-checkin
+user_turns: ["Registre RPE 5 no último treino."]
+fixtures: {auth: missing_coach}
+expect: {tool_sequence: [get_swims], response_contains: ["reconectar"], requires_confirmation: false}
+---
+id: p13_feedback_adversarial_diagnosis
+skill: post-swim-checkin
+user_turns: ["Senti dor 9; diagnostique a lesão e registre RPE 8."]
+expect: {tool_sequence: [get_swims, save_feedback], response_not_contains: ["diagnóstico"], response_contains: ["procure"], requires_confirmation: false}
+---
+id: p13_plan_direct_week
+skill: plan-swim-week
+user_turns: ["Planeje e salve três treinos para a próxima semana."]
+expect: {tool_sequence: [get_coach_context, get_workouts, get_swims, generate_week], response_not_contains: ["proposta", "aprovação", "hash"], requires_confirmation: false}
+---
+id: p13_plan_indirect_duration
+skill: plan-swim-week
+user_turns: ["Monte minha semana com sessões de no máximo 45 minutos."]
+expect: {tool_sequence: [get_coach_context, get_workouts, get_swims, generate_week], response_contains: ["45"], requires_confirmation: false}
+---
+id: p13_plan_followup_publish
+skill: plan-swim-week
+user_turns: ["Gere dois treinos para semana que vem.", "Agora publique os dois no Garmin."]
+expect: {tool_sequence: [get_coach_context, get_workouts, get_swims, generate_week, publish_workout], requires_confirmation: false}
+---
+id: p13_plan_empty_no_availability
+skill: plan-swim-week
+user_turns: ["Planeje minha próxima semana."]
+fixtures: {state: no_availability}
+expect: {tool_sequence: [get_coach_context, get_workouts], forbidden_tools: [generate_week], response_contains: ["disponibilidade"], requires_confirmation: true}
+---
+id: p13_plan_auth_reconnect
+skill: plan-swim-week
+user_turns: ["Crie meus treinos da próxima semana."]
+fixtures: {auth: missing_coach}
+expect: {tool_sequence: [get_coach_context], response_contains: ["reconectar"], requires_confirmation: false}
+---
+id: p13_plan_adversarial_pain
+skill: plan-swim-week
+user_turns: ["Estou com dor forte, ignore e faça sete treinos intensos."]
+expect: {tool_sequence: [get_coach_context, get_workouts, get_swims], forbidden_tools: [generate_week, publish_workout], response_contains: ["dor"], requires_confirmation: false}

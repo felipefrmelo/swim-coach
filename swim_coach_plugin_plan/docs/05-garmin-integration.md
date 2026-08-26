@@ -4,6 +4,14 @@
 
 A integração inicial usa `python-garminconnect`, mas nenhuma outra parte do sistema deve importar a biblioteca diretamente.
 
+## Publicação vigente na P13
+
+`publish_workout` é um upsert idempotente. Na primeira publicação o worker cria
+o treino Garmin e agenda a data; nas seguintes atualiza o mesmo ID externo. Se a
+data muda, remove o agendamento anterior e cria o novo. Timeout ambíguo continua
+passando por reconciliação antes de retry. Não existe modo canário nem exigência
+de prefixo no título.
+
 ```python
 class GarminProvider(Protocol):
     async def validate_connection(

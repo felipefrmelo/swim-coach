@@ -272,26 +272,12 @@ export interface Workout {
   schedule: { id: string; scheduled_date: string; scheduled_start_time: string | null; timezone: string; pool_id: string } | null;
 }
 
-export interface GarminActionProposal {
-  id: string;
-  action_type: "garmin.publish_and_schedule.v1";
-  status: "DRAFT" | "READY_FOR_REVIEW" | "APPROVED" | "REJECTED" | "EXPIRED" | "QUEUED" | "EXECUTING" | "SUCCEEDED" | "FAILED" | "NEEDS_RECONCILIATION" | "CANCELLED";
-  version: number;
-  action_hash: string;
-  expires_at: string;
-  target_id: string;
-  target_revision_id: string;
-  compiled_hash: string;
-  scheduled_date: string;
-  device_id: string;
-  impact: {
-    title: string;
-    distance_m: number;
+export interface WorkoutSaveResult {
+  workout: Workout;
+  garmin: {
+    status: string;
+    job_id: string | null;
     scheduled_date: string;
-    device: { id: string; name: string; model: string };
-    external_effects: string[];
-    warnings: string[];
-  };
-  write_enabled: boolean;
-  execution: { id: string; status: string; result: Record<string, unknown> | null; error: Record<string, unknown> | null } | null;
+    replayed: boolean;
+  } | null;
 }

@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
   "project": "swim-coach",
-  "plan_version": "1.0",
-  "updated_at": "2026-08-12T14:59:30-03:00",
-  "active_phase": "P12",
+  "plan_version": "1.1",
+  "updated_at": "2026-08-26T08:45:00-03:00",
+  "active_phase": "P13",
   "phases": [
     {
       "id": "P00",
@@ -283,6 +283,27 @@
         "pending:new-thread-plugin-smoke-and-earlier-real-gates"
       ],
       "commit": "aa98d80"
+    },
+    {
+      "id": "P13",
+      "status": "IN_PROGRESS",
+      "evidence": [
+        "docs/evidence/p13-chatgpt-first.md",
+        "docs/handoffs/p13.md",
+        "local:mcp-v2:8-tools:scope-coach",
+        "local:mcp-http:save-generate-direct:no-proposals",
+        "local:garmin-upsert:create-update-reschedule-replay:one-binding",
+        "local:pwa:single-save-command",
+        "local:plugin-personal:2.0.0+codex.20260826113352:enabled",
+        "local:skill-validation:7-passed",
+        "local:evals:42-p13",
+        "local:full-check:130-python:4-vitest",
+        "local:e2e:9-playwright",
+        "local:build:4-images",
+        "local:security:dependency-secret-image-scans-zero",
+        "pending:deploy-chatgpt-reconnect-smoke"
+      ],
+      "commit": null
     }
   ]
 }

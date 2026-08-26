@@ -23,6 +23,11 @@ Internet / ChatGPT / Codex / PWA
                        worker
 ```
 
+A implantação P13 deve definir `SWIM_COACH_MCP_V2_ENABLED=true`, manter
+`SWIM_COACH_MCP_WRITE_ENABLED=true`, planejamento ativo e Garmin live ativo. Não
+há variável de canário. API e worker precisam ser atualizados juntos porque o
+job `workout.upsert_garmin` depende do provider com create/update/reschedule.
+
 Componentes:
 
 - `web`: build estático React/PWA;

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from typing import cast
+from typing import Literal, cast, overload
 from zoneinfo import ZoneInfo
 
 from swim_coach.application.ports.repositories import UnitOfWorkFactory
@@ -42,6 +42,7 @@ class PlanningService:
     def __init__(self, uow_factory: UnitOfWorkFactory) -> None:
         self._uow_factory = uow_factory
 
+    @overload
     async def propose_week(
         self,
         user_id: UserId,
@@ -51,7 +52,33 @@ class PlanningService:
         preferences: PlanningPreferences,
         user_notes_present: bool,
         correlation_id: CorrelationId,
-    ) -> tuple[PlanningRun, ActionProposal, bool]:
+        create_proposal: Literal[True] = True,
+    ) -> tuple[PlanningRun, ActionProposal, bool]: ...
+
+    @overload
+    async def propose_week(
+        self,
+        user_id: UserId,
+        *,
+        actor_id: str,
+        week_start: date,
+        preferences: PlanningPreferences,
+        user_notes_present: bool,
+        correlation_id: CorrelationId,
+        create_proposal: Literal[False],
+    ) -> tuple[PlanningRun, None, bool]: ...
+
+    async def propose_week(
+        self,
+        user_id: UserId,
+        *,
+        actor_id: str,
+        week_start: date,
+        preferences: PlanningPreferences,
+        user_notes_present: bool,
+        correlation_id: CorrelationId,
+        create_proposal: bool = True,
+    ) -> tuple[PlanningRun, ActionProposal | None, bool]:
         if week_start.weekday() != 0:
             raise DomainError("VALIDATION_FAILED", "week_start must be a Monday.")
         context = await self._snapshot(user_id, week_start)
@@ -82,60 +109,69 @@ class PlanningService:
                     "context": context.model_dump(mode="json"),
                     "preferences": preferences.model_dump(mode="json"),
                     "user_notes_present": user_notes_present,
+                    "delivery": "proposal" if create_proposal else "direct",
                 },
             )
             input_hash = canonical_json_hash(input_snapshot)
             replay = await uow.planning_runs.get_by_input(user_id, ruleset.id, input_hash)
             if replay is not None:
+                if not create_proposal:
+                    return replay, None, True
                 if replay.output_proposal_id is None:
                     raise DomainError("INTERNAL_ERROR", "Planning replay is missing its proposal.")
-                proposal = await uow.action_proposals.get(user_id, replay.output_proposal_id)
-                if proposal is None:
+                replay_proposal = await uow.action_proposals.get(user_id, replay.output_proposal_id)
+                if replay_proposal is None:
                     raise DomainError("INTERNAL_ERROR", "Planning replay proposal is missing.")
-                return replay, proposal, True
+                return replay, replay_proposal, True
 
             generated = generate_week(context, ruleset, preferences)
             run_id = EntityId.new()
             output_plan = cast(JsonObject, generated.model_dump(mode="json"))
-            proposal = ActionProposal.ready_for_review(
-                id=EntityId.new(),
-                user_id=user_id,
-                action_type=self.ACTION_TYPE,
-                target_type="training_goal",
-                target_id=EntityId.parse(context.goal_id),
-                target_revision_id=None,
-                payload=cast(
-                    JsonObject,
-                    {
-                        "planning_run_id": str(run_id),
-                        "week": output_plan,
-                        "input_hash": input_hash,
-                        "ruleset_version": ruleset.version,
-                        "ruleset_hash": ruleset.content_hash,
-                    },
-                ),
-                impact=cast(
-                    JsonObject,
-                    {
-                        "before": {
-                            "session_count": len(context.existing_sessions),
-                            "distance_m": sum(
-                                item.distance_m for item in context.existing_sessions
-                            ),
+            proposal = (
+                ActionProposal.ready_for_review(
+                    id=EntityId.new(),
+                    user_id=user_id,
+                    action_type=self.ACTION_TYPE,
+                    target_type="training_goal",
+                    target_id=EntityId.parse(context.goal_id),
+                    target_revision_id=None,
+                    payload=cast(
+                        JsonObject,
+                        {
+                            "planning_run_id": str(run_id),
+                            "week": output_plan,
+                            "input_hash": input_hash,
+                            "ruleset_version": ruleset.version,
+                            "ruleset_hash": ruleset.content_hash,
                         },
-                        "after": {
-                            "session_count": len(generated.sessions),
-                            "distance_m": generated.target_volume_m,
-                            "session_dates": [item.date.isoformat() for item in generated.sessions],
+                    ),
+                    impact=cast(
+                        JsonObject,
+                        {
+                            "before": {
+                                "session_count": len(context.existing_sessions),
+                                "distance_m": sum(
+                                    item.distance_m for item in context.existing_sessions
+                                ),
+                            },
+                            "after": {
+                                "session_count": len(generated.sessions),
+                                "distance_m": generated.target_volume_m,
+                                "session_dates": [
+                                    item.date.isoformat() for item in generated.sessions
+                                ],
+                            },
+                            "decision_count": len(generated.decisions),
+                            "warnings": list(generated.warnings),
+                            "external_effects": [],
+                            "approval_effect": "REVIEW_ONLY_NO_STATE_CHANGE",
                         },
-                        "decision_count": len(generated.decisions),
-                        "warnings": list(generated.warnings),
-                        "external_effects": [],
-                        "approval_effect": "REVIEW_ONLY_NO_STATE_CHANGE",
-                    },
-                ),
-                expires_at=now + timedelta(hours=24),
-                created_at=now,
+                    ),
+                    expires_at=now + timedelta(hours=24),
+                    created_at=now,
+                )
+                if create_proposal
+                else None
             )
             run = PlanningRun(
                 id=run_id,
@@ -146,14 +182,15 @@ class PlanningService:
                 input_snapshot=input_snapshot,
                 input_hash=input_hash,
                 output_plan=output_plan,
-                output_proposal_id=proposal.id,
+                output_proposal_id=proposal.id if proposal is not None else None,
                 status=PlanningRunStatus.COMPLETED,
                 warnings=generated.warnings,
                 created_at=now,
                 completed_at=now,
             )
-            await uow.action_proposals.add(proposal)
-            await uow.flush()
+            if proposal is not None:
+                await uow.action_proposals.add(proposal)
+                await uow.flush()
             await uow.planning_runs.add(run)
             await uow.flush()
             for decision in generated.decisions:
@@ -177,19 +214,25 @@ class PlanningService:
                 )
             event_payload: JsonObject = {
                 "planning_run_id": str(run.id),
-                "proposal_id": str(proposal.id),
                 "week_start": week_start.isoformat(),
                 "input_hash": input_hash,
                 "ruleset_hash": ruleset.content_hash,
                 "output_hash": generated.output_hash,
                 "decision_count": len(generated.decisions),
+                "delivery": "proposal" if proposal is not None else "direct",
             }
+            if proposal is not None:
+                event_payload["proposal_id"] = str(proposal.id)
             await uow.outbox.add(
                 OutboxEvent(
                     id=EntityId.new(),
                     aggregate_type="PlanningRun",
                     aggregate_id=run.id,
-                    event_type="swim_coach.planning.week_proposed.v1",
+                    event_type=(
+                        "swim_coach.planning.week_proposed.v1"
+                        if proposal is not None
+                        else "swim_coach.planning.week_generated.v1"
+                    ),
                     payload=event_payload,
                     user_id=user_id,
                     correlation_id=correlation_id,
@@ -201,7 +244,11 @@ class PlanningService:
                     user_id=user_id,
                     actor_type="mcp",
                     actor_id=actor_id,
-                    action="planning.week_proposed",
+                    action=(
+                        "planning.week_proposed"
+                        if proposal is not None
+                        else "planning.week_generated"
+                    ),
                     entity_type="PlanningRun",
                     entity_id=run.id,
                     correlation_id=correlation_id,

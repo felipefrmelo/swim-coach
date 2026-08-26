@@ -28,6 +28,8 @@ class FakeGarminWorkoutProvider:
         self._ambiguous_schedule_once = ambiguous_schedule_once
         self.create_calls = 0
         self.schedule_calls = 0
+        self.update_calls = 0
+        self.unschedule_calls = 0
 
     async def create_workout(
         self, user_id: UserId, payload: GarminWorkoutDTO
@@ -75,6 +77,33 @@ class FakeGarminWorkoutProvider:
                 outcome_ambiguous=True,
             )
         return result
+
+    async def update_workout(
+        self, user_id: UserId, external_workout_id: str, payload: GarminWorkoutDTO
+    ) -> ExternalWorkoutResult:
+        self.update_calls += 1
+        previous_key = next(
+            (
+                key
+                for key, value in self._workouts.items()
+                if key[0] == str(user_id) and value.external_workout_id == external_workout_id
+            ),
+            None,
+        )
+        if previous_key is not None:
+            self._workouts.pop(previous_key)
+        result = ExternalWorkoutResult(
+            external_workout_id=external_workout_id,
+            provider_payload={"compiled_hash": payload.compiled_hash},
+        )
+        self._workouts[(str(user_id), payload.source_revision_hash)] = result
+        return result
+
+    async def unschedule_workout(self, user_id: UserId, external_schedule_id: str) -> None:
+        self.unschedule_calls += 1
+        for key, value in list(self._schedules.items()):
+            if key[0] == str(user_id) and value.external_schedule_id == external_schedule_id:
+                self._schedules.pop(key)
 
     async def find_workout_by_source_hash(
         self, user_id: UserId, source_revision_hash: str

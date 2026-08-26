@@ -1,7 +1,7 @@
 {
   "name": "swim-coach",
-  "version": "1.0.0",
-  "description": "Review pool swims and propose reproducible, explainable weekly training plans safely.",
+  "version": "2.0.0+codex.20260826113352",
+  "description": "Use ChatGPT as a personal swim coach with direct workout, Garmin, planning, sync, and feedback commands.",
   "author": {
     "name": "Felipe"
   },
@@ -15,8 +15,8 @@
   "apps": "./.app.json",
   "interface": {
     "displayName": "Swim Coach",
-    "shortDescription": "Review and safely update swim training",
-    "longDescription": "Review authenticated swims, goals, workouts, proposals, and sync status; generate reproducible weekly plan proposals with versioned rules and ordered decisions; and retain complete headless workflows plus exact-hash confirmation boundaries.",
+    "shortDescription": "Plan, edit, and publish swim training",
+    "longDescription": "Use ChatGPT as the primary interface to review swims and goals, generate weekly plans, save or edit workouts, publish them directly to Garmin, synchronize activities, and record feedback. The website remains an optional editor and status view.",
     "developerName": "Felipe",
     "category": "Health & Fitness",
     "capabilities": [
@@ -27,10 +27,10 @@
       "Use Swim Coach to review my latest swim.",
       "Use Swim Coach to show my swimming goal progress.",
       "Use Swim Coach to explain why my latest swim is missing.",
-      "Use Swim Coach to adapt my next swim.",
-      "Use Swim Coach to publish my workout to Garmin safely.",
+      "Use Swim Coach to adapt and save my next swim.",
+      "Use Swim Coach to publish my workout to Garmin.",
       "Use Swim Coach to record my post-swim feedback.",
-      "Use Swim Coach to propose my next swim-training week for review."
+      "Use Swim Coach to generate and save my next swim-training week."
     ]
   }
 }

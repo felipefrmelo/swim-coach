@@ -2,7 +2,7 @@
 
 > **Versão do plano:** 1.0
 > **Data-base:** 11 de agosto de 2026
-> **Estado:** implementação P00–P12 entregue; release pessoal 1.0 em validação operacional
+> **Estado:** P13 ChatGPT-first implementado localmente; validação/deploy em andamento
 > **Uso inicial:** pessoal
 > **Atleta inicial:** Felipe
 > **Dispositivo:** Garmin Forerunner 265
@@ -11,11 +11,10 @@
 
 Este diretório contém a especificação inicial de implementação do Swim Coach, organizada em documentos menores, contratos, fases e gates executáveis por LLMs. A arquitetura definida para o produto é **Plugin-first**.
 
-> **Checkpoint:** P00, P01 e P04 estão `DONE`; as implementações P02–P12 e seus
-> gates automatizados/integrados estão entregues. O plugin pessoal 1.0 reúne sete
-> Skills, 154 evals, UI MCP opcional, planejamento, automação recuperável e
-> hardening operacional. Os gates com atividade Garmin persistida, host OAuth,
-> conversa nova, cards no host, canário real e ciclo offline continuam pendentes. Veja
+> **Checkpoint:** o plugin pessoal 2.0 reúne sete Skills e oito comandos MCP sob
+> o scope `coach`. Salvar, editar, agendar, planejar, sincronizar, registrar
+> feedback e publicar são diretos; revisão, idempotência e reconciliação ficam
+> internas. A PWA é auxiliar. Veja
 > [`IMPLEMENTATION_STATUS.md`](IMPLEMENTATION_STATUS.md).
 
 ```text
@@ -26,12 +25,12 @@ ChatGPT / Codex
 Skills ───────────────► instruções de fluxo
        │
        ▼
-MCP remoto ───────────► dados, validações e ações controladas
+MCP remoto ───────────► oito comandos de intenção
        │
        ├── domínio e serviços de aplicação
        ├── PostgreSQL + worker
        ├── Garmin Connect (adaptador não oficial no uso pessoal)
-       └── UI MCP opcional, somente onde acrescentar valor
+       └── revisões, idempotência e reconciliação invisíveis
 
 PWA operacional
        ├── calendário
@@ -43,7 +42,7 @@ PWA operacional
 
 ## Decisão central
 
-O MVP **não terá um chat próprio nem chamará a OpenAI Responses API**. A conversa será hospedada por ChatGPT/Codex. O backend expõe um MCP seguro; o plugin empacota os Skills e a conexão MCP. A PWA continua necessária para fluxos visuais, configuração, aprovação alternativa e operação independente.
+O MVP **não terá um chat próprio nem chamará a OpenAI Responses API**. A conversa será hospedada por ChatGPT/Codex. O backend expõe um MCP com oito comandos diretos; o plugin empacota as Skills e a conexão MCP. A PWA é auxiliar para edição visual, calendário, configuração e diagnóstico.
 
 ## Como uma LLM deve começar
 
@@ -72,7 +71,7 @@ O MVP **não terá um chat próprio nem chamará a OpenAI Responses API**. A con
 | `contracts/` | schemas e contratos de API/MCP/domínio |
 | `adrs/` | decisões arquiteturais imutáveis ou versionadas |
 | `plugin-blueprint/` | esqueleto do plugin, Skills e instruções de registro |
-| `plugins/swim-coach/` | release candidate pessoal P12 `1.0.0`, com sete Skills, UI opcional e app mapping real |
+| `plugins/swim-coach/` | plugin pessoal P13 `2.0.0`, com sete Skills ChatGPT-first e app mapping real |
 | `backend/` | API/MCP, worker, probes e testes da fundação P00 |
 | `apps/web/` | shell PWA operacional, sem chat próprio |
 | `examples/` | fixtures de referência e payloads válidos |
@@ -81,11 +80,13 @@ O MVP **não terá um chat próprio nem chamará a OpenAI Responses API**. A con
 
 ## Ordem de implementação
 
-`P00 → P01 → P02 → P03 → P04 → P05 → P06 → P07 → P08 → P09 → P10 → P11 → P12`
+`P00 → P01 → P02 → P03 → P04 → P05 → P06 → P07 → P08 → P09 → P10 → P11 → P12 → P13`
 
-A primeira prova de conceito do plugin acontece já na **P00**, com ferramentas sem dados pessoais. A primeira fatia útil com dados reais chega na **P05/P06**. Escritas no Garmin via plugin só entram depois do fluxo de proposta, aprovação, escopos e idempotência.
+A primeira prova de conceito do plugin aconteceu na **P00**. A P13 substitui a
+superfície histórica por oito comandos e mantém autenticação, ownership,
+idempotência e reconciliação no servidor, sem expor proposal/hash/approval.
 
-## Executar o stack pessoal 1.0
+## Executar o stack pessoal 2.0
 
 Requer Python 3.12, Node 24 com Corepack, `uv`, Docker e Docker Compose.
 
@@ -102,17 +103,11 @@ A API fica em `http://127.0.0.1:18000`, a PWA em
 `http://127.0.0.1:14173` e o PostgreSQL em `127.0.0.1:55432`. As portas
 podem ser sobrescritas pelas variáveis documentadas em [`.env.example`](.env.example).
 Sem `SWIM_COACH_OAUTH_ISSUER`/`SWIM_COACH_OAUTH_RESOURCE`, o MCP falha fechado e
-libera somente `get_capabilities`, sem dados pessoais. Com OAuth configurado, a
-P05 registra oito tools autenticadas estritamente read-only para contexto,
-treinos, atividades, meta e status de sync; nenhuma chama Garmin nem altera
-estado de negócio. `SWIM_COACH_MCP_WRITE_ENABLED=true` libera a superfície P08
-somente com OAuth completo; Garmin externo continua dependente do kill switch
-separado. `SWIM_COACH_MCP_UI_ENABLED=true` acrescenta os cinco render tools e
-resources P09 somente quando OAuth e escrita MCP também estão habilitados; com a
-flag desligada, a superfície P08 permanece idêntica. O pacote `1.0.0` mantém sete
-Skills e 154 evals em `tests/evals/`. A PWA
-P01 usa BFF/cookie opaco,
-allowlist e ownership em todos os endpoints de contexto.
+libera somente `get_capabilities`. Com OAuth, escrita e v2 ativos, anuncia
+exatamente `get_coach_context`, `get_workouts`, `get_swims`, `save_workout`,
+`publish_workout`, `generate_week`, `sync_garmin` e `save_feedback`, todos com
+`coach`. Garmin externo continua dependente do kill switch do servidor. A PWA
+usa BFF/cookie opaco, allowlist e ownership.
 
 O Git root contém `../.codex/config.toml`, uma configuração
 project-scoped que conecta clientes Codex locais ao MCP e aplica allowlist apenas
@@ -140,8 +135,8 @@ codex mcp get swim_coach_p00
 - [Relatório de validação do pacote](PLAN_VALIDATION_REPORT.md)
 - [Evidências da P00](docs/evidence/p00-foundation-evidence.md)
 - [Evidências da P01](docs/evidence/p01-domain-persistence-identity.md)
-- [Evidências da P12](docs/evidence/p12-production-hardening-release.md)
-- [Handoff atual da P12](docs/handoffs/p12.md)
+- [Evidências da P13](docs/evidence/p13-chatgpt-first.md)
+- [Handoff atual da P13](docs/handoffs/p13.md)
 
 ## Entregáveis para execução
 

@@ -5,20 +5,20 @@ description: Record bounded post-swim feedback for a recent Swim Coach activity.
 
 # Record a post-swim check-in
 
-1. Resolve the owned activity with `list_recent_swims` and
-   `get_swim_activity`, unless the user supplied its internal activity ID.
+1. Resolve the activity with `get_swims`, unless the user supplied its internal
+   activity ID.
 2. Collect only missing required fields: RPE from 1–10, technique from 1–5 (or
    poor/fair/ok/good/excellent), and whether pain was present. Pain location and
    intensity and a short note are optional.
-3. Summarize the values and, when the user's message already clearly asks to
-   record them, call `record_session_feedback` once with a stable idempotency
-   key. Otherwise ask before writing.
-4. Report the stored feedback ID/version without exposing provider identifiers.
+3. When the user's message clearly asks to record the check-in, call
+   `save_feedback` once. Otherwise ask only for the missing values.
+4. Report that the feedback was saved without exposing provider identifiers or
+   internal version/idempotency fields.
 
 Do not diagnose pain, infer an injury, or prescribe treatment. If pain is severe,
 new, or alarming, recommend stopping and seeking qualified medical care in plain
 language. Never request Garmin credentials, tokens, FIT files, or private IDs.
-Never publish, approve, execute, reschedule, or adapt a workout in this Skill.
+Do not alter or publish a workout unless the user separately asks for it.
 
 Reply in Brazilian Portuguese unless the user uses another language. If the
 activity cannot be found or write authorization is missing, state that clearly

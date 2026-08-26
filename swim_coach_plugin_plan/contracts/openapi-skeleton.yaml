@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Swim Coach API
-  version: 1.0.0
+  version: 2.0.0
 servers:
   - url: /api/v1
 security:
@@ -182,10 +182,13 @@ paths:
         "409": {$ref: "#/components/responses/Problem"}
   /workouts:
     get: {operationId: listWorkouts, responses: {"200": {description: Workout page}}}
+  /workouts/save:
     post:
-      operationId: createWorkout
-      parameters: [{$ref: "#/components/parameters/IdempotencyKey"}]
-      responses: {"201": {description: Workout created}, "422": {$ref: "#/components/responses/Problem"}}
+      operationId: saveWorkout
+      parameters: [{$ref: "#/components/parameters/CsrfToken"}]
+      responses:
+        "200": {description: Workout created or revised, scheduled locally, and optionally queued for Garmin upsert in one command}
+        "422": {$ref: "#/components/responses/Problem"}
   /workouts/{workout_id}:
     get:
       operationId: getWorkout
@@ -195,33 +198,6 @@ paths:
     post:
       operationId: validateWorkout
       responses: {"200": {description: Canonical totals, errors and warnings without persistence}}
-  /workouts/{workout_id}/revisions:
-    post:
-      operationId: reviseWorkout
-      parameters:
-        - {in: path, name: workout_id, required: true, schema: {type: string, format: uuid}}
-        - {$ref: "#/components/parameters/IfMatch"}
-      responses:
-        "200": {description: Immutable revision appended}
-        "409": {$ref: "#/components/responses/Problem"}
-  /workouts/{workout_id}/approve-local:
-    post:
-      operationId: approveWorkoutLocally
-      parameters:
-        - {in: path, name: workout_id, required: true, schema: {type: string, format: uuid}}
-        - {$ref: "#/components/parameters/IfMatch"}
-      responses:
-        "200": {description: Exact current revision approved locally; no provider call}
-        "409": {$ref: "#/components/responses/Problem"}
-  /workouts/{workout_id}/schedule:
-    post:
-      operationId: scheduleWorkoutLocally
-      parameters:
-        - {in: path, name: workout_id, required: true, schema: {type: string, format: uuid}}
-        - {$ref: "#/components/parameters/IfMatch"}
-      responses:
-        "200": {description: Approved revision scheduled in an IANA timezone}
-        "409": {$ref: "#/components/responses/Problem"}
   /workout-templates:
     get:
       operationId: listWorkoutTemplates
@@ -229,25 +205,6 @@ paths:
     post:
       operationId: createWorkoutTemplate
       responses: {"201": {description: User-owned valid canonical template created}}
-  /proposals/{proposal_id}:
-    get:
-      operationId: getProposal
-      parameters: [{in: path, name: proposal_id, required: true, schema: {type: string, format: uuid}}]
-      responses: {"200": {description: Proposal}}
-  /proposals/{proposal_id}/approve:
-    post:
-      operationId: approveProposal
-      parameters:
-        - {in: path, name: proposal_id, required: true, schema: {type: string, format: uuid}}
-        - {$ref: "#/components/parameters/IdempotencyKey"}
-      responses: {"200": {description: Approved}, "409": {$ref: "#/components/responses/Problem"}}
-  /proposals/{proposal_id}/execute:
-    post:
-      operationId: executeProposal
-      parameters:
-        - {in: path, name: proposal_id, required: true, schema: {type: string, format: uuid}}
-        - {$ref: "#/components/parameters/IdempotencyKey"}
-      responses: {"202": {description: Job queued}, "409": {$ref: "#/components/responses/Problem"}}
   /integrations/garmin:
     get:
       operationId: getGarminConnection

@@ -9,7 +9,7 @@
 - MCP tools: `snake_case` orientado a verbo/objetivo;
 - events: `swim_coach.<bounded_context>.<event>.v1`;
 - error codes: `UPPER_SNAKE_CASE`;
-- OAuth scopes: `resource:verb`;
+- OAuth scopes: `resource:verb` no legado; `coach` é o scope público único P13;
 - plugin/skills: `kebab-case`.
 
 ## IDs
@@ -42,3 +42,6 @@
 ## Estados
 
 Não usar booleanos para ciclos complexos. Enums canônicos estão em `contracts/state-machines.md` e no catálogo de erros/eventos.
+
+O plugin P13 usa major `2.0.0` porque remove tools e campos públicos. O cache
+local acrescenta somente o sufixo `+codex.<timestamp>` sem mudar a versão base.

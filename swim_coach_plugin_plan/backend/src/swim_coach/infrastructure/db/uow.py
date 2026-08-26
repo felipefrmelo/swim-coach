@@ -2475,6 +2475,22 @@ class SqlAlchemyExternalWorkoutBindingsRepository:
         model = (await self._session.scalars(statement)).one_or_none()
         return _external_workout_binding(model) if model else None
 
+    async def get_by_workout(
+        self, user_id: UserId, provider: str, workout_id: EntityId
+    ) -> ExternalWorkoutBinding | None:
+        statement = (
+            select(ExternalWorkoutBindingModel)
+            .where(
+                ExternalWorkoutBindingModel.user_id == user_id.value,
+                ExternalWorkoutBindingModel.provider == provider,
+                ExternalWorkoutBindingModel.workout_id == workout_id.value,
+            )
+            .order_by(ExternalWorkoutBindingModel.updated_at.desc())
+            .limit(1)
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _external_workout_binding(model) if model else None
+
     async def add(self, binding: ExternalWorkoutBinding) -> None:
         self._session.add(
             ExternalWorkoutBindingModel(
@@ -2504,6 +2520,10 @@ class SqlAlchemyExternalWorkoutBindingsRepository:
                 ExternalWorkoutBindingModel.version == expected_version,
             )
             .values(
+                workout_id=binding.workout_id.value,
+                revision_id=binding.revision_id.value,
+                provider=binding.provider,
+                compiled_hash=binding.compiled_hash,
                 status=binding.status.value,
                 external_workout_id=binding.external_workout_id,
                 external_schedule_id=binding.external_schedule_id,

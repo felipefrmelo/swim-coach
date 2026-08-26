@@ -23,6 +23,7 @@
 | P10 | IN_PROGRESS | P03,P04,P08 | semana adaptativa explicável | [draft PR #11](https://github.com/felipefrmelo/swim-coach/pull/11) |
 | P11 | IN_PROGRESS | P10 | automações recuperáveis e PWA offline | [draft PR #12](https://github.com/felipefrmelo/swim-coach/pull/12) |
 | P12 | IN_PROGRESS | P11 | restore testado e release pessoal | [PR umbrella #13](https://github.com/felipefrmelo/swim-coach/pull/13) |
+| P13 | IN_PROGRESS | P12 | oito comandos diretos, Garmin upsert, plugin 2.0 e deploy pessoal | worktree `main` |
 
 ## Evidências por fase
 
@@ -372,3 +373,25 @@
     → gate pós-merge da `main` verde no commit `a81d30c`.
 - Gate pendente: conversa nova com as sete Skills e fechamento dos gates reais
   P11/anteriores. O release permanece candidate e não está pronto para público.
+
+### P13
+
+- Estado: `IN_PROGRESS`
+- Início: 2026-08-26T08:00:00-03:00
+- ADR/fase: [`ADR-0011`](adrs/ADR-0011-chatgpt-first-direct-commands.md) e
+  [`phases/p13-chatgpt-first-simplification.md`](phases/p13-chatgpt-first-simplification.md).
+- Implementado localmente:
+  - exatamente oito tools MCP v2 sob o scope `coach`;
+  - `save_workout`, `generate_week`, `sync_garmin`, `save_feedback` e
+    `publish_workout` sem campos do protocolo legado;
+  - Garmin create/update/reschedule/replay com um binding estável por treino;
+  - geração semanal direta sem `ActionProposal`;
+  - PWA com “Salvar” e “Salvar e enviar ao Garmin”;
+  - router REST de actions desmontado no modo v2 e modo canário removido;
+  - sete Skills reescritas, 42 evals P13 e plugin pessoal
+    `2.0.0+codex.20260826113352` validado/reinstalado.
+- Evidência local completa: `make check` com 130 Python e 4 Vitest, build das
+  quatro imagens, 9 Playwright, dependency/Gitleaks limpos, SBOM e Trivy com zero
+  HIGH/CRITICAL.
+- Gate pendente: commit/push/deploy, scope `coach` no
+  Auth0, reconexão do conector e smoke em conversa nova.

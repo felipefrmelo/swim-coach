@@ -2,7 +2,14 @@
 
 ## 1. Princípios
 
-As ferramentas representam **casos de uso**, não CRUD nem tabelas. Reads e writes são separados. Uma ferramenta de preview nunca executa o efeito que descreve. Toda resposta usa envelope estável.
+As ferramentas representam **casos de uso**, não CRUD nem tabelas. Na P13, a
+superfície pública tem oito comandos e nenhum preview técnico. Reads e writes
+continuam anotados corretamente, mas um pedido explícito para publicar chama
+`publish_workout` diretamente. Toda resposta usa envelope estável.
+
+Clientes não enviam hashes, números de versão, approval/execution IDs nem chaves
+de idempotência. O servidor deriva e audita esses valores. `get_workouts` também
+omite hashes internos.
 
 ```json
 {

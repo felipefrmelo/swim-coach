@@ -1,4 +1,4 @@
 interface:
   display_name: "Publish to Garmin"
-  short_description: "Preview and confirm Garmin publication"
-  default_prompt: "Use $publish-to-garmin to publish my swim workout safely."
+  short_description: "Publish or update a Garmin workout"
+  default_prompt: "Use $publish-to-garmin to publish my swim workout to Garmin."

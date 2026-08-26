@@ -33,6 +33,17 @@ class WorkoutCreateRequest(StrictModel):
     definition: CanonicalWorkout
 
 
+class WorkoutSaveRequest(StrictModel):
+    workout_id: UUID | None = None
+    pool_id: UUID | None = None
+    definition: CanonicalWorkout
+    scheduled_date: date | None = None
+    scheduled_start_time: time | None = None
+    change_reason: str | None = Field(default=None, max_length=500)
+    publish_to_garmin: bool = False
+    target_device_id: UUID | None = None
+
+
 class WorkoutReviseRequest(StrictModel):
     definition: CanonicalWorkout
     change_reason: str | None = Field(default=None, max_length=500)
@@ -132,6 +143,18 @@ class WorkoutResponse(StrictModel):
         )
 
 
+class GarminOperationResponse(StrictModel):
+    status: str
+    job_id: UUID | None
+    scheduled_date: date
+    replayed: bool
+
+
+class WorkoutSaveResponse(StrictModel):
+    workout: WorkoutResponse
+    garmin: GarminOperationResponse | None = None
+
+
 class TemplateResponse(StrictModel):
     id: UUID
     name: str
@@ -180,6 +203,44 @@ async def create_workout(
         correlation_id=correlation_id,
     )
     return _response(detail, response)
+
+
+@router.post("/workouts/save", response_model=WorkoutSaveResponse)
+async def save_workout_direct(
+    payload: WorkoutSaveRequest,
+    authenticated: CsrfAuthenticated,
+    services: Services,
+    correlation_id: RequestCorrelationId,
+) -> WorkoutSaveResponse:
+    """Save/schedule locally and optionally publish without exposing workflow internals."""
+
+    detail = await services.coach_commands.save_workout(
+        authenticated.user.id,
+        payload.definition,
+        workout_id=EntityId(payload.workout_id) if payload.workout_id else None,
+        pool_id=EntityId(payload.pool_id) if payload.pool_id else None,
+        scheduled_date=payload.scheduled_date,
+        scheduled_start_time=payload.scheduled_start_time,
+        change_reason=payload.change_reason,
+        correlation_id=correlation_id,
+    )
+    garmin = None
+    if payload.publish_to_garmin:
+        operation = await services.coach_commands.publish_workout(
+            authenticated.user.id,
+            detail.workout.id,
+            scheduled_date=None,
+            scheduled_start_time=None,
+            device_id=(EntityId(payload.target_device_id) if payload.target_device_id else None),
+            correlation_id=correlation_id,
+        )
+        garmin = GarminOperationResponse(
+            status=operation.status,
+            job_id=operation.job_id.value if operation.job_id else None,
+            scheduled_date=date.fromisoformat(operation.scheduled_date),
+            replayed=operation.replayed,
+        )
+    return WorkoutSaveResponse(workout=WorkoutResponse.from_detail(detail), garmin=garmin)
 
 
 @router.get("/workouts/{workout_id}", response_model=WorkoutResponse)

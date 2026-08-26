@@ -35,7 +35,10 @@ Implementar o Swim Coach de forma incremental, verificável e segura, obedecendo
 - Nunca commitar senha, token, FIT real, e-mail privado ou segredo.
 - Nunca registrar tokens ou credenciais em logs.
 - Dados privados e ferramentas de escrita exigem autenticação e escopo.
-- Efeitos externos exigem proposta válida, hash correspondente, aprovação não expirada, idempotency key e auditoria.
+- Na superfície v2 pessoal, a própria chamada `publish_workout` expressa a
+  intenção de efeito externo; proposta/hash/aprovação não são expostos. O
+  servidor ainda exige autenticação, ownership, idempotência derivada, auditoria
+  e reconciliação, conforme ADR-0011.
 - Uma anotação MCP não substitui validação, autorização nem confirmação.
 - O modelo não recebe FIT bruto, tokens Garmin ou payloads externos desnecessários.
 - O login Garmin ocorre por bootstrap seguro; a senha não é persistida.
@@ -58,7 +61,8 @@ Implementar o Swim Coach de forma incremental, verificável e segura, obedecendo
 - Datas/horários em UTC internamente; timezone do usuário na borda.
 - Dinheiro, duração, distância e ritmo não usam unidades implícitas.
 - IDs externos nunca são usados como PK interna.
-- APIs de escrita aceitam idempotency key e controle otimista quando aplicável.
+- APIs públicas não exigem chaves técnicas do usuário. Idempotência e controle
+  de concorrência são derivados no servidor quando aplicável.
 
 ## Entrega de fase
 

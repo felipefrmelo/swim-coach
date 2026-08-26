@@ -4,6 +4,12 @@
 
 Cada Skill representa um objetivo reconhecível, não uma ferramenta individual. A descrição é o gatilho; o corpo contém passos, condições, tratamento de falhas e formato final. Skills não inventam dados e não executam regras de domínio.
 
+Na versão 2.0, Skills podem executar diretamente a intenção claramente pedida.
+Editar usa `save_workout`; publicar usa `publish_workout`; planejar usa
+`generate_week`; sincronizar usa `sync_garmin`. Não há confirmação obrigatória
+em outro turno, proposal, hash, aprovação ou execução. A Skill pergunta apenas
+quando falta identificação, data ou outro dado que altere materialmente a ação.
+
 ## 2. Catálogo
 
 ### `review-latest-swim`

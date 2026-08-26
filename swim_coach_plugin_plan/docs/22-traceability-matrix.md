@@ -27,6 +27,11 @@
 | NFR-PORT-001 | P05/P09 | headless fallback eval |
 | NFR-DATA-001 | P12 | export/delete E2E |
 | NFR-TEST-001 | todas | phase gate |
+| FR-CHAT-001 | P13 | MCP contract: exatamente oito comandos e scope `coach` |
+| FR-CHAT-002 | P13 | MCP HTTP save/generate direto sem proposal |
+| FR-GARMIN-006 | P13 | create/update/reschedule/replay com um binding |
+| FR-WEB-009 | P13 | editor usa somente `/workouts/save` |
+| FR-SKILL-008 | P13 | 42 evals ChatGPT-first sem protocolo legado |
 
 ## Regra de mudança
 

@@ -9,6 +9,15 @@ A solução precisa combinar uma conversa rica, dados privados, regras determin�
 - **MCP/backend:** dados, autorização, validação e ações;
 - **PWA:** operação visual e contingência.
 
+## Arquitetura vigente na P13
+
+O contrato público é ChatGPT-first e contém oito comandos de intenção. MCP e
+REST chamam `CoachCommandService`; revisões, concorrência, idempotência, jobs,
+auditoria e reconciliação ficam dentro do servidor. `publish_workout` faz upsert
+no mesmo treino Garmin e na mesma agenda. A superfície proposal/approve/execute
+permanece somente como compatibilidade histórica e não é registrada no MCP v2
+nem no router REST da configuração vigente.
+
 ## 2. Containers
 
 ```mermaid

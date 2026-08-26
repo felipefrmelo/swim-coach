@@ -387,7 +387,7 @@ class ActivityDataService:
                     comment=comment,
                 )
             else:
-                if expected_version != feedback.version:
+                if expected_version is not None and expected_version != feedback.version:
                     raise DomainError("REVISION_CONFLICT", "Feedback version changed.")
                 feedback.revise(
                     rpe=rpe,

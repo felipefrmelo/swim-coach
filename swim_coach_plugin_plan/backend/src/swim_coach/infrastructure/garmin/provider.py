@@ -421,6 +421,43 @@ class GarminConnectProvider:
                 ) from exc
             raise
 
+    async def update_workout(
+        self, user_id: UserId, external_workout_id: str, payload: GarminWorkoutDTO
+    ) -> ExternalWorkoutResult:
+        try:
+            raw = await self._call(
+                user_id,
+                lambda client: client.update_workout(external_workout_id, payload.payload),
+            )
+            if not isinstance(raw, Mapping):
+                raise GarminProviderError(
+                    GarminErrorCategory.SCHEMA_CHANGED,
+                    retryable=False,
+                    outcome_ambiguous=True,
+                )
+            external_id = raw.get("workoutId", raw.get("id", external_workout_id))
+            return ExternalWorkoutResult(str(external_id), cast(JsonObject, _json_safe(raw)))
+        except GarminProviderError as exc:
+            if exc.category in {GarminErrorCategory.NETWORK, GarminErrorCategory.UNKNOWN}:
+                raise GarminProviderError(
+                    exc.category,
+                    retryable=exc.retryable,
+                    retry_after_seconds=exc.retry_after_seconds,
+                    outcome_ambiguous=True,
+                ) from exc
+            raise
+
+    async def unschedule_workout(self, user_id: UserId, external_schedule_id: str) -> None:
+        try:
+            await self._call(
+                user_id,
+                lambda client: client.unschedule_workout(external_schedule_id),
+            )
+        except GarminProviderError as exc:
+            if exc.category is GarminErrorCategory.NOT_FOUND:
+                return
+            raise
+
     async def find_workout_by_source_hash(
         self, user_id: UserId, source_revision_hash: str
     ) -> ExternalWorkoutResult | None:

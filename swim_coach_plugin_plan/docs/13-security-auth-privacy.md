@@ -2,6 +2,13 @@
 
 Este documento define os controles mínimos para a PWA, o MCP remoto, os workers e a integração Garmin. Ele é normativo para qualquer fase que leia dados pessoais ou produza efeitos externos.
 
+Para o produto pessoal P13, a autorização MCP foi reduzida a um único scope
+`coach`; não existe matriz de scopes apresentada ao usuário. Permanecem os
+controles que evitam perda de dados ou credenciais: OAuth, owner check, segredo
+Garmin cifrado, redaction, validação canônica, idempotência e reconciliação.
+O protocolo público de proposal/hash/approval foi removido porque adicionava
+fricção sem benefício proporcional neste uso individual.
+
 ## 1. Ativos protegidos
 
 - tokens e sessão Garmin;

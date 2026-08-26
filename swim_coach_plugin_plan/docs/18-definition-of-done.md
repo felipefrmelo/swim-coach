@@ -70,3 +70,12 @@ Uma fase é `DONE` apenas quando:
 3. nenhuma dependência futura é simulada como pronta;
 4. riscos bloqueadores foram resolvidos ou aceitos formalmente;
 5. o próximo agente consegue executar a fase seguinte sem reconstruir contexto.
+
+## Gate P13
+
+- [ ] oito tools MCP públicas e apenas scope `coach`;
+- [ ] edição/agendamento local em um `save_workout`;
+- [ ] publish/update/reschedule Garmin no mesmo binding;
+- [ ] nenhum registro proposal/approval/execution pelos comandos novos;
+- [ ] PWA e sete Skills sem rito antigo;
+- [ ] plugin 2.0 validado/reinstalado e produção com smoke real.

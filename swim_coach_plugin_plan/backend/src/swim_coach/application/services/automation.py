@@ -12,7 +12,7 @@ from swim_coach.domain.shared.value_objects import EntityId
 
 
 class AutomationService:
-    """Materialize periodic jobs with stable keys; never approve or publish actions."""
+    """Materialize periodic jobs with stable keys for direct personal workflows."""
 
     SYNC_JOB_TYPE = "garmin.sync_activities"
     PLAN_JOB_TYPE = "planning.generate_week"

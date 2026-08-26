@@ -68,7 +68,6 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`backend/alembic.ini`](backend/alembic.ini) | arquivo estruturado/auxiliar |
 | [`backend/scripts/load_smoke.py`](backend/scripts/load_smoke.py) | arquivo estruturado/auxiliar |
 | [`backend/scripts/probe_garmin_read.py`](backend/scripts/probe_garmin_read.py) | arquivo estruturado/auxiliar |
-| [`backend/scripts/probe_garmin_write_canary.py`](backend/scripts/probe_garmin_write_canary.py) | arquivo estruturado/auxiliar |
 | [`backend/scripts/probe_oauth_metadata.py`](backend/scripts/probe_oauth_metadata.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/__init__.py`](backend/src/swim_coach/__init__.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/application/__init__.py`](backend/src/swim_coach/application/__init__.py) | arquivo estruturado/auxiliar |
@@ -81,10 +80,12 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`backend/src/swim_coach/application/services/__init__.py`](backend/src/swim_coach/application/services/__init__.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/application/services/activity_data.py`](backend/src/swim_coach/application/services/activity_data.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/application/services/automation.py`](backend/src/swim_coach/application/services/automation.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/application/services/coach_commands.py`](backend/src/swim_coach/application/services/coach_commands.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/application/services/context.py`](backend/src/swim_coach/application/services/context.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/application/services/garmin_connection.py`](backend/src/swim_coach/application/services/garmin_connection.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/application/services/garmin_publish.py`](backend/src/swim_coach/application/services/garmin_publish.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/application/services/garmin_sync.py`](backend/src/swim_coach/application/services/garmin_sync.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/application/services/garmin_upsert.py`](backend/src/swim_coach/application/services/garmin_upsert.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/application/services/garmin_workout_compiler.py`](backend/src/swim_coach/application/services/garmin_workout_compiler.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/application/services/identity.py`](backend/src/swim_coach/application/services/identity.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/application/services/mcp_read.py`](backend/src/swim_coach/application/services/mcp_read.py) | arquivo estruturado/auxiliar |
@@ -177,6 +178,7 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`backend/tests/integration/__init__.py`](backend/tests/integration/__init__.py) | arquivo estruturado/auxiliar |
 | [`backend/tests/integration/conftest.py`](backend/tests/integration/conftest.py) | arquivo estruturado/auxiliar |
 | [`backend/tests/integration/test_activity_data.py`](backend/tests/integration/test_activity_data.py) | arquivo estruturado/auxiliar |
+| [`backend/tests/integration/test_chatgpt_first_v2.py`](backend/tests/integration/test_chatgpt_first_v2.py) | arquivo estruturado/auxiliar |
 | [`backend/tests/integration/test_garmin_connection.py`](backend/tests/integration/test_garmin_connection.py) | arquivo estruturado/auxiliar |
 | [`backend/tests/integration/test_garmin_publish.py`](backend/tests/integration/test_garmin_publish.py) | arquivo estruturado/auxiliar |
 | [`backend/tests/integration/test_garmin_sync.py`](backend/tests/integration/test_garmin_sync.py) | arquivo estruturado/auxiliar |
@@ -244,6 +246,7 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`releases/plugin-0.3.0.json`](releases/plugin-0.3.0.json) | arquivo estruturado/auxiliar |
 | [`releases/plugin-0.4.0.json`](releases/plugin-0.4.0.json) | arquivo estruturado/auxiliar |
 | [`releases/plugin-1.0.0.json`](releases/plugin-1.0.0.json) | arquivo estruturado/auxiliar |
+| [`releases/plugin-2.0.0.json`](releases/plugin-2.0.0.json) | arquivo estruturado/auxiliar |
 | [`tests/e2e/p01-auth-context.spec.ts`](tests/e2e/p01-auth-context.spec.ts) | arquivo estruturado/auxiliar |
 | [`tests/e2e/p02-garmin-status.spec.ts`](tests/e2e/p02-garmin-status.spec.ts) | arquivo estruturado/auxiliar |
 | [`tests/e2e/p03-activity-detail.spec.ts`](tests/e2e/p03-activity-detail.spec.ts) | arquivo estruturado/auxiliar |
@@ -253,6 +256,7 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`tests/evals/cases/p06-read-only.yaml`](tests/evals/cases/p06-read-only.yaml) | arquivo estruturado/auxiliar |
 | [`tests/evals/cases/p08-controlled-write.yaml`](tests/evals/cases/p08-controlled-write.yaml) | arquivo estruturado/auxiliar |
 | [`tests/evals/cases/p10-adaptive-planning.yaml`](tests/evals/cases/p10-adaptive-planning.yaml) | arquivo estruturado/auxiliar |
+| [`tests/evals/cases/p13-chatgpt-first.yaml`](tests/evals/cases/p13-chatgpt-first.yaml) | arquivo estruturado/auxiliar |
 | [`tests/evals/reports/p06-read-only.json`](tests/evals/reports/p06-read-only.json) | arquivo estruturado/auxiliar |
 | [`uv.lock`](uv.lock) | arquivo estruturado/auxiliar |
 
@@ -303,6 +307,7 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`docs/evidence/p10-adaptive-planning.md`](docs/evidence/p10-adaptive-planning.md) | P10 — adaptive weekly planning evidence |
 | [`docs/evidence/p11-automation-offline.md`](docs/evidence/p11-automation-offline.md) | P11 — automation and offline resilience evidence |
 | [`docs/evidence/p12-production-hardening-release.md`](docs/evidence/p12-production-hardening-release.md) | P12 — hardening, privacy and personal release evidence |
+| [`docs/evidence/p13-chatgpt-first.md`](docs/evidence/p13-chatgpt-first.md) | Evidência P13 — ChatGPT-first e comandos diretos |
 | [`docs/handoffs/p00.md`](docs/handoffs/p00.md) | Handoff — P00 Fundação e spikes de risco |
 | [`docs/handoffs/p01.md`](docs/handoffs/p01.md) | Handoff — P01 Domínio, persistência e identidade |
 | [`docs/handoffs/p03.md`](docs/handoffs/p03.md) | Handoff P03 |
@@ -315,6 +320,7 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`docs/handoffs/p10.md`](docs/handoffs/p10.md) | Handoff P10 |
 | [`docs/handoffs/p11.md`](docs/handoffs/p11.md) | Handoff P11 |
 | [`docs/handoffs/p12.md`](docs/handoffs/p12.md) | P12 handoff |
+| [`docs/handoffs/p13.md`](docs/handoffs/p13.md) | Handoff P13 — ChatGPT-first |
 | [`docs/operations/p07-garmin-write-reconciliation.md`](docs/operations/p07-garmin-write-reconciliation.md) | P07 — Publicação Garmin e reconciliação |
 | [`docs/public-readiness.md`](docs/public-readiness.md) | Public readiness assessment — separado do release pessoal |
 | [`docs/runbooks/p11-job-operations.md`](docs/runbooks/p11-job-operations.md) | P11 job operations runbook |
@@ -339,6 +345,7 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`phases/p10-adaptive-planning.md`](phases/p10-adaptive-planning.md) | P10 — Planejamento e adaptação semanal |
 | [`phases/p11-automation-pwa-hardening.md`](phases/p11-automation-pwa-hardening.md) | P11 — Automações, notificações e resiliência da PWA |
 | [`phases/p12-production-hardening-release.md`](phases/p12-production-hardening-release.md) | P12 — Hardening, privacidade e release pessoal |
+| [`phases/p13-chatgpt-first-simplification.md`](phases/p13-chatgpt-first-simplification.md) | P13 — ChatGPT-first e operação direta |
 
 ## Prompts por fase
 
@@ -358,6 +365,7 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`prompts/p10.md`](prompts/p10.md) | Prompt de implementação — P10 Planejamento e adaptação semanal |
 | [`prompts/p11.md`](prompts/p11.md) | Prompt de implementação — P11 Automações, notificações e resiliência da PWA |
 | [`prompts/p12.md`](prompts/p12.md) | Prompt de implementação — P12 Hardening, privacidade e release pessoal |
+| [`prompts/p13.md`](prompts/p13.md) | Prompt P13 |
 
 ## Contratos
 
@@ -370,7 +378,7 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`contracts/error-catalog.md`](contracts/error-catalog.md) | Catálogo de erros |
 | [`contracts/implementation-status.schema.json`](contracts/implementation-status.schema.json) | arquivo estruturado/auxiliar |
 | [`contracts/mcp-tools.yaml`](contracts/mcp-tools.yaml) | arquivo estruturado/auxiliar |
-| [`contracts/oauth-scopes.md`](contracts/oauth-scopes.md) | OAuth scopes |
+| [`contracts/oauth-scopes.md`](contracts/oauth-scopes.md) | OAuth scopes — MCP v2 pessoal |
 | [`contracts/openapi-skeleton.yaml`](contracts/openapi-skeleton.yaml) | arquivo estruturado/auxiliar |
 | [`contracts/plugin-eval-case.schema.json`](contracts/plugin-eval-case.schema.json) | arquivo estruturado/auxiliar |
 | [`contracts/state-machines.md`](contracts/state-machines.md) | Máquinas de estado |
@@ -390,6 +398,7 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`adrs/ADR-0008-versioned-domain-memory.md`](adrs/ADR-0008-versioned-domain-memory.md) | ADR-0008 — Memória do treinador em dados estruturados |
 | [`adrs/ADR-0009-mcp-ui-optional.md`](adrs/ADR-0009-mcp-ui-optional.md) | ADR-0009 — UI MCP é opcional e standards-first |
 | [`adrs/ADR-0010-pwa-bff-session.md`](adrs/ADR-0010-pwa-bff-session.md) | ADR-0010 — BFF OIDC e sessão opaca para a PWA |
+| [`adrs/ADR-0011-chatgpt-first-direct-commands.md`](adrs/ADR-0011-chatgpt-first-direct-commands.md) | ADR-0011 — ChatGPT-first com comandos diretos e segurança invisível |
 
 ## Blueprint do plugin
 
@@ -455,4 +464,4 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`tools/validate_plan.py`](tools/validate_plan.py) | arquivo estruturado/auxiliar |
 | [`tools/validate_repository.py`](tools/validate_repository.py) | arquivo estruturado/auxiliar |
 
-**Total indexado:** 403 arquivos (sem contar este índice e o arquivo de checksums).
+**Total indexado:** 412 arquivos (sem contar este índice e o arquivo de checksums).

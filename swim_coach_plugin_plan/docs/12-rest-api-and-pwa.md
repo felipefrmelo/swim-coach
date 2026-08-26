@@ -2,7 +2,14 @@
 
 ## 1. Papel
 
-A PWA não tenta replicar ChatGPT. Ela é o painel confiável para visualizar, editar, configurar, aprovar e recuperar operações. REST e MCP chamam os mesmos serviços de aplicação; não existe regra exclusiva em controller.
+A PWA não tenta replicar ChatGPT. Ela é uma ferramenta auxiliar para visualizar,
+editar, configurar e recuperar operações. REST e MCP chamam os mesmos serviços
+de aplicação; não existe regra exclusiva em controller.
+
+O editor vigente usa `POST /api/v1/workouts/save`: “Salvar” cria/revisa e agenda;
+“Salvar e enviar ao Garmin” acrescenta o upsert externo na mesma ação. A UI não
+mostra proposta, hash, aprovação, execução, versão esperada ou canário. Rotas de
+ações legadas não são montadas quando MCP v2 está ativo.
 
 ## 2. Rotas da PWA
 

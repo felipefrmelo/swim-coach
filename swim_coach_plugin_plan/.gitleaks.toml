@@ -9,3 +9,8 @@ regexes = ['''execute-proposal-uuid-v1''']
 [[allowlists]]
 description = "P12 OpenAPI SHA-256 content hash, not a credential"
 regexes = ['''4ceb5c5fc3750db11f1b4602e017cbcd96933e46ae81f6259468da5dafac6e26''']
+
+[[allowlists]]
+description = "P13 release manifest contains SHA-256 file checksums, not credentials"
+paths = ['''swim_coach_plugin_plan/releases/plugin-2\.0\.0\.json''']
+regexes = ['''[a-f0-9]{64}''']

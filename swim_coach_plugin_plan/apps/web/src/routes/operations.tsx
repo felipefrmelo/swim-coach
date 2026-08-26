@@ -28,7 +28,7 @@ export function OperationsPage() {
       <section>
         <p className="eyebrow">P11 · operação pessoal</p>
         <h1 className="page-title">Automações</h1>
-        <p className="page-copy">Saúde da fila, falhas recuperáveis e avisos. Publicação e aprovação continuam sempre manuais.</p>
+        <p className="page-copy">Saúde da fila, falhas recuperáveis e avisos dos comandos diretos.</p>
       </section>
       <section className="grid gap-3 sm:grid-cols-3">
         <Metric label="Na fila" value={String((metrics.counts.QUEUED ?? 0) + (metrics.counts.RETRY_SCHEDULED ?? 0))} />

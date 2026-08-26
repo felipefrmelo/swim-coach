@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### P13 — ChatGPT-first e operação direta
+
+- aceita a ADR-0011, que substitui a cerimônia pública de proposal/hash por
+  comandos de intenção e segurança invisível;
+- entregue a superfície de oito tools MCP sob o escopo `coach`, com comandos
+  diretos e sem proposal/hash/approval no contrato público;
+- criado `CoachCommandService`, geração semanal direta e `GarminUpsertService`;
+  replay, edição e mudança de data preservam um único binding Garmin;
+- removido o modo canário e isolado o router REST legado quando v2 está ativo;
+- PWA reduzida a “Salvar” e “Salvar e enviar ao Garmin”;
+- sete Skills e 42 evals atualizadas; plugin pessoal
+  `2.0.0+codex.20260826113352` validado e reinstalado.
+
 ### P12 — hardening, privacidade e release pessoal `1.0.0` (candidate)
 
 - entregues imagens non-root, overlay de produção read-only/cap-drop, readiness

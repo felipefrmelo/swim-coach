@@ -43,14 +43,12 @@ class GarminPublishService:
         *,
         write_enabled: bool = False,
         allow_fake_device: bool = False,
-        canary_title_prefix: str | None = None,
         proposal_ttl: timedelta = timedelta(minutes=15),
         compiler: GarminWorkoutCompiler | None = None,
     ) -> None:
         self._uow_factory = uow_factory
         self._write_enabled = write_enabled
         self._allow_fake_device = allow_fake_device
-        self._canary_title_prefix = canary_title_prefix
         self._proposal_ttl = proposal_ttl
         self._compiler = compiler or GarminWorkoutCompiler()
 
@@ -188,14 +186,6 @@ class GarminPublishService:
             workout, revision, schedule = await self._publication_input(
                 uow, user_id, proposal.target_id, expected_workout_version=None
             )
-            if self._canary_title_prefix and not workout.title.startswith(
-                self._canary_title_prefix
-            ):
-                raise DomainError(
-                    "GARMIN_CANARY_REQUIRED",
-                    "Live publication is limited to titles starting with "
-                    f"{self._canary_title_prefix}.",
-                )
             self._assert_proposal_current(proposal, workout, revision, schedule)
             compiled = self._compiler.compile(revision)
             if compiled.compiled_hash != proposal.payload.get("compiled_hash"):
@@ -266,14 +256,6 @@ class GarminPublishService:
             workout, revision, schedule = await self._publication_input(
                 uow, user_id, proposal.target_id, expected_workout_version=None
             )
-            if self._canary_title_prefix and not workout.title.startswith(
-                self._canary_title_prefix
-            ):
-                raise DomainError(
-                    "GARMIN_CANARY_REQUIRED",
-                    "Live publication is limited to titles starting with "
-                    f"{self._canary_title_prefix}.",
-                )
             self._assert_proposal_current(proposal, workout, revision, schedule)
             compiled = self._compiler.compile(revision)
             if compiled.compiled_hash != proposal.payload.get("compiled_hash"):

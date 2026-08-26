@@ -11,6 +11,15 @@ O plugin `swim-coach` combina:
 - **UI MCP opcional:** somente para inspeção, comparação, edição, confirmação e navegação;
 - **manifesto:** identidade e referências ao conteúdo do plugin.
 
+## Contrato 2.0 ChatGPT-first
+
+O plugin 2.0 usa somente `get_coach_context`, `get_workouts`, `get_swims`,
+`save_workout`, `publish_workout`, `generate_week`, `sync_garmin` e
+`save_feedback`, todos sob o scope OAuth `coach`. As Skills expressam intenção e
+não ensinam proposal/hash/approve/execute. Tools locais executam imediatamente;
+`publish_workout` é chamado quando o pedido do usuário já é claro. Perguntas
+adicionais servem apenas para resolver ambiguidade real, não para cumprir rito.
+
 ```text
 plugin-blueprint/
 ├── .codex-plugin/plugin.json        # P00 seguro: Read + Skill inofensiva

@@ -8,6 +8,11 @@ O Swim Coach transforma o ciclo de treinamento em uma sequência única e audit�
 planejar → revisar → publicar → nadar → sincronizar → analisar → adaptar
 ```
 
+Na P13, “revisar” é uma decisão conversacional, não um protocolo técnico. O
+usuário pede a intenção ao ChatGPT e o backend salva, agenda ou publica em um
+comando direto. Propostas, hashes, versões e chaves de idempotência não aparecem
+na experiência. O site é editor e painel auxiliar; ChatGPT é a interface principal.
+
 A interface conversacional principal vive em ChatGPT/Codex. O plugin ensina os workflows com Skills e acessa o backend pelo MCP. A PWA resolve fluxos visuais e operacionais. O relógio executa e mede.
 
 ## 2. Persona inicial

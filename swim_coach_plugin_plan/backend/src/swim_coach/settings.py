@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     oauth_resource: HttpUrl | None = None
     oauth_jwks_cache_seconds: int = Field(default=300, ge=30, le=3_600)
     mcp_write_enabled: bool = False
+    mcp_v2_enabled: bool = True
     mcp_ui_enabled: bool = False
     planning_enabled: bool = False
     automation_enabled: bool = False
@@ -58,8 +59,6 @@ class Settings(BaseSettings):
     garmin_read_enabled: bool = True
     garmin_write_enabled: bool = False
     garmin_write_mode: Literal["disabled", "fake", "live"] = "disabled"
-    garmin_write_canary_only: bool = True
-    garmin_write_canary_title_prefix: str = "[CANARY]"
     activity_storage_path: Path = Path(".swim-coach-data/artifacts")
 
     @model_validator(mode="after")
@@ -116,8 +115,6 @@ class Settings(BaseSettings):
             and self.garmin_master_keys is None
         ):
             raise ValueError("live Garmin writes require encrypted Garmin credentials")
-        if not self.garmin_write_canary_title_prefix.strip():
-            raise ValueError("garmin_write_canary_title_prefix cannot be empty")
         if (self.dev_auth_enabled or self.oidc_issuer is not None) and not (
             self.allowed_emails or self.allowed_subjects
         ):

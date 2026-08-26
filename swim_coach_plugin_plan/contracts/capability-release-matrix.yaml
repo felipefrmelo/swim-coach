@@ -1,248 +1,60 @@
-schema_version: '1.0'
+schema_version: "2.0"
 plugin_releases:
-- phase: P00
-  version: 0.0.0-spike
-  mode: skills-only-or-test-connection
-  purpose: platform feasibility
-- phase: P06
-  version: 0.1.0
-  mode: read-only
-  purpose: personal plugin with read workflows
-- phase: P08
-  version: 0.2.0
-  mode: controlled-write
-  purpose: feedback, sync, proposals and Garmin publication
-- phase: P09
-  version: 0.3.0
-  mode: optional-ui
-  purpose: MCP Apps UI while retaining headless behavior
-- phase: P10
-  version: 0.4.0
-  mode: adaptive-planning
-  purpose: versioned weekly planning workflow
-- phase: P12
-  version: 1.0.0
-  mode: hardened-personal-release
-  purpose: operational personal product
+  - {phase: P00, version: 0.0.0-spike, mode: skills-only-or-test-connection, purpose: platform feasibility}
+  - {phase: P06, version: 0.1.0, mode: read-only, purpose: historical read workflows}
+  - {phase: P08, version: 0.2.0, mode: controlled-write, purpose: historical proposal workflow}
+  - {phase: P09, version: 0.3.0, mode: optional-ui, purpose: historical MCP Apps UI}
+  - {phase: P10, version: 0.4.0, mode: adaptive-planning, purpose: historical weekly proposal}
+  - {phase: P12, version: 1.0.0, mode: hardened-personal-release, purpose: operational personal product}
+  - phase: P13
+    version: 2.0.0
+    mode: chatgpt-first-direct-commands
+    purpose: personal coach with eight intent-level tools and direct Garmin upsert
+    oauth_scopes: [coach]
+
 tools:
-- name: get_capabilities
-  introduced: P00
-  release: 0.0.0-spike
-  kind: read
-  external_effect: false
-- name: get_training_context
-  introduced: P05
-  release: 0.1.0
-  kind: read
-  external_effect: false
-- name: get_today_workout
-  introduced: P05
-  release: 0.1.0
-  kind: read
-  external_effect: false
-- name: get_week_plan
-  introduced: P05
-  release: 0.1.0
-  kind: read
-  external_effect: false
-- name: list_recent_swims
-  introduced: P05
-  release: 0.1.0
-  kind: read
-  external_effect: false
-- name: get_swim_activity
-  introduced: P05
-  release: 0.1.0
-  kind: read
-  external_effect: false
-- name: get_goal_progress
-  introduced: P05
-  release: 0.1.0
-  kind: read
-  external_effect: false
-- name: get_sync_status
-  introduced: P05
-  release: 0.1.0
-  kind: read
-  external_effect: false
-- name: render_workout_card
-  introduced: P09
-  release: 0.3.0
-  kind: optional-ui-read
-  external_effect: false
-- name: render_activity_comparison_card
-  introduced: P09
-  release: 0.3.0
-  kind: optional-ui-read
-  external_effect: false
-- name: render_goal_progress_card
-  introduced: P09
-  release: 0.3.0
-  kind: optional-ui-read
-  external_effect: false
-- name: render_proposal_confirmation_card
-  introduced: P09
-  release: 0.3.0
-  kind: optional-ui-read
-  external_effect: false
-- name: render_sync_status_card
-  introduced: P09
-  release: 0.3.0
-  kind: optional-ui-read
-  external_effect: false
-- name: get_action_proposal
-  introduced: P08
-  release: 0.2.0
-  kind: read
-  external_effect: false
-- name: get_job_status
-  introduced: P08
-  release: 0.2.0
-  kind: read
-  external_effect: false
-- name: sync_garmin_activities
-  introduced: P08
-  release: 0.2.0
-  kind: local-write-external-read
-  external_effect: true
-- name: record_session_feedback
-  introduced: P08
-  release: 0.2.0
-  kind: local-write
-  external_effect: false
-- name: create_workout_draft
-  introduced: P08
-  release: 0.2.0
-  kind: local-write
-  external_effect: false
-- name: propose_workout_change
-  introduced: P08
-  release: 0.2.0
-  kind: proposal
-  external_effect: false
-- name: propose_workout_reschedule
-  introduced: P08
-  release: 0.2.0
-  kind: proposal
-  external_effect: false
-- name: preview_garmin_publish
-  introduced: P08
-  release: 0.2.0
-  kind: proposal
-  external_effect: false
-- name: cancel_action_proposal
-  introduced: P08
-  release: 0.2.0
-  kind: local-write
-  external_effect: false
-- name: approve_action_proposal
-  introduced: P08
-  release: 0.2.0
-  kind: approval
-  external_effect: false
-- name: execute_approved_action
-  introduced: P08
-  release: 0.2.0
-  kind: external-write-queue
-  external_effect: true
-- name: retry_failed_job
-  introduced: P08
-  release: 0.2.0
-  kind: external-write-possible
-  external_effect: true
-- name: propose_week_plan
-  introduced: P10
-  release: 0.4.0
-  kind: proposal
-  external_effect: false
+  - {name: get_coach_context, introduced: P13, release: 2.0.0, kind: read, external_effect: false}
+  - {name: get_workouts, introduced: P13, release: 2.0.0, kind: read, external_effect: false}
+  - {name: get_swims, introduced: P13, release: 2.0.0, kind: read, external_effect: false}
+  - {name: save_workout, introduced: P13, release: 2.0.0, kind: local-write, external_effect: false}
+  - {name: publish_workout, introduced: P13, release: 2.0.0, kind: external-write-upsert, external_effect: true}
+  - {name: generate_week, introduced: P13, release: 2.0.0, kind: local-write, external_effect: false}
+  - {name: sync_garmin, introduced: P13, release: 2.0.0, kind: external-read, external_effect: true}
+  - {name: save_feedback, introduced: P13, release: 2.0.0, kind: local-write, external_effect: false}
+
 skills:
-- name: review-latest-swim
-  introduced: P06
-  release: 0.1.0
-  required_tools:
-  - list_recent_swims
-  - get_swim_activity
-  - get_sync_status
-- name: goal-progress
-  introduced: P06
-  release: 0.1.0
-  required_tools:
-  - get_training_context
-  - get_goal_progress
-- name: diagnose-sync
-  introduced: P06
-  release: 0.1.0
-  mode: read-only
-  required_tools:
-  - get_sync_status
-- name: adapt-workout
-  introduced: P08
-  release: 0.2.0
-  required_tools:
-  - get_today_workout
-  - get_week_plan
-  - propose_workout_change
-  - propose_workout_reschedule
-  - get_action_proposal
-- name: publish-to-garmin
-  introduced: P08
-  release: 0.2.0
-  required_tools:
-  - preview_garmin_publish
-  - get_action_proposal
-  - approve_action_proposal
-  - execute_approved_action
-  - get_job_status
-- name: post-swim-checkin
-  introduced: P08
-  release: 0.2.0
-  required_tools:
-  - list_recent_swims
-  - get_swim_activity
-  - record_session_feedback
-- name: diagnose-sync
-  upgraded: P08
-  release: 0.2.0
-  mode: read-and-trigger
-  required_tools:
-  - get_sync_status
-  - sync_garmin_activities
-  - get_job_status
-  - retry_failed_job
-- name: plan-swim-week
-  introduced: P10
-  release: 0.4.0
-  required_tools:
-  - get_training_context
-  - get_week_plan
-  - list_recent_swims
-  - get_goal_progress
-  - get_sync_status
-  - propose_week_plan
-  - get_action_proposal
-ui_resources:
-- name: workout-card
-  introduced: P09
-  optional: true
-  tools:
-  - render_workout_card
-- name: swim-comparison-card
-  introduced: P09
-  optional: true
-  tools:
-  - render_activity_comparison_card
-- name: goal-progress-card
-  introduced: P09
-  optional: true
-  tools:
-  - render_goal_progress_card
-- name: proposal-confirmation-card
-  introduced: P09
-  optional: true
-  tools:
-  - render_proposal_confirmation_card
-- name: sync-status-card
-  introduced: P09
-  optional: true
-  tools:
-  - render_sync_status_card
+  - name: review-latest-swim
+    introduced: P13
+    release: 2.0.0
+    required_tools: [get_swims, get_coach_context]
+  - name: goal-progress
+    introduced: P13
+    release: 2.0.0
+    required_tools: [get_coach_context]
+  - name: diagnose-sync
+    introduced: P13
+    release: 2.0.0
+    required_tools: [get_coach_context, sync_garmin, get_swims]
+  - name: adapt-workout
+    introduced: P13
+    release: 2.0.0
+    required_tools: [get_coach_context, get_workouts, save_workout, publish_workout]
+  - name: publish-to-garmin
+    introduced: P13
+    release: 2.0.0
+    required_tools: [get_workouts, save_workout, publish_workout]
+  - name: post-swim-checkin
+    introduced: P13
+    release: 2.0.0
+    required_tools: [get_swims, save_feedback]
+  - name: plan-swim-week
+    introduced: P13
+    release: 2.0.0
+    required_tools: [get_coach_context, get_workouts, get_swims, generate_week, publish_workout]
+
+ui_resources: []
+
+legacy:
+  status: retained-in-code-for-transition-not-advertised
+  retired_in: P13
+  notes: P00-P10 tool and UI contracts remain in history and legacy tests only.

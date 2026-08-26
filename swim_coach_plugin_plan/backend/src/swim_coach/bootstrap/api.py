@@ -54,10 +54,12 @@ def create_app(
     mcp_server = create_mcp_server(
         read_service=services.mcp_read,
         write_service=services.mcp_write,
+        coach_service=services.coach_commands,
         token_verifier=token_verifier,
         oauth_issuer=oauth_issuer,
         oauth_resource=oauth_resource,
         ui_enabled=settings.mcp_ui_enabled,
+        v2_enabled=settings.mcp_v2_enabled and services.mcp_write is not None,
         pwa_base_url=str(settings.pwa_base_url),
         allowed_hosts=allowed_hosts,
         allowed_origins=allowed_origins,
@@ -89,7 +91,8 @@ def create_app(
     app.include_router(context_router)
     app.include_router(garmin_router)
     app.include_router(workouts_router)
-    app.include_router(actions_router)
+    if not settings.mcp_v2_enabled:
+        app.include_router(actions_router)
     app.include_router(activities_router)
     app.include_router(operations_router)
     app.include_router(privacy_router)

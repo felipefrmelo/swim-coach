@@ -3,7 +3,6 @@ import pytest
 from pydantic import ValidationError
 
 from swim_coach.application.services.mcp_read import MCP_READ_SCOPES
-from swim_coach.application.services.mcp_write import MCP_WRITE_SCOPES
 from swim_coach.bootstrap.api import create_app
 from swim_coach.settings import Settings, get_settings
 
@@ -71,7 +70,7 @@ async def test_protected_resource_advertises_write_scopes_only_with_kill_switch(
             response = await client.get("/.well-known/oauth-protected-resource")
 
     assert response.status_code == 200
-    assert response.json()["scopes_supported"] == list((*MCP_READ_SCOPES, *MCP_WRITE_SCOPES))
+    assert response.json()["scopes_supported"] == ["coach"]
 
 
 def test_oauth_resource_allows_development_loopback_http() -> None:

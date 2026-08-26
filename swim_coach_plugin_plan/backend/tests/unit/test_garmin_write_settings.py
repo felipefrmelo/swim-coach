@@ -1,4 +1,4 @@
-"""P07 read/write flag and live canary safeguards."""
+"""Garmin read/write settings."""
 
 import base64
 
@@ -35,15 +35,13 @@ def test_fake_write_is_forbidden_in_production() -> None:
         )
 
 
-def test_live_write_requires_encrypted_credentials_and_defaults_to_canary_only() -> None:
+def test_live_write_requires_encrypted_credentials() -> None:
     with pytest.raises(ValidationError):
         Settings(_env_file=None, garmin_write_enabled=True, garmin_write_mode="live")
-    settings = Settings(
+    Settings(
         _env_file=None,
         garmin_write_enabled=True,
         garmin_write_mode="live",
         garmin_master_keys=keyring(),
         garmin_active_key_version="v1",
     )
-    assert settings.garmin_write_canary_only is True
-    assert settings.garmin_write_canary_title_prefix == "[CANARY]"
