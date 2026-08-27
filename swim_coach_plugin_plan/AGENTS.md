@@ -1,23 +1,27 @@
-# AGENTS.md — regras para qualquer LLM ou agente de código
+# AGENTS.md — regras para agentes de código
 
-## Missão
+## Produto e interfaces
 
-Implementar o Swim Coach de forma incremental, verificável e segura, obedecendo à fase atual e preservando os contratos do pacote de planejamento.
+- ChatGPT é a interface principal do usuário do Swim Coach.
+- Codex é uma ferramenta de desenvolvimento, testes e manutenção; não deve ser
+  apresentado como experiência principal do atleta.
+- O site/PWA é auxiliar para visualização, edição, configuração, diagnóstico,
+  exportação, administração da conta e contingência. Ele não contém chat próprio.
+- Novos fluxos cotidianos devem funcionar primeiro pelo plugin/MCP no ChatGPT.
+  Não crie uma capacidade de uso diário exclusiva do site.
+- Funções administrativas sensíveis podem permanecer exclusivas do site quando
+  isso reduzir risco ou melhorar a revisão visual.
+- PostgreSQL e backend são as fontes de verdade. Conversas e Skills nunca são
+  estado canônico do atleta, atividades ou treinos.
 
-## Antes de editar código
+## Antes de editar
 
-1. Leia `README.md`, `MASTER_PLAN.md` e `IMPLEMENTATION_STATUS.md`.
-2. Descubra a primeira fase elegível.
-3. Leia o arquivo da fase, o prompt correspondente, os ADRs e os documentos listados no `docs/20-context-map.md`.
-4. Inspecione o repositório real; não suponha que o esqueleto já exista.
-5. Registre qualquer divergência entre plano e código em `CHANGELOG.md` e, quando arquitetural, em um novo ADR.
-
-## Escopo
-
-- Implemente somente a fase solicitada.
-- Não antecipe uma fase posterior “porque é fácil”.
-- É permitido criar interfaces ou stubs necessários à fase atual, mas não lógica futura simulada como concluída.
-- Não marque uma tarefa como concluída sem evidência reproduzível.
+1. Leia `README.md` e inspecione o código, contratos e testes relacionados.
+2. Preserve as interfaces públicas e os dados existentes, salvo quando a tarefa
+   exigir explicitamente uma migração ou mudança incompatível.
+3. Faça a menor alteração completa e verifique-a com testes reproduzíveis.
+4. Não trate comentários, nomes históricos de fases ou artefatos gerados como
+   fonte de verdade quando o comportamento atual do código divergir.
 
 ## Invariantes de domínio
 
@@ -27,55 +31,37 @@ Implementar o Swim Coach de forma incremental, verificável e segura, obedecendo
 - Revisões de treino publicadas são imutáveis; mudanças criam nova revisão.
 - FIT bruto é preservado e normalizado de forma idempotente.
 - Payload específico Garmin não atravessa a porta do provider.
-- A conversa/Skill nunca é fonte de verdade do estado de treino.
 - Métricas clínicas não são diagnósticos.
 
-## Invariantes de segurança
+## Segurança
 
-- Nunca commitar senha, token, FIT real, e-mail privado ou segredo.
-- Nunca registrar tokens ou credenciais em logs.
-- Dados privados e ferramentas de escrita exigem autenticação e escopo.
-- Na superfície v2 pessoal, a própria chamada `publish_workout` expressa a
-  intenção de efeito externo; proposta/hash/aprovação não são expostos. O
-  servidor ainda exige autenticação, ownership, idempotência derivada, auditoria
-  e reconciliação, conforme ADR-0011.
-- Uma anotação MCP não substitui validação, autorização nem confirmação.
+- Nunca commite senha, token, FIT real, e-mail privado ou segredo.
+- Nunca registre tokens ou credenciais em logs.
+- Dados privados e ferramentas de escrita exigem autenticação e scope.
+- Comandos diretos do MCP não removem autenticação, ownership, idempotência,
+  auditoria ou reconciliação do servidor.
+- Uma anotação MCP não substitui validação ou autorização.
 - O modelo não recebe FIT bruto, tokens Garmin ou payloads externos desnecessários.
 - O login Garmin ocorre por bootstrap seguro; a senha não é persistida.
 
 ## Arquitetura
 
-- Monólito modular Python; dependências apontam para o domínio, nunca ao contrário.
+- Monólito modular Python; dependências apontam para o domínio.
 - REST, MCP e worker reutilizam os mesmos serviços de aplicação.
-- `GarminProvider` é uma porta. A biblioteca não oficial é detalhe de infraestrutura.
-- Jobs e outbox usam PostgreSQL até nova ADR.
-- A PWA não contém chat no MVP.
-- Skills orquestram workflows; ferramentas MCP fornecem dados e ações controladas.
+- `GarminProvider` é uma porta; a biblioteca não oficial é infraestrutura.
+- Jobs e outbox usam PostgreSQL.
+- Skills orquestram workflows; ferramentas MCP fornecem dados e ações.
 - Toda ferramenta MCP deve funcionar sem UI customizada.
+- O site não deve duplicar a conversa hospedada pelo ChatGPT.
 
-## Qualidade
+## Qualidade e entrega
 
-- Código tipado e testado.
-- Migrações forward e downgrade quando tecnicamente seguras.
+- Mantenha o código tipado e testado.
+- Migrações devem ter downgrade quando tecnicamente seguro.
 - Erros públicos usam catálogo estável e `correlation_id`.
-- Datas/horários em UTC internamente; timezone do usuário na borda.
-- Dinheiro, duração, distância e ritmo não usam unidades implícitas.
-- IDs externos nunca são usados como PK interna.
-- APIs públicas não exigem chaves técnicas do usuário. Idempotência e controle
-  de concorrência são derivados no servidor quando aplicável.
-
-## Entrega de fase
-
-Ao concluir:
-
-1. rode todos os comandos de verificação definidos na fase;
-2. salve evidências no bloco da fase em `IMPLEMENTATION_STATUS.md`;
-3. atualize `implementation-status.json`;
-4. atualize `CHANGELOG.md`;
-5. liste arquivos alterados, testes executados, migrações e riscos restantes;
-6. não esconda falhas nem use mocks como evidência de integração real;
-7. deixe o repositório executável para o próximo agente.
-
-## Quando o plano estiver incorreto
-
-Não contorne silenciosamente. Faça a menor mudança segura, escreva uma ADR com contexto, alternativas, decisão e consequências, atualize os documentos afetados e preserve rastreabilidade.
+- Datas ficam em UTC internamente e usam o timezone do usuário na borda.
+- Distância, duração e ritmo não usam unidades implícitas.
+- IDs externos nunca são PKs internas.
+- APIs públicas não exigem chaves técnicas do usuário.
+- Ao concluir, rode os checks aplicáveis, liste testes executados, migrações e
+  riscos restantes e deixe o repositório executável.

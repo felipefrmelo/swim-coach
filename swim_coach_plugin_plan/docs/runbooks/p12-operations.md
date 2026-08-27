@@ -8,16 +8,18 @@
 3. Execute `docker compose -f docker-compose.yml -f docker-compose.production.yml
    config` e revise portas, volumes e variáveis resolvidas.
 4. Execute `docker compose ... build`, depois somente o serviço `migrate`.
-5. Suba API/worker/web, espere `/health/ready`, valide a PWA e execute
-   `backend/scripts/load_smoke.py` contra o endpoint loopback.
+5. Suba API/worker/web, espere `/health/ready`, valide primeiro o backend, MCP e
+   plugin, execute `backend/scripts/load_smoke.py` contra o endpoint loopback e
+   então valide o painel auxiliar.
 6. Termine TLS no Secure MCP Tunnel/ingress gerenciado. O Compose só publica
    loopback e nunca deve ser exposto diretamente na Internet.
 
 ## Atualização e rollback
 
 Antes de atualizar, crie um backup criptografado verificado e guarde o hash do
-commit/imagem. Pare o worker, aplique a migration one-shot, suba a nova API/PWA e
-rode os smokes. Se uma verificação falhar, desligue `GARMIN_WRITE`, `MCP_WRITE` e
+commit/imagem. Pare o worker, aplique a migration one-shot, suba a nova API e o
+painel auxiliar e rode os smokes. Se uma verificação falhar, desligue
+`GARMIN_WRITE`, `MCP_WRITE` e
 `AUTOMATION`, restaure a imagem anterior e faça downgrade da migration apenas
 quando o arquivo Alembic declara downgrade seguro. Para perda/corrupção de dados,
 não tente downgrade: restaure o último backup verificado em destino isolado.
@@ -64,12 +66,15 @@ Acima de 80%, pare imports/exports, confirme que existe backup recente e remova
 somente backups além da retenção ou jobs finalizados pela rotina prevista. Não
 apague FIT, volume PostgreSQL ou export diretamente. Faça export/delete pela API.
 
-## OAuth, Garmin ou plugin
+## OAuth Garmin ou plugin
 
 Para OAuth, reexecute o metadata probe e valide issuer/audience/PKCE sem imprimir
 token. Para Garmin, respeite `429`, espere o backoff e reconecte pela CLI segura;
-senha não entra na PWA. Para o plugin, confirme o app mapping, reinstale a versão
-1.0.0 e abra conversa nova. Mantenha writes desligados até read smoke user-scoped.
+senha não entra no painel auxiliar. Para o plugin, confirme o app mapping,
+reinstale a versão 2.1.0 e abra uma conversa nova no ChatGPT. Faça o smoke
+principal pelo ChatGPT: consulte contexto, natação recente e treinos planejados.
+Mantenha writes desligados até o read smoke user-scoped passar; só depois valide
+o painel auxiliar e efeitos externos descartáveis.
 
 ## Incidente de segurança/privacidade
 

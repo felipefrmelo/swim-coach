@@ -28,7 +28,6 @@ e2e:
 
 validate:
 	UV_CACHE_DIR=$(UV_CACHE_DIR) uv run python tools/validate_repository.py
-	python3 tools/validate_plan.py
 
 build:
 	corepack pnpm build
