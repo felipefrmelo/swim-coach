@@ -40,6 +40,15 @@ const statusLabels: Record<Workout["status"], string> = {
   published: "Publicado", completed: "Concluído", cancelled: "Cancelado", archived: "Arquivado",
 };
 
+const garminWarningMessages: Record<string, string> = {
+  RPE_TARGET_MAPPED_TO_GARMIN_EFFORT_CATEGORY: "A Garmin aceita uma categoria de esforço por etapa. A faixa de RPE será convertida e também ficará nas notas.",
+  RPE_TARGET_DOWNGRADED_TO_TEXT: "A faixa de RPE ficará nas notas porque a meta de esforço nativa não está disponível.",
+  PACE_TARGET_DOWNGRADED_TO_TEXT: "O ritmo desejado ficará nas notas porque a meta de ritmo nativa não está disponível.",
+  ZONE_TARGET_DOWNGRADED_TO_TEXT: "A zona existente ficará nas notas porque esse alvo nativo ainda não é suportado.",
+  DRILL_STROKE_DOWNGRADED_TO_CHOICE: "O Garmin receberá este educativo com o estilo genérico Livre escolha.",
+  EQUIPMENT_OMITTED_FROM_GARMIN_PAYLOAD: "O equipamento desta etapa não será enviado ao Garmin.",
+};
+
 function starterWorkout(poolLength = 20): CanonicalWorkout {
   return {
     schema_version: "1.0",
@@ -75,11 +84,14 @@ function restStep(seconds: number): WorkoutStep {
 function calculate(nodes: WorkoutNode[], poolLength: number) {
   let distance = 0; let steps = 0; let restSeconds = 0;
   const errors: string[] = [];
+  const garminWarningCodes = new Set<string>();
   function walk(items: WorkoutNode[], multiplier: number, depth: number) {
     if (depth > 4) errors.push("Use no máximo quatro níveis de repetição.");
     items.forEach((node) => {
       if (node.type === "repeat") { walk(node.children, multiplier * node.repetitions, depth + 1); return; }
       steps += multiplier;
+      if (node.target?.type === "rpe") garminWarningCodes.add("RPE_TARGET_MAPPED_TO_GARMIN_EFFORT_CATEGORY");
+      if (node.target?.type === "zone") garminWarningCodes.add("ZONE_TARGET_DOWNGRADED_TO_TEXT");
       if (node.target?.type === "rpe" && (!Number.isInteger(node.target.min) || !Number.isInteger(node.target.max) || node.target.min < 1 || node.target.max > 10)) errors.push("Use valores inteiros de RPE entre 1 e 10.");
       if (node.target?.type === "rpe" && node.target.min > node.target.max) errors.push("O RPE mínimo não pode ser maior que o máximo.");
       if (node.target?.type === "pace_range" && (!Number.isFinite(node.target.min_seconds_per_100m) || !Number.isFinite(node.target.max_seconds_per_100m))) errors.push("Use o formato mm:ss nos dois limites de ritmo.");
@@ -93,7 +105,7 @@ function calculate(nodes: WorkoutNode[], poolLength: number) {
     });
   }
   walk(nodes, 1, 1);
-  return { distance, steps, restSeconds, errors: [...new Set(errors)] };
+  return { distance, steps, restSeconds, errors: [...new Set(errors)], garminWarningCodes };
 }
 
 export function WorkoutsPage() {
@@ -155,10 +167,10 @@ function WorkoutEditor({ poolId, initial, existing }: { poolId: string; initial:
     },
   });
   const garminAdvisories = useMemo(() => {
-    const codes = saveWarningCodes(definition.nodes);
+    const codes = new Set(totals.garminWarningCodes);
     for (const code of save.data?.garmin?.warnings ?? []) codes.add(code);
     return [...codes].map(garminWarningMessage);
-  }, [definition.nodes, save.data]);
+  }, [totals.garminWarningCodes, save.data]);
 
   function updateNode(index: number, node: WorkoutNode) { setDefinition((value) => ({ ...value, nodes: value.nodes.map((item, itemIndex) => itemIndex === index ? node : item) })); }
   function moveNode(index: number, direction: -1 | 1) { setDefinition((value) => { const nodes = [...value.nodes]; const target = index + direction; if (target < 0 || target >= nodes.length) return value; [nodes[index], nodes[target]] = [nodes[target], nodes[index]]; return { ...value, nodes }; }); setNodeKeys((value) => { const keys = [...value]; const target = index + direction; if (target < 0 || target >= keys.length) return value; [keys[index], keys[target]] = [keys[target], keys[index]]; return keys; }); }
@@ -215,8 +227,8 @@ function newTarget(type: string): NonNullable<WorkoutStep["target"]> {
 function PaceField({ label, seconds, onChange }: { label: string; seconds: number; onChange: (seconds: number) => void }) {
   const errorId = useId();
   const [draft, setDraft] = useState(() => formatPace(seconds));
-  const [invalid, setInvalid] = useState(() => !Number.isFinite(seconds));
-  return <Field label={label}><input aria-label={label} aria-invalid={invalid} aria-describedby={invalid ? errorId : undefined} type="text" inputMode="numeric" pattern="[0-9]+:[0-5][0-9]" value={draft} onChange={(event) => { const value = event.currentTarget.value; setDraft(value); setInvalid(parsePace(value) === null); }} onBlur={() => { const parsed = parsePace(draft); setInvalid(parsed === null); onChange(parsed ?? Number.NaN); }} />{invalid && <span id={errorId} role="alert" className="text-xs font-medium text-rose-700">Use minutos e segundos, por exemplo 2:15.</span>}</Field>;
+  const invalid = parsePace(draft) === null;
+  return <Field label={label}><input aria-label={label} aria-invalid={invalid} aria-describedby={invalid ? errorId : undefined} type="text" inputMode="numeric" pattern="[0-9]+:[0-5][0-9]" value={draft} onChange={(event) => setDraft(event.currentTarget.value)} onBlur={() => onChange(parsePace(draft) ?? Number.NaN)} />{invalid && <span id={errorId} role="alert" className="text-xs font-medium text-rose-700">Use minutos e segundos, por exemplo 2:15.</span>}</Field>;
 }
 
 function RepeatFields({ node, poolLength, onChange }: { node: WorkoutRepeat; poolLength: number; onChange: (node: WorkoutRepeat) => void }) {
@@ -224,12 +236,19 @@ function RepeatFields({ node, poolLength, onChange }: { node: WorkoutRepeat; poo
 }
 
 function ValidationPanel({ errors }: { errors: string[] }) { return errors.length ? <section className="validation-panel validation-error" role="alert" aria-live="assertive"><AlertTriangle className="size-5" /><div><h2 className="font-bold">Ajuste estes blocos</h2>{errors.map((error) => <p className="mt-1 text-sm" key={error}>{error}</p>)}</div></section> : <section className="validation-panel" role="status"><CheckCircle2 className="size-5" /><div><h2 className="font-bold">Pronto para salvar</h2><p className="mt-1 text-sm">Todas as distâncias terminam na parede.</p></div></section>; }
-function saveWarningCodes(nodes: WorkoutNode[]) { const codes = new Set<string>(); function walk(items: WorkoutNode[]) { items.forEach((node) => { if (node.type === "repeat") { walk(node.children); return; } if (node.target?.type === "rpe") codes.add("RPE_TARGET_MAPPED_TO_GARMIN_EFFORT_CATEGORY"); if (node.target?.type === "zone") codes.add("ZONE_TARGET_DOWNGRADED_TO_TEXT"); }); } walk(nodes); return codes; }
-function garminWarningMessage(code: string) { return ({ RPE_TARGET_MAPPED_TO_GARMIN_EFFORT_CATEGORY: "A Garmin aceita uma categoria de esforço por etapa. A faixa de RPE será convertida e também ficará nas notas.", RPE_TARGET_DOWNGRADED_TO_TEXT: "A faixa de RPE ficará nas notas porque a meta de esforço nativa não está disponível.", PACE_TARGET_DOWNGRADED_TO_TEXT: "O ritmo desejado ficará nas notas porque a meta de ritmo nativa não está disponível.", ZONE_TARGET_DOWNGRADED_TO_TEXT: "A zona existente ficará nas notas porque esse alvo nativo ainda não é suportado.", DRILL_STROKE_DOWNGRADED_TO_CHOICE: "O Garmin receberá este educativo com o estilo genérico Livre escolha.", EQUIPMENT_OMITTED_FROM_GARMIN_PAYLOAD: "O equipamento desta etapa não será enviado ao Garmin." } as Record<string, string>)[code] ?? "O Garmin ajustará parte desta etapa durante o envio."; }
+function garminWarningMessage(code: string) { return garminWarningMessages[code] ?? "O Garmin ajustará parte desta etapa durante o envio."; }
 function IconButton({ label, onClick, disabled, children }: { label: string; onClick: () => void; disabled?: boolean; children: React.ReactElement }) { return <button className="icon-button" type="button" aria-label={label} disabled={disabled} onClick={onClick}>{children}</button>; }
 function roleLabel(role: WorkoutRole) { return ({ WARMUP: "Aquecimento", WORK: "Nado", RECOVERY: "Recuperação", REST: "Descanso", COOLDOWN: "Soltura", DRILL: "Educativo", OTHER: "Outro" } as Record<WorkoutRole, string>)[role]; }
 function endLabel(node: WorkoutStep) { return node.end_condition.type === "distance" ? `${node.end_condition.meters} m` : node.end_condition.type === "time" ? `${node.end_condition.seconds} s` : "Botão lap"; }
-function targetLabel(target: WorkoutStep["target"]) { return !target || target.type === "none" ? "sem objetivo" : target.type === "rpe" ? `RPE ${target.min}–${target.max}` : target.type === "pace_range" ? Number.isFinite(target.min_seconds_per_100m) && Number.isFinite(target.max_seconds_per_100m) ? `${formatPace(target.min_seconds_per_100m)}–${formatPace(target.max_seconds_per_100m)}/100 m` : "ritmo inválido" : target.zone; }
+function targetLabel(target: WorkoutStep["target"]) {
+  if (!target) return "sem objetivo";
+  switch (target.type) {
+    case "none": return "sem objetivo";
+    case "rpe": return `RPE ${target.min}–${target.max}`;
+    case "pace_range": return Number.isFinite(target.min_seconds_per_100m) && Number.isFinite(target.max_seconds_per_100m) ? `${formatPace(target.min_seconds_per_100m)}–${formatPace(target.max_seconds_per_100m)}/100 m` : "ritmo inválido";
+    case "zone": return target.zone;
+  }
+}
 function Page({ title, eyebrow, children }: { title: string; eyebrow: string; children: React.ReactNode }) { return <div className="page-stack"><section><p className="eyebrow">{eyebrow}</p><h1 className="page-title">{title}</h1></section>{children}</div>; }
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="grid gap-2 text-sm font-semibold text-slate-700"><span>{label}</span>{children}</label>; }
 

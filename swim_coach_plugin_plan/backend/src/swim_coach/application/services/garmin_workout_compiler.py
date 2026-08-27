@@ -58,7 +58,10 @@ _STROKE_IDS = {
 @dataclass(slots=True)
 class _CompileState:
     capabilities: GarminWorkoutCapabilities
-    warnings: list[str]
+    warnings: dict[str, None]
+
+    def warn(self, code: str) -> None:
+        self.warnings.setdefault(code, None)
 
 
 class GarminWorkoutCompiler:
@@ -73,7 +76,7 @@ class GarminWorkoutCompiler:
                 "The workout has more top-level steps than the Garmin capability allows.",
                 details={"maximum": self._capabilities.max_top_level_steps},
             )
-        state = _CompileState(self._capabilities, [])
+        state = _CompileState(self._capabilities, {})
         source_revision_hash = hashlib.sha256(
             f"{revision.id}:{revision.content_hash}".encode()
         ).hexdigest()
@@ -109,7 +112,7 @@ class GarminWorkoutCompiler:
             payload=payload,
             compiled_hash=compiled_hash,
             source_revision_hash=source_revision_hash,
-            warnings=tuple(dict.fromkeys(state.warnings)),
+            warnings=tuple(state.warnings),
         )
 
     def _compile_node(
@@ -167,7 +170,7 @@ class GarminWorkoutCompiler:
             condition_id, condition_key, condition_display, value = 1, "lap.button", 1, None
         stroke = node.stroke.type
         if stroke == "drill":
-            state.warnings.append("DRILL_STROKE_DOWNGRADED_TO_CHOICE")
+            state.warn("DRILL_STROKE_DOWNGRADED_TO_CHOICE")
             stroke = "choice"
         if stroke not in state.capabilities.supported_strokes:
             raise DomainError(
@@ -177,7 +180,7 @@ class GarminWorkoutCompiler:
             )
         if node.equipment and node.equipment != ("NONE",):
             if not state.capabilities.supports_equipment:
-                state.warnings.append("EQUIPMENT_OMITTED_FROM_GARMIN_PAYLOAD")
+                state.warn("EQUIPMENT_OMITTED_FROM_GARMIN_PAYLOAD")
         result: dict[str, object] = {
             "type": "ExecutableStepDTO",
             "stepOrder": order,
@@ -217,7 +220,7 @@ class GarminWorkoutCompiler:
             return None
         if target.type == "pace_range":
             if not state.capabilities.supports_pace_target:
-                state.warnings.append("PACE_TARGET_DOWNGRADED_TO_TEXT")
+                state.warn("PACE_TARGET_DOWNGRADED_TO_TEXT")
                 return (
                     "Ritmo "
                     f"{GarminWorkoutCompiler._format_pace(target.min_seconds_per_100m)}-"
@@ -233,7 +236,7 @@ class GarminWorkoutCompiler:
             return None
         if target.type == "rpe":
             if not state.capabilities.supports_rpe_target:
-                state.warnings.append("RPE_TARGET_DOWNGRADED_TO_TEXT")
+                state.warn("RPE_TARGET_DOWNGRADED_TO_TEXT")
                 return f"RPE {target.min}-{target.max}"
             result.update(
                 {
@@ -244,12 +247,12 @@ class GarminWorkoutCompiler:
                     "secondaryTargetValueTwo": 0.0,
                 }
             )
-            state.warnings.append("RPE_TARGET_MAPPED_TO_GARMIN_EFFORT_CATEGORY")
+            state.warn("RPE_TARGET_MAPPED_TO_GARMIN_EFFORT_CATEGORY")
             return f"RPE {target.min}-{target.max}"
         # A native named-zone mapping is not implemented yet. Preserve it visibly
         # even when a provider advertises the broader capability instead of
         # silently dropping the athlete's target.
-        state.warnings.append("ZONE_TARGET_DOWNGRADED_TO_TEXT")
+        state.warn("ZONE_TARGET_DOWNGRADED_TO_TEXT")
         return f"Zona {target.zone}"
 
     @staticmethod
