@@ -9,6 +9,10 @@ from typing import Any
 from swim_coach.application.ports.repositories import UnitOfWorkFactory
 from swim_coach.application.services.garmin_upsert import GarminUpsertResult, GarminUpsertService
 from swim_coach.application.services.planning import PlanningService
+from swim_coach.application.services.workout_deletion import (
+    WorkoutDeletionResult,
+    WorkoutDeletionService,
+)
 from swim_coach.application.services.workouts import WorkoutDetail, WorkoutService
 from swim_coach.domain.planning import PlanningPreferences
 from swim_coach.domain.shared.errors import DomainError, ResourceNotFoundError
@@ -33,11 +37,13 @@ class CoachCommandService:
         uow_factory: UnitOfWorkFactory,
         workouts: WorkoutService,
         garmin_upsert: GarminUpsertService,
+        workout_deletion: WorkoutDeletionService,
         planning: PlanningService | None,
     ) -> None:
         self._uow_factory = uow_factory
         self._workouts = workouts
         self._garmin_upsert = garmin_upsert
+        self._workout_deletion = workout_deletion
         self._planning = planning
 
     @property
@@ -162,6 +168,17 @@ class CoachCommandService:
             workout_id,
             device_id=device_id,
             correlation_id=correlation_id,
+        )
+
+    async def delete_workout(
+        self,
+        user_id: UserId,
+        workout_id: EntityId,
+        *,
+        correlation_id: CorrelationId,
+    ) -> WorkoutDeletionResult:
+        return await self._workout_deletion.request(
+            user_id, workout_id, correlation_id=correlation_id
         )
 
     async def generate_week(

@@ -22,6 +22,7 @@ from swim_coach.application.services import (
     PlanningService,
     PrivacyService,
     SessionService,
+    WorkoutDeletionService,
     WorkoutService,
 )
 from swim_coach.application.services.oidc_login import OidcLoginService
@@ -53,6 +54,7 @@ class AppServices:
     garmin_upsert: GarminUpsertService
     garmin_writer: GarminWorkoutProvider | None
     workouts: WorkoutService
+    workout_deletion: WorkoutDeletionService
     activity_data: ActivityDataService
     mcp_read: McpReadService
     mcp_write: McpWriteService | None
@@ -145,6 +147,7 @@ def build_services(settings: Settings, database: Database | None = None) -> AppS
         write_enabled=settings.garmin_write_enabled,
         allow_fake_device=settings.garmin_write_mode == "fake",
     )
+    workout_deletion = WorkoutDeletionService(uow_factory)
     mcp_read = McpReadService(
         uow_factory=uow_factory,
         identity=identity,
@@ -170,6 +173,7 @@ def build_services(settings: Settings, database: Database | None = None) -> AppS
         uow_factory=uow_factory,
         workouts=workouts,
         garmin_upsert=garmin_upsert,
+        workout_deletion=workout_deletion,
         planning=planning,
     )
     return AppServices(
@@ -185,6 +189,7 @@ def build_services(settings: Settings, database: Database | None = None) -> AppS
         garmin_upsert=garmin_upsert,
         garmin_writer=garmin_writer,
         workouts=workouts,
+        workout_deletion=workout_deletion,
         activity_data=activity_data,
         mcp_read=mcp_read,
         planning=planning,

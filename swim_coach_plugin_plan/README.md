@@ -2,7 +2,7 @@
 
 > **Versão do plano:** 1.0
 > **Data-base:** 11 de agosto de 2026
-> **Estado:** P13 ChatGPT-first implantado na VM pessoal; reconexão/smoke no ChatGPT pendentes
+> **Estado:** P14 em implementação sobre a P13 ChatGPT-first implantada
 > **Uso inicial:** pessoal
 > **Atleta inicial:** Felipe
 > **Dispositivo:** Garmin Forerunner 265
@@ -11,7 +11,7 @@
 
 Este diretório contém a especificação inicial de implementação do Swim Coach, organizada em documentos menores, contratos, fases e gates executáveis por LLMs. A arquitetura definida para o produto é **Plugin-first**.
 
-> **Checkpoint:** o plugin pessoal 2.0 reúne sete Skills e oito comandos MCP sob
+> **Checkpoint:** o plugin pessoal 2.1 reúne oito Skills e nove comandos MCP sob
 > o scope `coach`. Salvar, editar, agendar, planejar, sincronizar, registrar
 > feedback e publicar são diretos; revisão, idempotência e reconciliação ficam
 > internas. A PWA é auxiliar. Veja
@@ -25,7 +25,7 @@ ChatGPT / Codex
 Skills ───────────────► instruções de fluxo
        │
        ▼
-MCP remoto ───────────► oito comandos de intenção
+MCP remoto ───────────► nove comandos de intenção
        │
        ├── domínio e serviços de aplicação
        ├── PostgreSQL + worker
@@ -42,7 +42,7 @@ PWA operacional
 
 ## Decisão central
 
-O MVP **não terá um chat próprio nem chamará a OpenAI Responses API**. A conversa será hospedada por ChatGPT/Codex. O backend expõe um MCP com oito comandos diretos; o plugin empacota as Skills e a conexão MCP. A PWA é auxiliar para edição visual, calendário, configuração e diagnóstico.
+O MVP **não terá um chat próprio nem chamará a OpenAI Responses API**. A conversa será hospedada por ChatGPT/Codex. O backend expõe um MCP com nove comandos diretos; o plugin empacota as Skills e a conexão MCP. A PWA é auxiliar para edição visual, calendário, configuração e diagnóstico.
 
 ## Como uma LLM deve começar
 
@@ -71,7 +71,7 @@ O MVP **não terá um chat próprio nem chamará a OpenAI Responses API**. A con
 | `contracts/` | schemas e contratos de API/MCP/domínio |
 | `adrs/` | decisões arquiteturais imutáveis ou versionadas |
 | `plugin-blueprint/` | esqueleto do plugin, Skills e instruções de registro |
-| `plugins/swim-coach/` | plugin pessoal P13 `2.0.0`, com sete Skills ChatGPT-first e app mapping real |
+| `plugins/swim-coach/` | plugin pessoal P14 `2.1.0`, com oito Skills ChatGPT-first e app mapping real |
 | `backend/` | API/MCP, worker, probes e testes da fundação P00 |
 | `apps/web/` | shell PWA operacional, sem chat próprio |
 | `examples/` | fixtures de referência e payloads válidos |
@@ -80,7 +80,7 @@ O MVP **não terá um chat próprio nem chamará a OpenAI Responses API**. A con
 
 ## Ordem de implementação
 
-`P00 → P01 → P02 → P03 → P04 → P05 → P06 → P07 → P08 → P09 → P10 → P11 → P12 → P13`
+`P00 → P01 → P02 → P03 → P04 → P05 → P06 → P07 → P08 → P09 → P10 → P11 → P12 → P13 → P14`
 
 A primeira prova de conceito do plugin aconteceu na **P00**. A P13 substitui a
 superfície histórica por oito comandos e mantém autenticação, ownership,
@@ -105,7 +105,7 @@ podem ser sobrescritas pelas variáveis documentadas em [`.env.example`](.env.ex
 Sem `SWIM_COACH_OAUTH_ISSUER`/`SWIM_COACH_OAUTH_RESOURCE`, o MCP falha fechado e
 libera somente `get_capabilities`. Com OAuth, escrita e v2 ativos, anuncia
 exatamente `get_coach_context`, `get_workouts`, `get_swims`, `save_workout`,
-`publish_workout`, `generate_week`, `sync_garmin` e `save_feedback`, todos com
+`publish_workout`, `delete_workout`, `generate_week`, `sync_garmin` e `save_feedback`, todos com
 `coach`. Garmin externo continua dependente do kill switch do servidor. A PWA
 usa BFF/cookie opaco, allowlist e ownership.
 

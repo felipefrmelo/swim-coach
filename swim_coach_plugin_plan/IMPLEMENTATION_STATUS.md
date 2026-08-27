@@ -23,7 +23,8 @@
 | P10 | IN_PROGRESS | P03,P04,P08 | semana adaptativa explicável | [draft PR #11](https://github.com/felipefrmelo/swim-coach/pull/11) |
 | P11 | IN_PROGRESS | P10 | automações recuperáveis e PWA offline | [draft PR #12](https://github.com/felipefrmelo/swim-coach/pull/12) |
 | P12 | IN_PROGRESS | P11 | restore testado e release pessoal | [PR umbrella #13](https://github.com/felipefrmelo/swim-coach/pull/13) |
-| P13 | IN_PROGRESS | P12 | oito comandos diretos, Garmin upsert, plugin 2.0 e deploy pessoal | worktree `main` |
+| P13 | DONE | P12 | oito comandos diretos, Garmin upsert, plugin 2.0 e deploy pessoal | `0887f96` |
+| P14 | DONE | P13 | exclusão direta local/agenda/Garmin e plugin 2.1 | worktree `main` |
 
 ## Evidências por fase
 
@@ -376,7 +377,7 @@
 
 ### P13
 
-- Estado: `IN_PROGRESS`
+- Estado: `DONE`
 - Início: 2026-08-26T08:00:00-03:00
 - ADR/fase: [`ADR-0011`](adrs/ADR-0011-chatgpt-first-direct-commands.md) e
   [`phases/p13-chatgpt-first-simplification.md`](phases/p13-chatgpt-first-simplification.md).
@@ -398,4 +399,22 @@
 - Deploy saudável na VM pessoal: MCP v2/planejamento/Garmin live ativos, oito
   tools exatas, Auth0 aceitando `coach`, API/worker sem reinícios e sem bindings
   Garmin duplicados.
-- Gate pendente: reconexão do conector e smoke autenticado em conversa nova.
+- Gate concluído: conector reconectado e comandos diretos exercitados no ChatGPT.
+
+### P14
+
+- Estado: `DONE`
+- Início: 2026-08-26T15:00:00-03:00
+- ADR/fase: [`ADR-0012`](adrs/ADR-0012-delete-workout-everywhere.md) e
+  [`phases/p14-workout-delete-everywhere.md`](phases/p14-workout-delete-everywhere.md).
+- Implementado e implantado:
+  - nona tool `delete_workout` com scope `coach`;
+  - remoção local imediata e job idempotente de limpeza Garmin;
+  - advisory lock compartilhado com upsert e hard delete após desagendar/apagar;
+  - endpoint REST, ação PWA e Skill `delete-workout`;
+  - proteção de treinos concluídos ou ligados a atividade;
+  - migration `000011` aprovada em up/down/up.
+- Evidência: [`docs/evidence/p14-workout-delete-everywhere.md`](docs/evidence/p14-workout-delete-everywhere.md).
+- Gate concluído: plugin pessoal `2.1.0+codex.20260827020956` validado e
+  reinstalado, produção saudável no schema `000011`, nove tools carregadas e
+  canário descartável publicado e excluído no Garmin sem tocar atividades.

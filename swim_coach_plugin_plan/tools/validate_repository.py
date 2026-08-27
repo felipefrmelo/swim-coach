@@ -74,8 +74,8 @@ def validate_plugin(errors: list[str]) -> None:
     if manifest.get("name") != "swim-coach":
         errors.append("plugin name must be swim-coach")
     version = manifest.get("version")
-    if not isinstance(version, str) or not version.startswith("2.0.0+codex."):
-        errors.append("P13 plugin version must use base 2.0.0 with one Codex cachebuster")
+    if not isinstance(version, str) or not version.startswith("2.1.0+codex."):
+        errors.append("P14 plugin version must use base 2.1.0 with one Codex cachebuster")
     capabilities = manifest.get("interface", {}).get("capabilities", [])
     if capabilities != ["Read", "Write"]:
         errors.append("P13 plugin must advertise Read and Write")
@@ -95,8 +95,9 @@ def validate_plugin(errors: list[str]) -> None:
         "publish-to-garmin",
         "post-swim-checkin",
         "plan-swim-week",
+        "delete-workout",
     }:
-        errors.append("P13 must contain exactly the seven personal 2.0 skills")
+        errors.append("P14 must contain exactly the eight personal 2.1 skills")
     app_mapping = load_json(plugin_root / ".app.json")
     expected_app_mapping = {
         "apps": {

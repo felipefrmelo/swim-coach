@@ -65,8 +65,10 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`backend/alembic/versions/000008_p10_adaptive_planning.py`](backend/alembic/versions/000008_p10_adaptive_planning.py) | arquivo estruturado/auxiliar |
 | [`backend/alembic/versions/000009_p11_automation.py`](backend/alembic/versions/000009_p11_automation.py) | arquivo estruturado/auxiliar |
 | [`backend/alembic/versions/000010_p12_privacy.py`](backend/alembic/versions/000010_p12_privacy.py) | arquivo estruturado/auxiliar |
+| [`backend/alembic/versions/000011_p14_workout_deletion.py`](backend/alembic/versions/000011_p14_workout_deletion.py) | arquivo estruturado/auxiliar |
 | [`backend/alembic.ini`](backend/alembic.ini) | arquivo estruturado/auxiliar |
 | [`backend/scripts/load_smoke.py`](backend/scripts/load_smoke.py) | arquivo estruturado/auxiliar |
+| [`backend/scripts/probe_garmin_delete_canary.py`](backend/scripts/probe_garmin_delete_canary.py) | arquivo estruturado/auxiliar |
 | [`backend/scripts/probe_garmin_read.py`](backend/scripts/probe_garmin_read.py) | arquivo estruturado/auxiliar |
 | [`backend/scripts/probe_oauth_metadata.py`](backend/scripts/probe_oauth_metadata.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/__init__.py`](backend/src/swim_coach/__init__.py) | arquivo estruturado/auxiliar |
@@ -94,6 +96,7 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`backend/src/swim_coach/application/services/planning.py`](backend/src/swim_coach/application/services/planning.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/application/services/privacy.py`](backend/src/swim_coach/application/services/privacy.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/application/services/sessions.py`](backend/src/swim_coach/application/services/sessions.py) | arquivo estruturado/auxiliar |
+| [`backend/src/swim_coach/application/services/workout_deletion.py`](backend/src/swim_coach/application/services/workout_deletion.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/application/services/workouts.py`](backend/src/swim_coach/application/services/workouts.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/bootstrap/__init__.py`](backend/src/swim_coach/bootstrap/__init__.py) | arquivo estruturado/auxiliar |
 | [`backend/src/swim_coach/bootstrap/api.py`](backend/src/swim_coach/bootstrap/api.py) | arquivo estruturado/auxiliar |
@@ -226,6 +229,8 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`plugins/swim-coach/.codex-plugin/plugin.json`](plugins/swim-coach/.codex-plugin/plugin.json) | arquivo estruturado/auxiliar |
 | [`plugins/swim-coach/skills/adapt-workout/SKILL.md`](plugins/swim-coach/skills/adapt-workout/SKILL.md) | Adapt a swim workout |
 | [`plugins/swim-coach/skills/adapt-workout/agents/openai.yaml`](plugins/swim-coach/skills/adapt-workout/agents/openai.yaml) | arquivo estruturado/auxiliar |
+| [`plugins/swim-coach/skills/delete-workout/SKILL.md`](plugins/swim-coach/skills/delete-workout/SKILL.md) | Delete a workout everywhere |
+| [`plugins/swim-coach/skills/delete-workout/agents/openai.yaml`](plugins/swim-coach/skills/delete-workout/agents/openai.yaml) | arquivo estruturado/auxiliar |
 | [`plugins/swim-coach/skills/diagnose-sync/SKILL.md`](plugins/swim-coach/skills/diagnose-sync/SKILL.md) | Diagnose Garmin sync |
 | [`plugins/swim-coach/skills/diagnose-sync/agents/openai.yaml`](plugins/swim-coach/skills/diagnose-sync/agents/openai.yaml) | arquivo estruturado/auxiliar |
 | [`plugins/swim-coach/skills/goal-progress/SKILL.md`](plugins/swim-coach/skills/goal-progress/SKILL.md) | Explain swimming goal progress |
@@ -247,6 +252,7 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`releases/plugin-0.4.0.json`](releases/plugin-0.4.0.json) | arquivo estruturado/auxiliar |
 | [`releases/plugin-1.0.0.json`](releases/plugin-1.0.0.json) | arquivo estruturado/auxiliar |
 | [`releases/plugin-2.0.0.json`](releases/plugin-2.0.0.json) | arquivo estruturado/auxiliar |
+| [`releases/plugin-2.1.0.json`](releases/plugin-2.1.0.json) | arquivo estruturado/auxiliar |
 | [`tests/e2e/p01-auth-context.spec.ts`](tests/e2e/p01-auth-context.spec.ts) | arquivo estruturado/auxiliar |
 | [`tests/e2e/p02-garmin-status.spec.ts`](tests/e2e/p02-garmin-status.spec.ts) | arquivo estruturado/auxiliar |
 | [`tests/e2e/p03-activity-detail.spec.ts`](tests/e2e/p03-activity-detail.spec.ts) | arquivo estruturado/auxiliar |
@@ -257,6 +263,7 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`tests/evals/cases/p08-controlled-write.yaml`](tests/evals/cases/p08-controlled-write.yaml) | arquivo estruturado/auxiliar |
 | [`tests/evals/cases/p10-adaptive-planning.yaml`](tests/evals/cases/p10-adaptive-planning.yaml) | arquivo estruturado/auxiliar |
 | [`tests/evals/cases/p13-chatgpt-first.yaml`](tests/evals/cases/p13-chatgpt-first.yaml) | arquivo estruturado/auxiliar |
+| [`tests/evals/cases/p14-delete-workout.yaml`](tests/evals/cases/p14-delete-workout.yaml) | arquivo estruturado/auxiliar |
 | [`tests/evals/reports/p06-read-only.json`](tests/evals/reports/p06-read-only.json) | arquivo estruturado/auxiliar |
 | [`uv.lock`](uv.lock) | arquivo estruturado/auxiliar |
 
@@ -308,6 +315,7 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`docs/evidence/p11-automation-offline.md`](docs/evidence/p11-automation-offline.md) | P11 — automation and offline resilience evidence |
 | [`docs/evidence/p12-production-hardening-release.md`](docs/evidence/p12-production-hardening-release.md) | P12 — hardening, privacy and personal release evidence |
 | [`docs/evidence/p13-chatgpt-first.md`](docs/evidence/p13-chatgpt-first.md) | Evidência P13 — ChatGPT-first e comandos diretos |
+| [`docs/evidence/p14-workout-delete-everywhere.md`](docs/evidence/p14-workout-delete-everywhere.md) | Evidência P14 — excluir treino em todos os lugares |
 | [`docs/handoffs/p00.md`](docs/handoffs/p00.md) | Handoff — P00 Fundação e spikes de risco |
 | [`docs/handoffs/p01.md`](docs/handoffs/p01.md) | Handoff — P01 Domínio, persistência e identidade |
 | [`docs/handoffs/p03.md`](docs/handoffs/p03.md) | Handoff P03 |
@@ -321,6 +329,7 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`docs/handoffs/p11.md`](docs/handoffs/p11.md) | Handoff P11 |
 | [`docs/handoffs/p12.md`](docs/handoffs/p12.md) | P12 handoff |
 | [`docs/handoffs/p13.md`](docs/handoffs/p13.md) | Handoff P13 — ChatGPT-first |
+| [`docs/handoffs/p14.md`](docs/handoffs/p14.md) | Handoff P14 |
 | [`docs/operations/p07-garmin-write-reconciliation.md`](docs/operations/p07-garmin-write-reconciliation.md) | P07 — Publicação Garmin e reconciliação |
 | [`docs/public-readiness.md`](docs/public-readiness.md) | Public readiness assessment — separado do release pessoal |
 | [`docs/runbooks/p11-job-operations.md`](docs/runbooks/p11-job-operations.md) | P11 job operations runbook |
@@ -346,6 +355,7 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`phases/p11-automation-pwa-hardening.md`](phases/p11-automation-pwa-hardening.md) | P11 — Automações, notificações e resiliência da PWA |
 | [`phases/p12-production-hardening-release.md`](phases/p12-production-hardening-release.md) | P12 — Hardening, privacidade e release pessoal |
 | [`phases/p13-chatgpt-first-simplification.md`](phases/p13-chatgpt-first-simplification.md) | P13 — ChatGPT-first e operação direta |
+| [`phases/p14-workout-delete-everywhere.md`](phases/p14-workout-delete-everywhere.md) | P14 — excluir treino em todos os lugares |
 
 ## Prompts por fase
 
@@ -366,6 +376,7 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`prompts/p11.md`](prompts/p11.md) | Prompt de implementação — P11 Automações, notificações e resiliência da PWA |
 | [`prompts/p12.md`](prompts/p12.md) | Prompt de implementação — P12 Hardening, privacidade e release pessoal |
 | [`prompts/p13.md`](prompts/p13.md) | Prompt P13 |
+| [`prompts/p14.md`](prompts/p14.md) | Prompt P14 |
 
 ## Contratos
 
@@ -399,6 +410,7 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`adrs/ADR-0009-mcp-ui-optional.md`](adrs/ADR-0009-mcp-ui-optional.md) | ADR-0009 — UI MCP é opcional e standards-first |
 | [`adrs/ADR-0010-pwa-bff-session.md`](adrs/ADR-0010-pwa-bff-session.md) | ADR-0010 — BFF OIDC e sessão opaca para a PWA |
 | [`adrs/ADR-0011-chatgpt-first-direct-commands.md`](adrs/ADR-0011-chatgpt-first-direct-commands.md) | ADR-0011 — ChatGPT-first com comandos diretos e segurança invisível |
+| [`adrs/ADR-0012-delete-workout-everywhere.md`](adrs/ADR-0012-delete-workout-everywhere.md) | ADR-0012 — exclusão direta de treino em todas as superfícies |
 
 ## Blueprint do plugin
 
@@ -412,6 +424,7 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`plugin-blueprint/marketplace.example.json`](plugin-blueprint/marketplace.example.json) | arquivo estruturado/auxiliar |
 | [`plugin-blueprint/release-skills/p00/get-capabilities/SKILL.md`](plugin-blueprint/release-skills/p00/get-capabilities/SKILL.md) | Verify Swim Coach capabilities |
 | [`plugin-blueprint/skill-library/adapt-workout/SKILL.md`](plugin-blueprint/skill-library/adapt-workout/SKILL.md) | Adapt a workout |
+| [`plugin-blueprint/skill-library/delete-workout/SKILL.md`](plugin-blueprint/skill-library/delete-workout/SKILL.md) | Delete a workout everywhere |
 | [`plugin-blueprint/skill-library/diagnose-sync/SKILL.md`](plugin-blueprint/skill-library/diagnose-sync/SKILL.md) | Diagnose Garmin sync |
 | [`plugin-blueprint/skill-library/goal-progress/SKILL.md`](plugin-blueprint/skill-library/goal-progress/SKILL.md) | Explain goal progress |
 | [`plugin-blueprint/skill-library/plan-swim-week/SKILL.md`](plugin-blueprint/skill-library/plan-swim-week/SKILL.md) | Plan a swim week |
@@ -464,4 +477,4 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`tools/validate_plan.py`](tools/validate_plan.py) | arquivo estruturado/auxiliar |
 | [`tools/validate_repository.py`](tools/validate_repository.py) | arquivo estruturado/auxiliar |
 
-**Total indexado:** 412 arquivos (sem contar este índice e o arquivo de checksums).
+**Total indexado:** 425 arquivos (sem contar este índice e o arquivo de checksums).

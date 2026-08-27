@@ -1100,7 +1100,7 @@ class PlannedWorkoutModel(Base):
         CheckConstraint("sport = 'POOL_SWIMMING'", name="ck_planned_workout_sport"),
         CheckConstraint(
             "status IN ('draft','approved','scheduled','published','completed',"
-            "'cancelled','archived')",
+            "'cancelled','archived','deleting')",
             name="ck_planned_workout_status",
         ),
         CheckConstraint("version >= 1", name="ck_planned_workout_version"),

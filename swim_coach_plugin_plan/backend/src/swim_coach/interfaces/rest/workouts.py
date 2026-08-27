@@ -155,6 +155,16 @@ class WorkoutSaveResponse(StrictModel):
     garmin: GarminOperationResponse | None = None
 
 
+class WorkoutDeleteResponse(StrictModel):
+    status: str
+    workout_id: UUID
+    local_removed: bool
+    calendar_removed: bool
+    garmin_cleanup: str
+    job_id: UUID
+    replayed: bool
+
+
 class TemplateResponse(StrictModel):
     id: UUID
     name: str
@@ -249,6 +259,33 @@ async def get_workout(
 ) -> WorkoutResponse:
     detail = await services.workouts.get_workout(authenticated.user.id, EntityId(workout_id))
     return _response(detail, response)
+
+
+@router.delete(
+    "/workouts/{workout_id}",
+    response_model=WorkoutDeleteResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def delete_workout(
+    workout_id: UUID,
+    authenticated: CsrfAuthenticated,
+    services: Services,
+    correlation_id: RequestCorrelationId,
+) -> WorkoutDeleteResponse:
+    result = await services.coach_commands.delete_workout(
+        authenticated.user.id,
+        EntityId(workout_id),
+        correlation_id=correlation_id,
+    )
+    return WorkoutDeleteResponse(
+        status="ACCEPTED",
+        workout_id=result.workout_id.value,
+        local_removed=result.local_removed,
+        calendar_removed=result.calendar_removed,
+        garmin_cleanup=result.garmin_cleanup,
+        job_id=result.job_id.value,
+        replayed=result.replayed,
+    )
 
 
 @router.post("/workouts/{workout_id}/revisions", response_model=WorkoutResponse)

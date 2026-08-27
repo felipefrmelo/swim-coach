@@ -13,16 +13,18 @@ Esta matriz impede que uma Skill seja empacotada antes de suas tools existirem e
 | P10 | `0.4.0` | planejamento | proposta semanal adaptativa e explicável |
 | P12 | `1.0.0-personal` | hardened | release pessoal operável, recuperável e auditável |
 | P13 | `2.0.0` | ChatGPT-first | oito comandos diretos, scope `coach`, Garmin upsert e site auxiliar |
+| P14 | `2.1.0` | exclusão direta | nona tool e hard delete local/Garmin sem apagar atividades |
 
 As versões são alvos. A implementação pode ajustar SemVer por ADR, mas não pode antecipar capacidade de risco.
 
-### P13 — superfície pública vigente
+### P14 — superfície pública vigente
 
 - `get_coach_context`;
 - `get_workouts`;
 - `get_swims`;
 - `save_workout`;
 - `publish_workout`;
+- `delete_workout`;
 - `generate_week`;
 - `sync_garmin`;
 - `save_feedback`.
@@ -83,6 +85,7 @@ Ela gera proposal revisável; não ativa nem publica a semana automaticamente.
 | `post-swim-checkin` | 0.2.0 | feedback validado e sem diagnóstico |
 | `diagnose-sync` upgrade | 0.2.0 | pode oferecer/disparar sync com scope |
 | `plan-swim-week` | 0.4.0 | ruleset versionado e planning run reprodutível |
+| `delete-workout` | 2.1.0 | tool destrutiva idempotente e proteção de atividades concluídas |
 
 ## 4. UI MCP
 

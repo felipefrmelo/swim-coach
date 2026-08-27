@@ -14,6 +14,7 @@ import type {
   CanonicalWorkout,
   Workout,
   WorkoutSaveResult,
+  WorkoutDeleteResult,
   WorkoutValidation,
   OperationsSnapshot,
   OperationsJob,
@@ -164,6 +165,8 @@ export const api = {
     request<GarminConnection>("/integrations/garmin", { method: "DELETE" }),
   workouts: () => request<Workout[]>("/workouts"),
   workout: (id: string) => request<Workout>(`/workouts/${id}`),
+  deleteWorkout: (id: string) =>
+    request<WorkoutDeleteResult>(`/workouts/${id}`, { method: "DELETE" }),
   saveWorkout: (payload: {
     workout_id: string | null;
     pool_id: string;

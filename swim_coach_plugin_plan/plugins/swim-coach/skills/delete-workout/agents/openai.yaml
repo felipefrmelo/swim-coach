@@ -1,0 +1,4 @@
+interface:
+  display_name: "Delete workout"
+  short_description: "Delete a planned workout everywhere"
+  default_prompt: "Use $delete-workout to remove my planned swim workout everywhere."

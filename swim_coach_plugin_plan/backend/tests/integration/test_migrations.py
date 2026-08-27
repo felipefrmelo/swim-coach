@@ -76,7 +76,7 @@ async def test_migration_up_down_up_and_constraints(
     finally:
         await database.dispose()
 
-        assert revision == "000010"
+        assert revision == "000011"
     assert immutable_trigger == 1
     assert {item["name"] for item in constraints} >= {
         "ck_pool_length_positive",

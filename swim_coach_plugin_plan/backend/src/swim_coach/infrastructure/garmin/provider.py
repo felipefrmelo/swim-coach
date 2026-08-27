@@ -458,6 +458,24 @@ class GarminConnectProvider:
                 return
             raise
 
+    async def delete_workout(self, user_id: UserId, external_workout_id: str) -> None:
+        try:
+            await self._call(
+                user_id,
+                lambda client: client.delete_workout(external_workout_id),
+            )
+        except GarminProviderError as exc:
+            if exc.category is GarminErrorCategory.NOT_FOUND:
+                return
+            if exc.category in {GarminErrorCategory.NETWORK, GarminErrorCategory.UNKNOWN}:
+                raise GarminProviderError(
+                    exc.category,
+                    retryable=True,
+                    retry_after_seconds=exc.retry_after_seconds,
+                    outcome_ambiguous=True,
+                ) from exc
+            raise
+
     async def find_workout_by_source_hash(
         self, user_id: UserId, source_revision_hash: str
     ) -> ExternalWorkoutResult | None:

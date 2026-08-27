@@ -27,7 +27,7 @@ class ContractVerifier:
 
 
 @pytest.mark.asyncio
-async def test_v2_announces_exactly_eight_intent_tools_with_one_scope() -> None:
+async def test_v2_announces_exactly_nine_intent_tools_with_one_scope() -> None:
     contract = yaml.safe_load((ROOT / "contracts/mcp-tools.yaml").read_text())
     expected = {item["name"]: item for item in contract["tools"]}
     server = create_mcp_server(
@@ -42,7 +42,9 @@ async def test_v2_announces_exactly_eight_intent_tools_with_one_scope() -> None:
 
     registered = server._tool_manager._tools
     assert list(registered) == list(expected)
-    assert len(registered) == 8
+    assert len(registered) == 9
+    assert "nine intent-level tools" in server.instructions
+    assert "delete_workout" in server.instructions
     listed = {tool.name: tool for tool in await server.list_tools()}
     assert set(listed) == set(expected)
 

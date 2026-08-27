@@ -148,6 +148,14 @@ function WorkoutEditor({ poolId, initial, existing }: { poolId: string; initial:
       await navigate({ to: "/workouts/$workoutId", params: { workoutId: saved.workout.id } });
     },
   });
+  const remove = useMutation({
+    mutationFn: () => api.deleteWorkout(existing!.id),
+    onSuccess: async () => {
+      queryClient.removeQueries({ queryKey: ["workout", existing!.id] });
+      await queryClient.invalidateQueries({ queryKey: ["workouts"] });
+      await navigate({ to: "/workouts" });
+    },
+  });
 
   function updateNode(index: number, node: WorkoutNode) { setDefinition((value) => ({ ...value, nodes: value.nodes.map((item, itemIndex) => itemIndex === index ? node : item) })); }
   function moveNode(index: number, direction: -1 | 1) { setDefinition((value) => { const nodes = [...value.nodes]; const target = index + direction; if (target < 0 || target >= nodes.length) return value; [nodes[index], nodes[target]] = [nodes[target], nodes[index]]; return { ...value, nodes }; }); }
@@ -168,8 +176,10 @@ function WorkoutEditor({ poolId, initial, existing }: { poolId: string; initial:
       <section className="surface-card form-stack"><div><p className="eyebrow">Agenda</p><h2 className="section-title mt-1">Quando nadar</h2></div><div className="grid grid-cols-2 gap-3"><Field label="Data"><input type="date" value={scheduleDate} onChange={(event) => setScheduleDate(event.target.value)} /></Field><Field label="Horário"><input type="time" value={scheduleTime} onChange={(event) => setScheduleTime(event.target.value)} /></Field></div></section>
       {existing && <section className="surface-card"><h2 className="section-title">Histórico</h2><p className="mt-2 text-sm text-slate-600">{existing.revisions.length} revisões preservadas automaticamente.</p></section>}
       {save.isError && <ErrorState message="Não foi possível salvar o treino." />}
+      {remove.isError && <ErrorState message="Não foi possível excluir o treino." />}
       {save.isSuccess && <SavedNotice>{save.data.garmin ? "Treino salvo e envio ao Garmin iniciado." : "Treino salvo e agendado."}</SavedNotice>}
       <div className="grid gap-3 sm:grid-cols-2"><button className="secondary-button gap-2" type="button" disabled={save.isPending || !definition.title || definition.nodes.length === 0} onClick={() => save.mutate(false)}><Save className="size-4" />{save.isPending ? "Salvando…" : "Salvar"}</button><button className="primary-button gap-2" type="button" disabled={save.isPending || !scheduleDate || !definition.title || definition.nodes.length === 0} onClick={() => save.mutate(true)}><Send className="size-4" />{save.isPending ? "Enviando…" : "Salvar e enviar ao Garmin"}</button></div>
+      {existing && existing.status !== "completed" && <button className="secondary-button gap-2 border-red-300 text-red-900" type="button" disabled={remove.isPending} onClick={() => window.confirm("Excluir este treino da agenda, do Swim Coach e do Garmin?") && remove.mutate()}><Trash2 className="size-4" />{remove.isPending ? "Excluindo…" : "Excluir treino"}</button>}
     </Page>
   );
 }

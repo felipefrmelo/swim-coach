@@ -64,7 +64,16 @@ class McpNextAction(McpModel):
 class McpResult(McpModel):
     schema_version: Literal["1.0"] = "1.0"
     request_id: str
-    status: Literal["OK", "PARTIAL", "NOT_FOUND"]
+    status: Literal[
+        "OK",
+        "ACCEPTED",
+        "PARTIAL",
+        "NOT_FOUND",
+        "NEEDS_INPUT",
+        "NEEDS_AUTHORIZATION",
+        "CONFLICT",
+        "FAILED",
+    ]
     data: dict[str, Any]
     warnings: list[McpWarning] = Field(default_factory=list)
     next_actions: list[McpNextAction] = Field(default_factory=list)

@@ -1,6 +1,6 @@
 # Matriz de release dos Skills
 
-`skill-library/` contém o **estado-alvo** dos sete workflows de produto. O manifesto do blueprint não aponta para essa pasta. A implementação deve criar o diretório ativo `skills/` da release usando somente os itens liberados abaixo.
+`skill-library/` contém o **estado-alvo** dos oito workflows de produto. O manifesto do blueprint não aponta para essa pasta. A implementação deve criar o diretório ativo `skills/` da release usando somente os itens liberados abaixo.
 
 | Release | Skills ativos | Fonte/variante | Observação |
 |---|---|---|---|
@@ -8,6 +8,7 @@
 | `0.1.0` | `review-latest-swim`, `goal-progress`, `diagnose-sync` | biblioteca; `diagnose-sync` deve ser reduzido à variante read-only | nenhuma tool de write disponível |
 | `0.2.0` | anteriores + `adapt-workout`, `publish-to-garmin`, `post-swim-checkin` | biblioteca; `diagnose-sync` passa à variante read-and-trigger | confirmação, scopes e idempotência obrigatórios |
 | `0.4.0` | anteriores + `plan-swim-week` | biblioteca | depende do motor adaptativo P10 |
+| `2.1.0` | anteriores + `delete-workout` | biblioteca | exclusão direta P14 com confirmação do host |
 
 ## Regra de montagem
 

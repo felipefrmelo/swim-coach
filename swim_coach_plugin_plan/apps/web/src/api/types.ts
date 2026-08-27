@@ -281,3 +281,13 @@ export interface WorkoutSaveResult {
     replayed: boolean;
   } | null;
 }
+
+export interface WorkoutDeleteResult {
+  status: "ACCEPTED";
+  workout_id: string;
+  local_removed: boolean;
+  calendar_removed: boolean;
+  garmin_cleanup: "QUEUED" | "COMPLETED" | "NEEDS_ATTENTION";
+  job_id: string;
+  replayed: boolean;
+}

@@ -60,3 +60,21 @@ async def test_ambiguous_schedule_is_found_before_retry() -> None:
     reconciled = await provider.find_schedule(user_id, workout.external_workout_id, scheduled_date)
     assert reconciled is not None
     assert provider.schedule_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_delete_removes_schedule_and_template_idempotently() -> None:
+    provider = FakeGarminWorkoutProvider()
+    user_id = UserId.new()
+    workout = await provider.create_workout(user_id, dto())
+    scheduled_date = date(2026, 8, 12)
+    await provider.schedule_workout(user_id, workout.external_workout_id, scheduled_date)
+
+    await provider.delete_workout(user_id, workout.external_workout_id)
+    await provider.delete_workout(user_id, workout.external_workout_id)
+
+    assert (
+        await provider.find_schedule(user_id, workout.external_workout_id, scheduled_date) is None
+    )
+    assert await provider.find_workout_by_source_hash(user_id, dto().source_revision_hash) is None
+    assert provider.delete_calls == 2

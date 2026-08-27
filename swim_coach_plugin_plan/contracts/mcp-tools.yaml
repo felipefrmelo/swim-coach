@@ -68,6 +68,17 @@ tools:
         scheduled_date: {type: [string, "null"], format: date}
         scheduled_start_time: {type: [string, "null"]}
         target_device_id: {type: [string, "null"], format: uuid}
+  - name: delete_workout
+    title: Delete a swim workout everywhere
+    description: Remove a planned workout, its local calendar entry, Garmin schedule, and Garmin workout template; completed or activity-matched workouts are protected.
+    scopes: [coach]
+    annotations: {readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true}
+    input:
+      type: object
+      additionalProperties: false
+      required: [workout_id]
+      properties:
+        workout_id: {type: string, format: uuid}
   - name: generate_week
     title: Generate and save a swim week
     description: Generate a deterministic week from current data and save its sessions directly to the local calendar.

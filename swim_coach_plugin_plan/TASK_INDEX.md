@@ -2,7 +2,7 @@
 
 Gerado de `phases/pXX-*.md`. O arquivo da fase continua sendo a fonte de aceite, testes, evidências e gate.
 
-**Total:** 123 tasks.
+**Total:** 130 tasks.
 
 | Task | Fase | Título | Especificação |
 |---|---|---|---|
@@ -129,3 +129,10 @@ Gerado de `phases/pXX-*.md`. O arquivo da fase continua sendo a fonte de aceite,
 | `P13-T06` | P13 | Atualizar plugin, Skills e evals | [`phases/p13-chatgpt-first-simplification.md`](phases/p13-chatgpt-first-simplification.md) |
 | `P13-T07` | P13 | Isolar o legado e atualizar documentação | [`phases/p13-chatgpt-first-simplification.md`](phases/p13-chatgpt-first-simplification.md) |
 | `P13-T08` | P13 | Validar e implantar | [`phases/p13-chatgpt-first-simplification.md`](phases/p13-chatgpt-first-simplification.md) |
+| `P14-T01` | P14 | Fixar ADR e contratos | [`phases/p14-workout-delete-everywhere.md`](phases/p14-workout-delete-everywhere.md) |
+| `P14-T02` | P14 | Persistência e serviço de exclusão | [`phases/p14-workout-delete-everywhere.md`](phases/p14-workout-delete-everywhere.md) |
+| `P14-T03` | P14 | Provider e worker Garmin | [`phases/p14-workout-delete-everywhere.md`](phases/p14-workout-delete-everywhere.md) |
+| `P14-T04` | P14 | MCP, REST e PWA | [`phases/p14-workout-delete-everywhere.md`](phases/p14-workout-delete-everywhere.md) |
+| `P14-T05` | P14 | Plugin, Skill e evals | [`phases/p14-workout-delete-everywhere.md`](phases/p14-workout-delete-everywhere.md) |
+| `P14-T06` | P14 | Testes e concorrência | [`phases/p14-workout-delete-everywhere.md`](phases/p14-workout-delete-everywhere.md) |
+| `P14-T07` | P14 | Release e deploy | [`phases/p14-workout-delete-everywhere.md`](phases/p14-workout-delete-everywhere.md) |

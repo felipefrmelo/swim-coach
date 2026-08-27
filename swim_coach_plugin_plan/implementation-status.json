@@ -2,8 +2,8 @@
   "schema_version": "1.0",
   "project": "swim-coach",
   "plan_version": "1.1",
-  "updated_at": "2026-08-26T08:45:00-03:00",
-  "active_phase": "P13",
+  "updated_at": "2026-08-26T15:00:00-03:00",
+  "active_phase": "P14",
   "phases": [
     {
       "id": "P00",
@@ -286,7 +286,7 @@
     },
     {
       "id": "P13",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "evidence": [
         "docs/evidence/p13-chatgpt-first.md",
         "docs/handoffs/p13.md",
@@ -306,9 +306,30 @@
         "github:actions:32966938164:quality-pass",
         "production:healthy:8-tools:coach-scope:garmin-live",
         "production:api-worker:restart-count-zero",
-        "pending:chatgpt-reconnect-fresh-conversation-smoke"
+        "production:chatgpt-reconnected-and-direct-workflows-exercised"
       ],
       "commit": "0887f965f374b72ade141cd8b173a3998c1cf4a8"
+    },
+    {
+      "id": "P14",
+      "status": "DONE",
+      "evidence": [
+        "docs/evidence/p14-workout-delete-everywhere.md",
+        "docs/handoffs/p14.md",
+        "local:migration-000011:testcontainers-up-down-up",
+        "local:mcp-v2:9-tools:scope-coach",
+        "local:delete-workout:immediate-hide-idempotent-job-hard-delete",
+        "local:garmin-fake:unschedule-delete-replay",
+        "local:skill-validation:delete-workout-passed",
+        "local:evals:6-p14",
+        "local:full-check:132-python:4-web",
+        "personal:plugin-2.1.0+codex.20260827020956:installed",
+        "production:healthy:schema-000011:9-tools:coach-scope:garmin-live",
+        "production:api-worker-web-postgres:restart-count-zero",
+        "production:real-disposable-garmin-publish-delete-canary-passed",
+        "production:delete-canary-local-records-zero"
+      ],
+      "commit": null
     }
   ]
 }
