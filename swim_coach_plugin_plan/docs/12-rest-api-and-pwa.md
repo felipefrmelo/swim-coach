@@ -11,6 +11,15 @@ O editor vigente usa `POST /api/v1/workouts/save`: “Salvar” cria/revisa e ag
 mostra proposta, hash, aprovação, execução, versão esperada ou canário. Rotas de
 ações legadas não são montadas quando MCP v2 está ativo.
 
+No `StepEditor`, cada etapa comum ou filha de uma repetição expõe diretamente o
+tipo de meta, seus valores e notas. As opções são “Sem objetivo”, “Baseado no
+esforço (RPE 1–10)” e “Ritmo desejado (`mm:ss/100 m`)”. Notas aceitam até 600
+caracteres. A UI valida faixas antes de habilitar os botões de salvamento e usa
+os campos canônicos `target` e `instructions`, portanto criar, editar e recarregar
+não exige migração adicional. Quando há publicação, `garmin.warnings` expõe
+qualquer conversão ou fallback; o editor também antecipa a conversão da faixa RPE
+para uma categoria Garmin sem esconder o intervalo original.
+
 ## 2. Rotas da PWA
 
 | Rota | Tela |
@@ -181,6 +190,8 @@ Prioridade iPhone:
 
 - navegação inferior com Hoje, Calendário, Atividades, Configurações;
 - editor usa cards e reorder acessível;
+- inputs de meta e notas mantêm alvo mínimo de toque de 44 px e ficam expostos
+  no próprio card, sem modal adicional;
 - números de ritmo em `tabular-nums`;
 - 20 m e unidade exibidos no cabeçalho;
 - confirmação crítica sem gesto acidental;

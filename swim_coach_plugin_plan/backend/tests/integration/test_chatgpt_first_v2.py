@@ -117,14 +117,25 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
                         == [{"type": "oauth2", "scopes": ["coach"]}]
                         for tool in listed.tools
                     )
+                    definition = canonical_workout()
+                    nodes = definition["nodes"]
+                    assert isinstance(nodes, list)
+                    first_step = nodes[0]
+                    assert isinstance(first_step, dict)
+                    first_step["target"] = {"type": "rpe", "min": 5, "max": 6}
                     saved = await session.call_tool(
                         "save_workout",
                         {
                             "pool_id": str(pools[0].id),
-                            "definition": canonical_workout(),
+                            "definition": definition,
                             "scheduled_date": target_date.isoformat(),
                             "scheduled_start_time": "19:00:00",
                         },
+                    )
+                    assert saved.structuredContent is not None
+                    published = await session.call_tool(
+                        "publish_workout",
+                        {"workout_id": saved.structuredContent["data"]["workout_id"]},
                     )
                     workouts = await session.call_tool(
                         "get_workouts", {"date": target_date.isoformat()}
@@ -143,6 +154,17 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
     assert saved.structuredContent["data"]["status"] == "scheduled"
     assert workouts.isError is False
     assert workouts.structuredContent is not None
+    assert published.isError is False
+    assert published.structuredContent is not None
+    assert published.structuredContent["warnings"] == [
+        {
+            "code": "RPE_TARGET_MAPPED_TO_GARMIN_EFFORT_CATEGORY",
+            "message": (
+                "The RPE range was mapped to a Garmin effort category and preserved in the "
+                "step text."
+            ),
+        }
+    ]
     assert generated.isError is False
     assert generated.structuredContent is not None
     assert generated.structuredContent["data"]["session_count"] == 2
@@ -201,12 +223,18 @@ async def test_direct_save_publish_update_and_reschedule_use_one_binding(
                 await uow.commit()
 
             first_date = date.today() + timedelta(days=1)
+            definition = canonical_workout()
+            nodes = definition["nodes"]
+            assert isinstance(nodes, list)
+            first_step = nodes[0]
+            assert isinstance(first_step, dict)
+            first_step["target"] = {"type": "rpe", "min": 5, "max": 6}
             saved = await client.post(
                 "/api/v1/workouts/save",
                 headers={"X-CSRF-Token": csrf},
                 json={
                     "pool_id": pool["id"],
-                    "definition": canonical_workout(),
+                    "definition": definition,
                     "scheduled_date": first_date.isoformat(),
                     "scheduled_start_time": "19:00:00",
                     "publish_to_garmin": True,
@@ -216,9 +244,19 @@ async def test_direct_save_publish_update_and_reschedule_use_one_binding(
             body = saved.json()
             assert body["workout"]["status"] == "scheduled"
             assert body["garmin"]["status"] == "queued"
+            assert body["garmin"]["warnings"] == ["RPE_TARGET_MAPPED_TO_GARMIN_EFFORT_CATEGORY"]
             assert "proposal" not in saved.text.casefold()
             assert "action_hash" not in saved.text
             workout_id = body["workout"]["id"]
+            async with database.session_factory() as session:
+                payload = await session.scalar(
+                    select(JobModel.payload_json).where(
+                        JobModel.job_type == "workout.upsert_garmin",
+                        JobModel.payload_json["workout_id"].as_string() == workout_id,
+                    )
+                )
+            assert payload is not None
+            assert payload["warnings"] == ["RPE_TARGET_MAPPED_TO_GARMIN_EFFORT_CATEGORY"]
 
             writer = app.state.services.garmin_writer
             assert isinstance(writer, FakeGarminWorkoutProvider)
@@ -242,6 +280,7 @@ async def test_direct_save_publish_update_and_reschedule_use_one_binding(
             )
             assert replay.replayed is True
             assert replay.job_id is None
+            assert replay.warnings == ("RPE_TARGET_MAPPED_TO_GARMIN_EFFORT_CATEGORY",)
 
             edited = await client.post(
                 "/api/v1/workouts/save",

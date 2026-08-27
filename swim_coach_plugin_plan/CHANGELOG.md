@@ -23,6 +23,9 @@
   replay, edição e mudança de data preservam um único binding Garmin;
 - removido o modo canário e isolado o router REST legado quando v2 está ativo;
 - PWA reduzida a “Salvar” e “Salvar e enviar ao Garmin”;
+- editor de etapas passa a criar e editar metas sem objetivo, RPE e ritmo, além
+  de notas; o compilador envia notas/targets nativos e define piscina/unidade no
+  topo do payload Garmin, com fallback textual e warnings explícitos;
 - sete Skills e 42 evals atualizadas; plugin pessoal
   `2.0.0+codex.20260826113352` validado e reinstalado;
 - `make check`, build, 9 Playwright, dependency/Gitleaks/SBOM/Trivy e os dois

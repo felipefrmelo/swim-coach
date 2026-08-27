@@ -149,9 +149,11 @@ distance_m % pool_length_m == 0
 5. Repetições devem ser inteiras e positivas.
 6. O treino deve ter ao menos uma etapa executável.
 7. `pace_range.min <= pace_range.max`.
-8. Descanso não contribui para a distância.
-9. Uma revisão validada não é alterada; cria-se nova revisão.
-10. Recursos não suportados pelo Garmin geram erro ou warning explícito; nunca são descartados silenciosamente.
+8. `rpe.min <= rpe.max`, com ambos os limites entre 1 e 10.
+9. `instructions` é opcional e tem no máximo 600 caracteres por etapa.
+10. Descanso não contribui para a distância.
+11. Uma revisão validada não é alterada; cria-se nova revisão.
+12. Recursos não suportados pelo Garmin geram erro ou warning explícito; nunca são descartados silenciosamente.
 
 ## 3. Validação em camadas
 
@@ -203,6 +205,29 @@ Payload Garmin
 ```
 
 O compilador é determinístico: a mesma revisão e a mesma matriz de capacidade geram o mesmo hash de payload.
+
+### Mapeamento do editor e do Garmin
+
+O editor PWA grava os campos existentes do contrato canônico também em etapas
+dentro de grupos de repetição:
+
+| Escolha no editor | Campo canônico | Compilação Garmin |
+|---|---|---|
+| Sem objetivo | `target.type = none` | `targetType = no.target`, sem alvo secundário |
+| Baseado no esforço | `target.type = rpe`, intervalo 1–10 | `secondaryTargetType = swim.instruction` e categoria de esforço |
+| Ritmo desejado | `target.type = pace_range`, em `mm:ss/100 m` | `secondaryTargetType = pace.zone`, limites convertidos para m/s |
+| Notas | `instructions`, até 600 caracteres | `description` da etapa executável |
+
+Para ritmo, os limites Garmin são ordenados por velocidade:
+`secondaryTargetValueOne = 100 / max_seconds_per_100m` e
+`secondaryTargetValueTwo = 100 / min_seconds_per_100m`. Para RPE, o ponto médio
+arredondado para cima é convertido em uma das sete categorias Garmin; o intervalo
+original também segue no texto da etapa e a conversão gera warning explícito.
+
+O comprimento e a distância estimada são sempre compilados no topo do treino:
+`poolLength`, `poolLengthUnit = meter` e `estimatedDistanceInMeters`. Esses campos
+não são duplicados no segmento. Se uma capability desabilitar um target, o alvo
+é preservado no texto e um warning `*_DOWNGRADED_TO_TEXT` é emitido.
 
 ---
 

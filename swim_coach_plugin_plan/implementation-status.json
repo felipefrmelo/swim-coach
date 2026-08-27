@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "project": "swim-coach",
   "plan_version": "1.1",
-  "updated_at": "2026-08-26T15:00:00-03:00",
+  "updated_at": "2026-08-27T02:00:00-03:00",
   "active_phase": "P14",
   "phases": [
     {
@@ -294,6 +294,12 @@
         "local:mcp-http:save-generate-direct:no-proposals",
         "local:garmin-upsert:create-update-reschedule-replay:one-binding",
         "local:pwa:single-save-command",
+        "local:pwa:step-targets-notes:top-repeat-reload",
+        "local:garmin-compiler:pool-notes-pace-rpe-text-fallback",
+        "local:refinement-check:91-unit:9-vitest:types-lint-build",
+        "local:full-python:142-pass",
+        "garmin-live:workout-types:pace-zone-6:swim-instruction-18",
+        "garmin-live:disposable-80m:pool-notes-rpe-pace:create-read-delete",
         "local:plugin-personal:2.0.0+codex.20260826113352:enabled",
         "local:skill-validation:7-passed",
         "local:evals:42-p13",
