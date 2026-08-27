@@ -21,6 +21,21 @@ _NO_TARGET: JsonObject = {
     "workoutTargetTypeKey": "no.target",
     "displayOrder": 1,
 }
+_PACE_TARGET: JsonObject = {
+    "workoutTargetTypeId": 6,
+    "workoutTargetTypeKey": "pace.zone",
+    "displayOrder": 6,
+}
+_SWIM_INSTRUCTION_TARGET: JsonObject = {
+    "workoutTargetTypeId": 18,
+    "workoutTargetTypeKey": "swim.instruction",
+    "displayOrder": 18,
+}
+_METER_UNIT: JsonObject = {"unitId": 1, "unitKey": "meter", "factor": 100.0}
+_DEFAULT_CAPABILITIES = GarminWorkoutCapabilities(
+    supports_pace_target=True,
+    supports_rpe_target=True,
+)
 _STEP_TYPES = {
     "WARMUP": (1, "warmup", 1),
     "COOLDOWN": (2, "cooldown", 2),
@@ -48,7 +63,7 @@ class _CompileState:
 
 class GarminWorkoutCompiler:
     def __init__(self, capabilities: GarminWorkoutCapabilities | None = None) -> None:
-        self._capabilities = capabilities or GarminWorkoutCapabilities()
+        self._capabilities = capabilities or _DEFAULT_CAPABILITIES
 
     def compile(self, revision: WorkoutRevision) -> GarminWorkoutDTO:
         definition = revision.definition
@@ -73,6 +88,9 @@ class GarminWorkoutCompiler:
                 "description": self._description(revision, source_revision_hash),
                 "sportType": _SPORT,
                 "estimatedDurationInSecs": round(revision.totals.estimated_total_seconds),
+                "estimatedDistanceInMeters": float(revision.totals.distance_m),
+                "poolLength": float(definition.pool_length_m),
+                "poolLengthUnit": _METER_UNIT,
                 "workoutSegments": [
                     {"segmentOrder": 1, "sportType": _SPORT, "workoutSteps": steps}
                 ],
@@ -157,12 +175,6 @@ class GarminWorkoutCompiler:
                 "The workout contains a stroke unsupported by the target device.",
                 details={"stroke": stroke},
             )
-        if node.target.type == "pace_range" and not state.capabilities.supports_pace_target:
-            state.warnings.append("PACE_TARGET_DOWNGRADED_TO_NO_TARGET")
-        elif node.target.type == "rpe" and not state.capabilities.supports_rpe_target:
-            state.warnings.append("RPE_TARGET_DOWNGRADED_TO_NO_TARGET")
-        elif node.target.type == "zone" and not state.capabilities.supports_named_zone_target:
-            state.warnings.append("ZONE_TARGET_DOWNGRADED_TO_NO_TARGET")
         if node.equipment and node.equipment != ("NONE",):
             if not state.capabilities.supports_equipment:
                 state.warnings.append("EQUIPMENT_OMITTED_FROM_GARMIN_PAYLOAD")
@@ -185,7 +197,92 @@ class GarminWorkoutCompiler:
         }
         if value is not None:
             result["endConditionValue"] = float(value)
+        if end.type == "distance":
+            result["preferredEndConditionUnit"] = _METER_UNIT
+        target_cue = self._compile_target(node, result=result, state=state)
+        description = self._step_description(node, target_cue=target_cue)
+        if description:
+            result["description"] = description
         return cast(JsonObject, result)
+
+    @staticmethod
+    def _compile_target(
+        node: StepNode,
+        *,
+        result: dict[str, object],
+        state: _CompileState,
+    ) -> str | None:
+        target = node.target
+        if target.type == "none":
+            return None
+        if target.type == "pace_range":
+            if not state.capabilities.supports_pace_target:
+                state.warnings.append("PACE_TARGET_DOWNGRADED_TO_TEXT")
+                return (
+                    "Ritmo "
+                    f"{GarminWorkoutCompiler._format_pace(target.min_seconds_per_100m)}-"
+                    f"{GarminWorkoutCompiler._format_pace(target.max_seconds_per_100m)}/100 m"
+                )
+            result.update(
+                {
+                    "secondaryTargetType": _PACE_TARGET,
+                    "secondaryTargetValueOne": 100 / target.max_seconds_per_100m,
+                    "secondaryTargetValueTwo": 100 / target.min_seconds_per_100m,
+                }
+            )
+            return None
+        if target.type == "rpe":
+            if not state.capabilities.supports_rpe_target:
+                state.warnings.append("RPE_TARGET_DOWNGRADED_TO_TEXT")
+                return f"RPE {target.min}-{target.max}"
+            result.update(
+                {
+                    "secondaryTargetType": _SWIM_INSTRUCTION_TARGET,
+                    "secondaryTargetValueOne": float(
+                        GarminWorkoutCompiler._garmin_effort(target.min, target.max)
+                    ),
+                    "secondaryTargetValueTwo": 0.0,
+                }
+            )
+            state.warnings.append("RPE_TARGET_MAPPED_TO_GARMIN_EFFORT_CATEGORY")
+            return f"RPE {target.min}-{target.max}"
+        # A native named-zone mapping is not implemented yet. Preserve it visibly
+        # even when a provider advertises the broader capability instead of
+        # silently dropping the athlete's target.
+        state.warnings.append("ZONE_TARGET_DOWNGRADED_TO_TEXT")
+        return f"Zona {target.zone}"
+
+    @staticmethod
+    def _step_description(node: StepNode, *, target_cue: str | None) -> str | None:
+        instructions = (
+            node.instructions if node.instructions and node.instructions.strip() else None
+        )
+        if instructions and target_cue:
+            return f"{instructions} · {target_cue}"
+        return instructions or target_cue
+
+    @staticmethod
+    def _garmin_effort(minimum: int, maximum: int) -> int:
+        midpoint = (minimum + maximum + 1) // 2
+        if midpoint == 1:
+            return 1  # recovery
+        if midpoint == 2:
+            return 2  # very_easy
+        if midpoint <= 4:
+            return 3  # easy
+        if midpoint <= 6:
+            return 4  # moderate
+        if midpoint <= 8:
+            return 5  # hard
+        if midpoint == 9:
+            return 6  # very_hard
+        return 7  # all_out
+
+    @staticmethod
+    def _format_pace(seconds: float) -> str:
+        rounded = round(seconds)
+        minutes, remainder = divmod(rounded, 60)
+        return f"{minutes}:{remainder:02d}"
 
     @staticmethod
     def _description(revision: WorkoutRevision, source_revision_hash: str) -> str:

@@ -62,6 +62,41 @@ A integração PostgreSQL com provider fake comprovou:
 - banco pessoal: 1 usuário, 1 conexão Garmin ativa, 2 dispositivos, 4 treinos e
   zero treinos com bindings Garmin duplicados.
 
+## Refinamento do editor e do payload Garmin
+
+Em 2026-08-26, o editor canônico passou a expor `target` e `instructions` em
+etapas de topo e filhas de repeats. O fluxo coberto cria RPE 5–6 no aquecimento,
+ritmo 1:40–1:50/100 m na série principal, grava notas, salva e remonta o editor
+com os mesmos valores. Não houve mudança de schema REST, banco ou migration.
+
+O compilador agora inclui, de forma determinística:
+
+- `poolLength`, unidade métrica e distância estimada no topo do workout;
+- unidade métrica preferida nas etapas por distância;
+- `description` por etapa para as notas;
+- `pace.zone` com os limites canônicos convertidos para m/s;
+- `swim.instruction` para RPE e o intervalo original como texto conservador;
+- fallback textual e warning quando a capability nativa estiver desabilitada.
+
+Verificações do refinamento:
+
+- 13 testes focados do compilador Garmin verdes;
+- 91 testes unitários Python verdes;
+- 140 testes Python verdes na suíte completa da árvore preparada para publicação;
+- 9 testes Vitest verdes, incluindo criação, salvamento, remontagem, reorder de
+  etapas sem ID e repeats aninhados;
+- TypeScript, ESLint, Ruff, Mypy, build Vite e validadores do repositório verdes
+  na mesma árvore limpa.
+
+O smoke Garmin real não foi executado nesta mudança. O shape de pool, nota e
+ritmo tem fixture pública consistente; a enumeração categórica de esforço segue
+com warning e texto RPE no payload até uma validação autenticada protegida.
+Referências usadas: [round-trip de natação em piscina](https://github.com/pablo-albaladejo/kaiord/blob/main/test-fixtures/gcn/WorkoutSwimmingAllStrokesOutput.gcn),
+[faixa real de ritmo](https://github.com/Taxuspt/garmin_mcp/issues/89) e
+[round-trip das opções do editor Garmin](https://github.com/mrclmtll/garmin-coach-llm/blob/d4f4858988e1d49c79fa8b81755c94e9e79610a5/backend/app/schemas/workout.py#L170-L183),
+[códigos observados em workouts](https://github.com/edwillys/garmin-scheduler/blob/ad51085953916c0566af8197cc779d44102ebb5b/src/garmin_scheduler/garmin_constants.py#L117-L127)
+e [enumeração completa pública](https://github.com/llehouerou/go-garmin/blob/cbf5895e08bf32ea5510aabfd392c892055de2ab/service_workout.go#L226-L248).
+
 ## Limite
 
 Uma conversa já aberta não recarrega Skills/MCP. Após reconexão OAuth, o smoke

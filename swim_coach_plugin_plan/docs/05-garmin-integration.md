@@ -172,6 +172,26 @@ A sobreposição permite capturar atividades editadas ou sincronizadas com atras
 9. Alterar estado local somente após resposta confirmada.
 10. Notificar resultado.
 
+### 6.1 Contrato de compilação para natação em piscina
+
+- `poolLength`, `poolLengthUnit` métrica e `estimatedDistanceInMeters` ficam no
+  nível superior do workout; o segmento não recebe cópias desses campos;
+- etapas por distância recebem `preferredEndConditionUnit = meter`;
+- `instructions` vira `description` da etapa e é omitido quando vazio;
+- ritmo desejado usa o alvo secundário `pace.zone` (ID 6), com a faixa canônica
+  de segundos por 100 m convertida em limites crescentes de m/s;
+- esforço usa o alvo secundário `swim.instruction` (ID 18). Como o Garmin aceita
+  uma categoria, o intervalo RPE 1–10 é reduzido pelo ponto médio e preservado
+  também como texto `RPE x-y` na descrição;
+- `targetType` primário permanece explicitamente `no.target` para os alvos de
+  natação acima;
+- capabilities sem suporte preservam a indicação no texto e geram warning de
+  downgrade, sem descarte silencioso.
+
+O shape de pool, notas e ritmo está coberto por fixtures/testes locais. A ordem
+dos códigos categóricos de esforço permanece acompanhada por warning e fallback
+textual até o próximo smoke real protegido no Garmin.
+
 ## 7. Idempotência
 
 Chave sugerida:

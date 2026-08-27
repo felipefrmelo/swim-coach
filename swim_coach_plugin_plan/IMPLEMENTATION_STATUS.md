@@ -387,12 +387,19 @@
   - Garmin create/update/reschedule/replay com um binding estável por treino;
   - geração semanal direta sem `ActionProposal`;
   - PWA com “Salvar” e “Salvar e enviar ao Garmin”;
+  - editor PWA com metas por etapa (sem objetivo, RPE e ritmo) e notas, incluindo
+    filhos de repeats; payload Garmin com piscina métrica, distância estimada,
+    notas e targets secundários, mais fallback textual explícito;
   - router REST de actions desmontado no modo v2 e modo canário removido;
   - sete Skills reescritas, 42 evals P13 e plugin pessoal
     `2.0.0+codex.20260826113352` validado/reinstalado.
 - Evidência local completa: `make check` com 130 Python e 4 Vitest, build das
   quatro imagens, 9 Playwright, dependency/Gitleaks limpos, SBOM e Trivy com zero
   HIGH/CRITICAL.
+- Refinamento local do editor/payload: 13 testes do compilador, 91 unitários,
+  140 testes Python na suíte completa e 9 Vitest verdes; TypeScript, ESLint,
+  Ruff, Mypy, build Vite e validadores do repositório também verdes na árvore
+  limpa preparada para publicação.
 - Publicado na `main` em `4bf2cec`; hotfix do worker em `0887f96`, ambos com CI
   verde (`32966318411` e `32966938164`).
 - Deploy saudável na VM pessoal: MCP v2/planejamento/Garmin live ativos, oito

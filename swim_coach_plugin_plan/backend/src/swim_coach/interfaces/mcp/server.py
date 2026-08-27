@@ -35,6 +35,7 @@ from swim_coach.application.services.mcp_read import (
     McpPrincipal,
     McpReadService,
     McpResult,
+    McpWarning,
 )
 from swim_coach.application.services.mcp_write import (
     MCP_PLANNING_TOOL_SCOPES,
@@ -83,6 +84,37 @@ DESTRUCTIVE_LOCAL_WRITE = ToolAnnotations(
     idempotentHint=True,
     openWorldHint=False,
 )
+
+_GARMIN_WARNING_MESSAGES = {
+    "DRILL_STROKE_DOWNGRADED_TO_CHOICE": (
+        "Garmin will receive this drill stroke as the generic choice stroke."
+    ),
+    "EQUIPMENT_OMITTED_FROM_GARMIN_PAYLOAD": (
+        "Garmin will not receive the equipment configured for this workout step."
+    ),
+    "PACE_TARGET_DOWNGRADED_TO_TEXT": (
+        "The desired pace is included as step text because a native Garmin pace target "
+        "is unavailable."
+    ),
+    "RPE_TARGET_DOWNGRADED_TO_TEXT": (
+        "The RPE target is included as step text because a native Garmin effort target "
+        "is unavailable."
+    ),
+    "RPE_TARGET_MAPPED_TO_GARMIN_EFFORT_CATEGORY": (
+        "The RPE range was mapped to a Garmin effort category and preserved in the step text."
+    ),
+    "ZONE_TARGET_DOWNGRADED_TO_TEXT": (
+        "The training zone is included as step text because a native Garmin zone target "
+        "is unavailable."
+    ),
+}
+
+
+def _garmin_warning(code: str) -> McpWarning:
+    return McpWarning(
+        code=code,
+        message=_GARMIN_WARNING_MESSAGES.get(code, "Garmin adjusted part of the workout payload."),
+    )
 
 
 class SwimCoachFastMCP(FastMCP):
@@ -1547,6 +1579,7 @@ def _register_v2_tools(
                     "job_id": str(result.job_id) if result.job_id else None,
                     "replayed": result.replayed,
                 },
+                warnings=[_garmin_warning(code) for code in result.warnings],
                 human_summary=(
                     "Garmin publication is queued."
                     if result.job_id

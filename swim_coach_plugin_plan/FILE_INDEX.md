@@ -45,6 +45,9 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`apps/web/src/routes/operations.tsx`](apps/web/src/routes/operations.tsx) | arquivo estruturado/auxiliar |
 | [`apps/web/src/routes/pages.tsx`](apps/web/src/routes/pages.tsx) | arquivo estruturado/auxiliar |
 | [`apps/web/src/routes/router.tsx`](apps/web/src/routes/router.tsx) | arquivo estruturado/auxiliar |
+| [`apps/web/src/routes/workout-editor.test.tsx`](apps/web/src/routes/workout-editor.test.tsx) | arquivo estruturado/auxiliar |
+| [`apps/web/src/routes/workout-pace.ts`](apps/web/src/routes/workout-pace.ts) | arquivo estruturado/auxiliar |
+| [`apps/web/src/routes/workouts.test.ts`](apps/web/src/routes/workouts.test.ts) | arquivo estruturado/auxiliar |
 | [`apps/web/src/routes/workouts.tsx`](apps/web/src/routes/workouts.tsx) | arquivo estruturado/auxiliar |
 | [`apps/web/src/test/setup.ts`](apps/web/src/test/setup.ts) | arquivo estruturado/auxiliar |
 | [`apps/web/src/vite-env.d.ts`](apps/web/src/vite-env.d.ts) | arquivo estruturado/auxiliar |
@@ -464,4 +467,4 @@ Mapa gerado do pacote. Arquivos de código/contrato sem título Markdown usam um
 | [`tools/validate_plan.py`](tools/validate_plan.py) | arquivo estruturado/auxiliar |
 | [`tools/validate_repository.py`](tools/validate_repository.py) | arquivo estruturado/auxiliar |
 
-**Total indexado:** 412 arquivos (sem contar este índice e o arquivo de checksums).
+**Total indexado:** 415 arquivos (sem contar este índice e o arquivo de checksums).

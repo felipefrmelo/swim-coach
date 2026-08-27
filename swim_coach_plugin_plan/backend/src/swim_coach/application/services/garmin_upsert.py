@@ -23,6 +23,7 @@ class GarminUpsertResult:
     status: str
     job_id: EntityId | None
     replayed: bool
+    warnings: tuple[str, ...] = ()
 
 
 class GarminUpsertService:
@@ -108,6 +109,7 @@ class GarminUpsertService:
                     "published",
                     None,
                     True,
+                    compiled.warnings,
                 )
             if binding is None:
                 binding = ExternalWorkoutBinding(
@@ -141,6 +143,7 @@ class GarminUpsertService:
                         "revision_content_hash": revision.content_hash,
                         "source_revision_hash": compiled.source_revision_hash,
                         "compiled_payload": compiled.payload,
+                        "warnings": list(compiled.warnings),
                         "scheduled_date": schedule.scheduled_date.isoformat(),
                         "device_id": str(selected.id) if selected is not None else None,
                     },
@@ -159,6 +162,7 @@ class GarminUpsertService:
                 "job_id": str(stored.id),
                 "scheduled_date": schedule.scheduled_date.isoformat(),
                 "replayed": replayed,
+                "warnings": list(compiled.warnings),
             }
             await uow.outbox.add(
                 OutboxEvent(
@@ -193,4 +197,5 @@ class GarminUpsertService:
             "queued",
             stored.id,
             replayed,
+            compiled.warnings,
         )

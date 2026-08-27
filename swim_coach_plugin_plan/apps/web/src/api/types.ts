@@ -279,5 +279,6 @@ export interface WorkoutSaveResult {
     job_id: string | null;
     scheduled_date: string;
     replayed: boolean;
+    warnings: string[];
   } | null;
 }

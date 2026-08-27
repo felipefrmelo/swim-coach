@@ -148,6 +148,7 @@ class GarminOperationResponse(StrictModel):
     job_id: UUID | None
     scheduled_date: date
     replayed: bool
+    warnings: list[str] = Field(default_factory=list)
 
 
 class WorkoutSaveResponse(StrictModel):
@@ -239,6 +240,7 @@ async def save_workout_direct(
             job_id=operation.job_id.value if operation.job_id else None,
             scheduled_date=date.fromisoformat(operation.scheduled_date),
             replayed=operation.replayed,
+            warnings=list(operation.warnings),
         )
     return WorkoutSaveResponse(workout=WorkoutResponse.from_detail(detail), garmin=garmin)
 
