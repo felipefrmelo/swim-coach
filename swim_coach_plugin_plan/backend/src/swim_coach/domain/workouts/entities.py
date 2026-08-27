@@ -21,6 +21,7 @@ class PlannedWorkoutStatus(StrEnum):
     COMPLETED = "completed"
     CANCELLED = "cancelled"
     ARCHIVED = "archived"
+    DELETING = "deleting"
 
 
 @dataclass(frozen=True, slots=True)

@@ -20,6 +20,7 @@ from swim_coach.application.services import (
     PlanningService,
     PrivacyService,
 )
+from swim_coach.application.services.garmin_workout_compiler import GarminWorkoutCompiler
 from swim_coach.bootstrap.container import build_services
 from swim_coach.domain.actions import (
     ActionExecution,
@@ -50,6 +51,7 @@ class Worker:
     GARMIN_PUBLISH_JOB_TYPE = "workout.publish_garmin"
     GARMIN_SCHEDULE_JOB_TYPE = "workout.schedule_garmin"
     GARMIN_UPSERT_JOB_TYPE = "workout.upsert_garmin"
+    WORKOUT_DELETE_JOB_TYPE = "workout.delete_everywhere"
     ACTIVITY_FETCH_FILE_JOB_TYPE = "activity.fetch_file"
     PLANNING_JOB_TYPE = "planning.generate_week"
     PRIVACY_DELETE_JOB_TYPE = "privacy.delete_user"
@@ -66,6 +68,7 @@ class Worker:
         coach_commands: CoachCommandService | None = None,
         planning: PlanningService | None = None,
         privacy: PrivacyService | None = None,
+        database: Database | None = None,
         worker_id: str = "worker-p01",
         poll_interval: float = 1.0,
     ) -> None:
@@ -78,6 +81,7 @@ class Worker:
         self._coach_commands = coach_commands
         self._planning = planning
         self._privacy = privacy
+        self._database = database
         self._worker_id = worker_id
         self._poll_interval = poll_interval
 
@@ -86,7 +90,7 @@ class Worker:
             return False
         if self._automation is not None:
             await self._automation.tick()
-        job_types = {self.NOOP_JOB_TYPE}
+        job_types = {self.NOOP_JOB_TYPE, self.WORKOUT_DELETE_JOB_TYPE}
         if self._garmin_sync is not None:
             job_types.add(self.GARMIN_SYNC_JOB_TYPE)
         if self._garmin_writer is not None:
@@ -120,6 +124,8 @@ class Worker:
             return await self._run_garmin_schedule(job)
         if job.job_type == self.GARMIN_UPSERT_JOB_TYPE:
             return await self._run_garmin_upsert(job)
+        if job.job_type == self.WORKOUT_DELETE_JOB_TYPE:
+            return await self._run_workout_delete(job)
         if job.job_type == self.ACTIVITY_FETCH_FILE_JOB_TYPE:
             return await self._run_activity_fetch_file(job)
         if job.job_type == self.PLANNING_JOB_TYPE:
@@ -374,6 +380,27 @@ class Worker:
             )
 
     async def _run_garmin_upsert(self, job: Job) -> bool:
+        if job.user_id is None:
+            return await self._finish_failure(job, "GARMIN_JOB_INVALID", retryable=False)
+        try:
+            workout_id = EntityId.parse(cast(str, job.payload["workout_id"]))
+            if self._database is None:
+                return await self._run_garmin_upsert_locked(job)
+            async with self._database.user_advisory_lock(
+                f"garmin-workout:{job.user_id}:{workout_id}"
+            ):
+                return await self._run_garmin_upsert_locked(job)
+        except DomainError as exc:
+            return await self._finish_failure(
+                job,
+                exc.code,
+                retryable=exc.code == "JOB_ALREADY_RUNNING",
+                retry_after_seconds=30,
+            )
+        except (KeyError, TypeError, ValueError):
+            return await self._finish_failure(job, "GARMIN_JOB_INVALID", retryable=False)
+
+    async def _run_garmin_upsert_locked(self, job: Job) -> bool:
         """Create/update one Garmin template and move its single calendar binding."""
 
         if (
@@ -395,6 +422,11 @@ class Worker:
         async with self._uow_factory() as uow:
             workout = await uow.workouts.get(job.user_id, workout_id)
             binding = await uow.external_workout_bindings.get(job.user_id, binding_id)
+        if workout is not None and workout.status is PlannedWorkoutStatus.DELETING:
+            async with self._uow_factory() as uow:
+                finished = await uow.jobs.mark_succeeded(job.id, self._worker_id, datetime.now(UTC))
+                await uow.commit()
+            return finished
         if workout is None or binding is None or workout.current_revision_id != revision_id:
             return await self._finish_failure(job, "GARMIN_JOB_STALE", retryable=False)
 
@@ -493,13 +525,14 @@ class Worker:
                 stored_binding.last_error = None
                 stored_binding.updated_at = now
                 stored_binding.version += 1
-                stored_workout.status = PlannedWorkoutStatus.PUBLISHED
-                stored_workout.updated_at = now
-                stored_workout.version += 1
                 await uow.external_workout_bindings.update(
                     stored_binding, expected_version=binding_version
                 )
-                await uow.workouts.update(stored_workout, expected_version=workout_version)
+                if stored_workout.status is not PlannedWorkoutStatus.DELETING:
+                    stored_workout.status = PlannedWorkoutStatus.PUBLISHED
+                    stored_workout.updated_at = now
+                    stored_workout.version += 1
+                    await uow.workouts.update(stored_workout, expected_version=workout_version)
                 finished = await uow.jobs.mark_succeeded(job.id, self._worker_id, now)
                 await uow.commit()
             return finished
@@ -510,6 +543,91 @@ class Worker:
         except Exception:
             logger.exception("garmin_upsert_internal_failure", extra={"job_id": str(job.id)})
             return await self._finish_failure(job, "GARMIN_UPSERT_INTERNAL", retryable=False)
+
+    async def _run_workout_delete(self, job: Job) -> bool:
+        if self._uow_factory is None or job.user_id is None:
+            return await self._finish_failure(job, "WORKOUT_DELETE_JOB_INVALID", retryable=False)
+        try:
+            workout_id = EntityId.parse(cast(str, job.payload["workout_id"]))
+        except (KeyError, TypeError, ValueError):
+            return await self._finish_failure(job, "WORKOUT_DELETE_JOB_INVALID", retryable=False)
+        try:
+            if self._database is None:
+                return await self._run_workout_delete_locked(job, workout_id)
+            async with self._database.user_advisory_lock(
+                f"garmin-workout:{job.user_id}:{workout_id}"
+            ):
+                return await self._run_workout_delete_locked(job, workout_id)
+        except DomainError as exc:
+            return await self._finish_failure(
+                job,
+                exc.code,
+                retryable=exc.code == "JOB_ALREADY_RUNNING",
+                retry_after_seconds=30,
+            )
+
+    async def _run_workout_delete_locked(self, job: Job, workout_id: EntityId) -> bool:
+        if self._uow_factory is None or job.user_id is None:
+            return False
+        async with self._uow_factory() as uow:
+            workout = await uow.workouts.get(job.user_id, workout_id)
+            binding = await uow.external_workout_bindings.get_by_workout(
+                job.user_id, "garmin", workout_id
+            )
+            revision = (
+                await uow.workout_revisions.get(job.user_id, workout.current_revision_id)
+                if workout is not None and workout.current_revision_id is not None
+                else None
+            )
+        if workout is None:
+            async with self._uow_factory() as uow:
+                finished = await uow.jobs.mark_succeeded(job.id, self._worker_id, datetime.now(UTC))
+                await uow.commit()
+            return finished
+        if workout.status is not PlannedWorkoutStatus.DELETING:
+            return await self._finish_failure(job, "WORKOUT_DELETE_STATE_CONFLICT", retryable=False)
+
+        try:
+            if binding is not None and binding.external_schedule_id is not None:
+                if self._garmin_writer is None or not self._garmin_write_enabled:
+                    return await self._finish_failure(job, "GARMIN_WRITE_DISABLED", retryable=True)
+                await self._garmin_writer.unschedule_workout(
+                    job.user_id, binding.external_schedule_id
+                )
+            external_id = binding.external_workout_id if binding is not None else None
+            if external_id is None and revision is not None and self._garmin_writer is not None:
+                source_hash = GarminWorkoutCompiler().compile(revision).source_revision_hash
+                found = await self._garmin_writer.find_workout_by_source_hash(
+                    job.user_id, source_hash
+                )
+                external_id = found.external_workout_id if found is not None else None
+            if external_id is not None:
+                if self._garmin_writer is None or not self._garmin_write_enabled:
+                    return await self._finish_failure(job, "GARMIN_WRITE_DISABLED", retryable=True)
+                await self._garmin_writer.delete_workout(job.user_id, external_id)
+        except GarminProviderError as exc:
+            return await self._finish_failure(
+                job,
+                exc.category.value,
+                retryable=exc.retryable or exc.outcome_ambiguous,
+                retry_after_seconds=exc.retry_after_seconds,
+            )
+
+        now = datetime.now(UTC)
+        async with self._uow_factory() as uow:
+            await uow.action_proposals.delete_for_target(job.user_id, "planned_workout", workout_id)
+            deleted = await uow.workouts.delete(
+                job.user_id,
+                workout_id,
+                required_status=PlannedWorkoutStatus.DELETING,
+            )
+            if not deleted:
+                raise DomainError(
+                    "WORKOUT_DELETE_STATE_CONFLICT", "Workout deletion state changed."
+                )
+            finished = await uow.jobs.mark_succeeded(job.id, self._worker_id, now)
+            await uow.commit()
+        return finished
 
     async def _finish_upsert_failure(
         self,
@@ -902,6 +1020,7 @@ async def run_worker() -> None:
             coach_commands=services.coach_commands,
             planning=services.planning,
             privacy=services.privacy,
+            database=database,
         ).run(stop_event)
     finally:
         await database.dispose()

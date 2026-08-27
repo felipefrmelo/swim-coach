@@ -84,6 +84,12 @@ DESTRUCTIVE_LOCAL_WRITE = ToolAnnotations(
     idempotentHint=True,
     openWorldHint=False,
 )
+DESTRUCTIVE_OPEN_WORLD_WRITE = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=True,
+    idempotentHint=True,
+    openWorldHint=True,
+)
 
 _GARMIN_WARNING_MESSAGES = {
     "DRILL_STROKE_DOWNGRADED_TO_CHOICE": (
@@ -162,10 +168,12 @@ def create_mcp_server(
     write_enabled = bool(oauth_enabled and write_service)
     ui_enabled = bool(oauth_enabled and write_enabled and ui_enabled)
     instructions = (
-        "Swim Coach is a personal, ChatGPT-first swimming coach. Use the eight "
+        "Swim Coach is a personal, ChatGPT-first swimming coach. Use the nine "
         "intent-level tools directly. Local saves need no extra confirmation. Calling "
         "publish_workout means the user asked to send that workout to Garmin; do not add "
-        "proposal, hash, approval, execution, revision, or idempotency ceremony."
+        "proposal, hash, approval, execution, revision, or idempotency ceremony. Calling "
+        "delete_workout means the user asked to remove the planned workout locally, from "
+        "the calendar, and from Garmin after the host's destructive-action confirmation."
         if v2_enabled and oauth_enabled
         else "Swim Coach exposes authenticated, user-scoped swimming training data. "
         + (
@@ -1338,7 +1346,7 @@ def _register_v2_tools(
     execute: Callable[..., Awaitable[McpResult]],
     execute_write: Callable[..., Awaitable[McpResult]],
 ) -> None:
-    """Register the complete public v2 surface: eight intent-level tools."""
+    """Register the complete public v2 surface: nine intent-level tools."""
 
     scope = frozenset({"coach"})
 
@@ -1379,6 +1387,7 @@ def _register_v2_tools(
                         "save_workout": True,
                         "generate_week": coach_service.planning_enabled,
                         "publish_workout": coach_service.garmin_write_enabled,
+                        "delete_workout": True,
                     },
                 },
                 warnings=[*training.warnings, *sync.warnings],
@@ -1588,6 +1597,50 @@ def _register_v2_tools(
             )
 
         return await execute_write("publish_workout", ctx, scope, args, command)
+
+    @server.tool(
+        name="delete_workout",
+        title="Delete a swim workout everywhere",
+        description=(
+            "Remove a planned workout from Swim Coach, its local calendar, and Garmin. "
+            "Completed or activity-matched workouts are protected."
+        ),
+        annotations=DESTRUCTIVE_OPEN_WORLD_WRITE,
+        structured_output=True,
+    )
+    async def delete_workout(
+        workout_id: UUID,
+        ctx: Context[Any, Any, Any],
+    ) -> McpResult:
+        args = {"workout_id": str(workout_id)}
+
+        async def command(
+            principal: McpPrincipal, request_id: str, correlation_id: CorrelationId
+        ) -> McpResult:
+            result = await coach_service.delete_workout(
+                principal.user_id,
+                EntityId(workout_id),
+                correlation_id=correlation_id,
+            )
+            return McpResult(
+                request_id=request_id,
+                status="ACCEPTED",
+                data={
+                    "workout_id": str(result.workout_id),
+                    "local_removed": result.local_removed,
+                    "calendar_removed": result.calendar_removed,
+                    "garmin_cleanup": result.garmin_cleanup,
+                    "job_id": str(result.job_id),
+                    "replayed": result.replayed,
+                },
+                human_summary=(
+                    "The workout was removed locally; Garmin cleanup is running."
+                    if result.garmin_cleanup == "QUEUED"
+                    else "The workout has already been deleted everywhere."
+                ),
+            )
+
+        return await execute_write("delete_workout", ctx, scope, args, command)
 
     @server.tool(
         name="generate_week",

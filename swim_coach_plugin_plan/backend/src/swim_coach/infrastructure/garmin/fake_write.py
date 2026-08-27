@@ -21,15 +21,23 @@ class FakeGarminWorkoutProvider:
         *,
         ambiguous_create_once: bool = False,
         ambiguous_schedule_once: bool = False,
+        fail_delete_once: bool = False,
     ) -> None:
         self._workouts: dict[tuple[str, str], ExternalWorkoutResult] = {}
         self._schedules: dict[tuple[str, str, date], ExternalScheduleResult] = {}
         self._ambiguous_create_once = ambiguous_create_once
         self._ambiguous_schedule_once = ambiguous_schedule_once
+        self._fail_delete_once = fail_delete_once
         self.create_calls = 0
         self.schedule_calls = 0
         self.update_calls = 0
         self.unschedule_calls = 0
+        self.delete_calls = 0
+
+    def fail_next_delete(self) -> None:
+        """Inject one retryable deletion failure for worker contract tests."""
+
+        self._fail_delete_once = True
 
     async def create_workout(
         self, user_id: UserId, payload: GarminWorkoutDTO
@@ -101,9 +109,24 @@ class FakeGarminWorkoutProvider:
 
     async def unschedule_workout(self, user_id: UserId, external_schedule_id: str) -> None:
         self.unschedule_calls += 1
-        for key, value in list(self._schedules.items()):
-            if key[0] == str(user_id) and value.external_schedule_id == external_schedule_id:
-                self._schedules.pop(key)
+        for schedule_key, value in list(self._schedules.items()):
+            if (
+                schedule_key[0] == str(user_id)
+                and value.external_schedule_id == external_schedule_id
+            ):
+                self._schedules.pop(schedule_key)
+
+    async def delete_workout(self, user_id: UserId, external_workout_id: str) -> None:
+        self.delete_calls += 1
+        if self._fail_delete_once:
+            self._fail_delete_once = False
+            raise GarminProviderError(GarminErrorCategory.NETWORK, retryable=True)
+        for schedule_key, _value in list(self._schedules.items()):
+            if schedule_key[0] == str(user_id) and schedule_key[1] == external_workout_id:
+                self._schedules.pop(schedule_key)
+        for workout_key, value in list(self._workouts.items()):
+            if workout_key[0] == str(user_id) and value.external_workout_id == external_workout_id:
+                self._workouts.pop(workout_key)
 
     async def find_workout_by_source_hash(
         self, user_id: UserId, source_revision_hash: str

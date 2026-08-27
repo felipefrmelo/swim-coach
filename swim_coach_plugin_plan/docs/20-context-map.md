@@ -18,6 +18,7 @@ Este arquivo reduz o contexto que uma LLM precisa carregar. Leia sempre `AGENTS.
 | P11 | 12,14,15,23 | 0005,0006 | openapi, domain-events |
 | P12 | 13,14,15,17,18,19,21,22,23,24 | todos | todos |
 | P13 | 00,01,03,04,05,08,09,10,12,13,14,15,17,18,22,23,24 | 0001,0002,0003,0005,0007,0008,0010,0011 | canonical-workout, mcp-tools, oauth-scopes, openapi, domain-events |
+| P14 | 01,03,04,05,08,09,10,12,13,14,15,17,18,22,23,24 | 0003,0005,0007,0011,0012 | mcp-tools, oauth-scopes, openapi, error-catalog, state-machines |
 
 Números de documento referem-se ao prefixo em `docs/`.
 

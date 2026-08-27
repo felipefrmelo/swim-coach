@@ -13,7 +13,7 @@ O plugin terá:
 
 - Skills versionados para os workflows recorrentes;
 - um servidor MCP remoto com ferramentas tipadas;
-- oito comandos MCP de intenção, úteis sem UI customizada;
+- nove comandos MCP de intenção, úteis sem UI customizada;
 - pacote local/pessoal primeiro;
 - preparação para publicação pública futura, sem transformar isso em requisito do MVP.
 
@@ -66,6 +66,7 @@ flowchart TB
 | P11 | Automações e resiliência UX | sync, feedback, notificações e offline | jobs recuperáveis e estado coerente |
 | P12 | Hardening e release pessoal | backup/restore, segurança, observabilidade e release | checklist operacional completo |
 | P13 | ChatGPT-first direto | oito tools, escopo único, PWA auxiliar e Garmin upsert | fluxo completo sem cerimônia técnica visível |
+| P14 | Exclusão direta | apagar treino local/agenda/Garmin com uma ação | hard delete idempotente sem apagar atividades |
 
 ## 5. Fatias de valor
 
@@ -119,7 +120,7 @@ Adiado:
 
 ## 7. Critérios de conclusão do produto pessoal
 
-O plano estará completo quando o gate P13 estiver concluído e for possível demonstrar, sem manipulação manual do banco:
+O plano estará completo quando o gate P14 estiver concluído e for possível demonstrar, sem manipulação manual do banco:
 
 1. instalar o plugin pessoal;
 2. autenticar;
@@ -132,6 +133,7 @@ O plano estará completo quando o gate P13 estiver concluído e for possível de
 9. registrar RPE/técnica/dor;
 10. gerar a semana seguinte com justificativa;
 11. recuperar o sistema a partir de backup testado.
+12. excluir um treino planejado da agenda, do Swim Coach e do Garmin sem apagar atividades.
 
 ## 8. Navegação para implementação
 

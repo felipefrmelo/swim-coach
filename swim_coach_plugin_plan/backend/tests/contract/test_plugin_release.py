@@ -35,6 +35,7 @@ SKILLS = {
         "generate_week",
         "publish_workout",
     ),
+    "delete-workout": ("get_workouts", "delete_workout"),
 }
 CATEGORY_COUNTS = {
     "direct": 1,
@@ -56,24 +57,25 @@ def load_yaml(path: Path) -> Any:
 
 def load_eval_cases() -> list[dict[str, Any]]:
     cases: list[dict[str, Any]] = []
-    for path in sorted((ROOT / "tests/evals/cases").glob("p13-*.yaml")):
-        documents = yaml.safe_load_all(path.read_text(encoding="utf-8"))
-        cases.extend(document for document in documents if document is not None)
+    for pattern in ("p13-*.yaml", "p14-*.yaml"):
+        for path in sorted((ROOT / "tests/evals/cases").glob(pattern)):
+            documents = yaml.safe_load_all(path.read_text(encoding="utf-8"))
+            cases.extend(document for document in documents if document is not None)
     return cases
 
 
-def test_p13_manifest_app_marketplace_and_release_matrix_are_chatgpt_first_2_0() -> None:
+def test_p14_manifest_app_marketplace_and_release_matrix_include_direct_delete_2_1() -> None:
     manifest = load_json(PLUGIN_ROOT / ".codex-plugin/plugin.json")
     app_mapping = load_json(PLUGIN_ROOT / ".app.json")
     marketplace = load_json(ROOT / ".agents/plugins/marketplace.json")
     release_matrix = load_yaml(ROOT / "contracts/capability-release-matrix.yaml")
 
     assert manifest["name"] == "swim-coach"
-    assert manifest["version"].startswith("2.0.0+codex.")
+    assert manifest["version"].startswith("2.1.0+codex.")
     assert manifest["skills"] == "./skills/"
     assert manifest["apps"] == "./.app.json"
     assert manifest["interface"]["capabilities"] == ["Read", "Write"]
-    assert len(manifest["interface"]["defaultPrompt"]) == 7
+    assert len(manifest["interface"]["defaultPrompt"]) == 8
 
     assert app_mapping == {
         "apps": {
@@ -108,18 +110,22 @@ def test_p13_manifest_app_marketplace_and_release_matrix_are_chatgpt_first_2_0()
     assert p13_release["version"] == "2.0.0"
     assert p13_release["mode"] == "chatgpt-first-direct-commands"
     assert p13_release["oauth_scopes"] == ["coach"]
+    p14_release = next(item for item in release_matrix["plugin_releases"] if item["phase"] == "P14")
+    assert p14_release["version"] == "2.1.0"
+    assert p14_release["mode"] == "direct-delete-everywhere"
+    assert p14_release["oauth_scopes"] == ["coach"]
     tool_names = {item["name"] for item in load_yaml(ROOT / "contracts/mcp-tools.yaml")["tools"]}
     assert tool_names == {item["name"] for item in release_matrix["tools"]}
     upgraded_skills = {
         item["name"]: tuple(item["required_tools"])
         for item in release_matrix["skills"]
-        if item.get("introduced") == "P13"
+        if item.get("introduced") in {"P13", "P14"}
     }
     assert upgraded_skills == SKILLS
     assert release_matrix["ui_resources"] == []
 
 
-def test_p13_skill_frontmatter_workflows_and_ui_metadata_are_valid() -> None:
+def test_p14_skill_frontmatter_workflows_and_ui_metadata_are_valid() -> None:
     skill_files = sorted((PLUGIN_ROOT / "skills").glob("*/SKILL.md"))
     assert {path.parent.name for path in skill_files} == set(SKILLS)
 
@@ -146,14 +152,14 @@ def test_p13_skill_frontmatter_workflows_and_ui_metadata_are_valid() -> None:
         assert f"${skill_name}" in interface["default_prompt"]
 
 
-def test_p13_eval_dataset_validates_direct_command_selection() -> None:
+def test_p14_eval_dataset_validates_direct_command_selection() -> None:
     schema = load_json(ROOT / "contracts/plugin-eval-case.schema.json")
     validator = Draft202012Validator(schema)
     tool_catalog = load_yaml(ROOT / "contracts/mcp-tools.yaml")
     tool_names = {item["name"] for item in tool_catalog["tools"]}
     cases = load_eval_cases()
 
-    assert len(cases) == 42
+    assert len(cases) == 48
     assert len({case["id"] for case in cases}) == len(cases)
     assert Counter(case["skill"] for case in cases) == Counter(
         {skill_name: 6 for skill_name in SKILLS}
@@ -189,14 +195,14 @@ def test_p13_eval_dataset_validates_direct_command_selection() -> None:
         assert counts == Counter(CATEGORY_COUNTS), skill_name
 
 
-def test_p13_release_manifest_hashes_are_current() -> None:
-    release = load_json(ROOT / "releases/plugin-2.0.0.json")
+def test_p14_release_manifest_hashes_are_current() -> None:
+    release = load_json(ROOT / "releases/plugin-2.1.0.json")
 
-    assert release["version"].startswith("2.0.0+codex.")
-    assert release["mode"] == "chatgpt-first-direct-commands"
+    assert release["version"].startswith("2.1.0+codex.")
+    assert release["mode"] == "direct-delete-everywhere"
     assert release["status"] == "release_candidate"
     assert release["oauth_scopes"] == ["coach"]
-    assert len(release["tools"]) == 8
+    assert len(release["tools"]) == 9
     for relative, expected in release["hashes"].items():
         actual = hashlib.sha256((ROOT / relative).read_bytes()).hexdigest()
         assert actual == expected, relative

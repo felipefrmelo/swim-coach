@@ -67,7 +67,10 @@ class WorkoutService:
 
     async def get_workout(self, user_id: UserId, workout_id: EntityId) -> WorkoutDetail:
         async with self._uow_factory() as uow:
-            return await self._get_detail(uow, user_id, workout_id)
+            detail = await self._get_detail(uow, user_id, workout_id)
+            if detail.workout.status is PlannedWorkoutStatus.DELETING:
+                raise ResourceNotFoundError("workout")
+            return detail
 
     async def create_draft(
         self,

@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### P14 — excluir treino em todos os lugares
+
+- adicionada a nona tool `delete_workout`, com scope `coach` e annotations
+  destrutivas/open-world para uma única confirmação do host;
+- exclusão fica invisível imediatamente, remove a agenda local e enfileira
+  limpeza idempotente do calendário e template Garmin;
+- worker usa advisory lock por treino, retries seguros e hard delete local após
+  a limpeza externa; atividades concluídas/vinculadas são protegidas;
+- REST/PWA receberam uma única ação de exclusão e diálogo simples;
+- plugin 2.1 adiciona a Skill `delete-workout` e seis evals específicas.
+
 ### P13 — ChatGPT-first e operação direta
 
 - aceita a ADR-0011, que substitui a cerimônia pública de proposal/hash por

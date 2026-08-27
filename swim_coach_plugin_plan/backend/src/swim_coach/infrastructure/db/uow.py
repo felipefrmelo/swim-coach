@@ -1932,7 +1932,10 @@ class SqlAlchemyWorkoutsRepository:
     async def list(self, user_id: UserId) -> Sequence[PlannedWorkout]:
         statement = (
             select(PlannedWorkoutModel)
-            .where(PlannedWorkoutModel.user_id == user_id.value)
+            .where(
+                PlannedWorkoutModel.user_id == user_id.value,
+                PlannedWorkoutModel.status != PlannedWorkoutStatus.DELETING.value,
+            )
             .order_by(PlannedWorkoutModel.updated_at.desc())
         )
         return [_workout(model) for model in await self._session.scalars(statement)]
@@ -1994,6 +1997,20 @@ class SqlAlchemyWorkoutsRepository:
         )
         if (await self._session.scalar(statement)) is None:
             raise RevisionConflictError(expected_version)
+
+    async def delete(
+        self, user_id: UserId, workout_id: EntityId, *, required_status: PlannedWorkoutStatus
+    ) -> bool:
+        statement = (
+            delete(PlannedWorkoutModel)
+            .where(
+                PlannedWorkoutModel.id == workout_id.value,
+                PlannedWorkoutModel.user_id == user_id.value,
+                PlannedWorkoutModel.status == required_status.value,
+            )
+            .returning(PlannedWorkoutModel.id)
+        )
+        return (await self._session.scalar(statement)) is not None
 
 
 class SqlAlchemyWorkoutRevisionsRepository:
@@ -2121,6 +2138,21 @@ class SqlAlchemyWorkoutSchedulesRepository:
             },
         )
         await self._session.execute(statement)
+
+    async def delete(self, user_id: UserId, workout_id: EntityId) -> bool:
+        statement = (
+            delete(WorkoutScheduleModel)
+            .where(
+                WorkoutScheduleModel.workout_id == workout_id.value,
+                WorkoutScheduleModel.workout_id.in_(
+                    select(PlannedWorkoutModel.id).where(
+                        PlannedWorkoutModel.user_id == user_id.value
+                    )
+                ),
+            )
+            .returning(WorkoutScheduleModel.id)
+        )
+        return (await self._session.scalar(statement)) is not None
 
 
 class SqlAlchemyWorkoutTemplatesRepository:
@@ -2252,6 +2284,20 @@ class SqlAlchemyActionProposalsRepository:
         )
         if (await self._session.scalar(statement)) is None:
             raise RevisionConflictError(expected_version)
+
+    async def delete_for_target(
+        self, user_id: UserId, target_type: str, target_id: EntityId
+    ) -> int:
+        statement = (
+            delete(ActionProposalModel)
+            .where(
+                ActionProposalModel.user_id == user_id.value,
+                ActionProposalModel.target_type == target_type,
+                ActionProposalModel.target_id == target_id.value,
+            )
+            .returning(ActionProposalModel.id)
+        )
+        return len((await self._session.scalars(statement)).all())
 
 
 class SqlAlchemyActionApprovalsRepository:

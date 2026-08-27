@@ -113,12 +113,12 @@ def validate_required_structure(report: Report) -> None:
     for rel in required:
         if not (ROOT / rel).exists():
             report.error(f"Arquivo obrigatório ausente: {rel}")
-    for phase in range(14):
+    for phase in range(15):
         if not list((ROOT / "phases").glob(f"p{phase:02d}-*.md")):
             report.error(f"Fase P{phase:02d} ausente")
         if not (ROOT / "prompts" / f"p{phase:02d}.md").exists():
             report.error(f"Prompt P{phase:02d} ausente")
-    report.check("estrutura obrigatória e 14 fases/prompts")
+    report.check("estrutura obrigatória e 15 fases/prompts")
 
 
 def validate_json_yaml(report: Report) -> dict[Path, Any]:
@@ -226,7 +226,7 @@ def validate_tasks_and_status(parsed: dict[Path, Any], report: Report) -> None:
     report.stats["tasks"] = len(owners)
 
     status = parsed.get(ROOT / "implementation-status.json")
-    expected = [f"P{i:02d}" for i in range(14)]
+    expected = [f"P{i:02d}" for i in range(15)]
     if isinstance(status, dict):
         actual = [phase.get("id") for phase in status.get("phases", [])]
         if actual != expected:
@@ -256,7 +256,7 @@ def validate_catalogs(parsed: dict[Path, Any], report: Report) -> None:
     if missing:
         report.error(f"Tools sem fase de release: {missing}")
 
-    phase_order = [f"P{i:02d}" for i in range(14)]
+    phase_order = [f"P{i:02d}" for i in range(15)]
     for item in matrix.get("tools", []):
         if item.get("introduced") not in phase_order:
             report.error(f"Tool {item.get('name')} tem fase inválida {item.get('introduced')}")

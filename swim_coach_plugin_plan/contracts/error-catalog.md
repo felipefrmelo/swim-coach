@@ -44,4 +44,6 @@ Todos os erros públicos têm `code`, `message`, `correlation_id`, `retryable`, 
 | `DELETION_CONFIRMATION_MISMATCH` | privacy | frase exata | sem revelar ownership |
 | `DELETION_STATE_CONFLICT` | privacy | refetch | estado sanitizado |
 | `DELETION_NOT_DUE` | privacy | após cooling-off | instante devido |
+| `WORKOUT_DELETE_COMPLETED_FORBIDDEN` | workout | não | atividade histórica vinculada é preservada |
+| `WORKOUT_DELETE_STATE_CONFLICT` | workout/concurrency | após refetch | estado sanitizado |
 | `INTERNAL_ERROR` | internal | talvez | somente correlation id |

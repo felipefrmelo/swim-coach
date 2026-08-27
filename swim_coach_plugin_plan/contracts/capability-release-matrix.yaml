@@ -11,6 +11,11 @@ plugin_releases:
     mode: chatgpt-first-direct-commands
     purpose: personal coach with eight intent-level tools and direct Garmin upsert
     oauth_scopes: [coach]
+  - phase: P14
+    version: 2.1.0
+    mode: direct-delete-everywhere
+    purpose: immediate local removal with idempotent Garmin cleanup
+    oauth_scopes: [coach]
 
 tools:
   - {name: get_coach_context, introduced: P13, release: 2.0.0, kind: read, external_effect: false}
@@ -21,6 +26,7 @@ tools:
   - {name: generate_week, introduced: P13, release: 2.0.0, kind: local-write, external_effect: false}
   - {name: sync_garmin, introduced: P13, release: 2.0.0, kind: external-read, external_effect: true}
   - {name: save_feedback, introduced: P13, release: 2.0.0, kind: local-write, external_effect: false}
+  - {name: delete_workout, introduced: P14, release: 2.1.0, kind: destructive-external-write, external_effect: true}
 
 skills:
   - name: review-latest-swim
@@ -51,6 +57,10 @@ skills:
     introduced: P13
     release: 2.0.0
     required_tools: [get_coach_context, get_workouts, get_swims, generate_week, publish_workout]
+  - name: delete-workout
+    introduced: P14
+    release: 2.1.0
+    required_tools: [get_workouts, delete_workout]
 
 ui_resources: []
 

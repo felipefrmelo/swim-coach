@@ -4,7 +4,7 @@ import httpx
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 from mcp.server.auth.provider import AccessToken
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from swim_coach.application.services.context import AvailabilityInput
 from swim_coach.bootstrap.api import create_app
@@ -12,6 +12,7 @@ from swim_coach.bootstrap.container import build_services
 from swim_coach.domain.athlete import Device
 from swim_coach.domain.shared import CorrelationId
 from swim_coach.domain.shared.value_objects import EntityId, UserId
+from swim_coach.domain.workouts import PlannedWorkoutStatus
 from swim_coach.infrastructure.db import Database
 from swim_coach.infrastructure.db.models import (
     ActionApprovalModel,
@@ -105,6 +106,7 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
                         "get_swims",
                         "save_workout",
                         "publish_workout",
+                        "delete_workout",
                         "generate_week",
                         "sync_garmin",
                         "save_feedback",
@@ -321,6 +323,164 @@ async def test_direct_save_publish_update_and_reschedule_use_one_binding(
     async with database.session_factory() as session:
         assert (
             await session.scalar(select(func.count()).select_from(ExternalWorkoutBindingModel)) == 1
+        )
+        assert await session.scalar(select(func.count()).select_from(ActionProposalModel)) == 0
+        assert await session.scalar(select(func.count()).select_from(ActionApprovalModel)) == 0
+        assert await session.scalar(select(func.count()).select_from(ActionExecutionModel)) == 0
+
+
+async def test_delete_workout_removes_local_schedule_and_garmin_everywhere(
+    database: Database, app_settings: Settings
+) -> None:
+    settings = app_settings.model_copy(
+        update={"garmin_write_enabled": True, "garmin_write_mode": "fake"}
+    )
+    app = create_app(settings, database)
+    transport = httpx.ASGITransport(app=app)
+    async with app.router.lifespan_context(app):
+        async with httpx.AsyncClient(transport=transport, base_url="http://localhost") as client:
+            await client.post("/api/v1/auth/dev-login")
+            csrf = client.cookies.get("swim_coach_csrf")
+            assert csrf
+            me = (await client.get("/api/v1/me")).json()
+            pool = (await client.get("/api/v1/pools")).json()[0]
+            user_id = UserId.parse(me["user"]["id"])
+            now = datetime.now(UTC)
+            async with app.state.services.uow_factory() as uow:
+                await uow.devices.add(
+                    Device(
+                        id=EntityId.new(),
+                        user_id=user_id,
+                        provider="garmin",
+                        external_device_id="delete-device",
+                        model="Forerunner delete test",
+                        name="Relógio delete",
+                        is_primary=True,
+                        capabilities={"workout_write": True},
+                        last_seen_at=now,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                )
+                await uow.commit()
+
+            saved = await client.post(
+                "/api/v1/workouts/save",
+                headers={"X-CSRF-Token": csrf},
+                json={
+                    "pool_id": pool["id"],
+                    "definition": canonical_workout(),
+                    "scheduled_date": (date.today() + timedelta(days=1)).isoformat(),
+                    "scheduled_start_time": "19:00:00",
+                    "publish_to_garmin": True,
+                },
+            )
+            assert saved.status_code == 200, saved.text
+            workout_id = saved.json()["workout"]["id"]
+            writer = app.state.services.garmin_writer
+            assert isinstance(writer, FakeGarminWorkoutProvider)
+            worker = Worker(
+                app.state.services.uow_factory,
+                app.state.services.garmin_sync,
+                writer,
+                garmin_write_enabled=True,
+                database=database,
+            )
+            assert await worker.run_once()
+
+            deleted = await client.delete(
+                f"/api/v1/workouts/{workout_id}", headers={"X-CSRF-Token": csrf}
+            )
+            assert deleted.status_code == 202, deleted.text
+            assert deleted.json()["local_removed"] is True
+            assert deleted.json()["calendar_removed"] is True
+            assert deleted.json()["garmin_cleanup"] == "QUEUED"
+            assert (await client.get(f"/api/v1/workouts/{workout_id}")).status_code == 404
+            assert all(
+                item["id"] != workout_id for item in (await client.get("/api/v1/workouts")).json()
+            )
+
+            replay = await client.delete(
+                f"/api/v1/workouts/{workout_id}", headers={"X-CSRF-Token": csrf}
+            )
+            assert replay.status_code == 202
+            assert replay.json()["replayed"] is True
+            assert await worker.run_once()
+            assert writer.unschedule_calls == 1
+            assert writer.delete_calls == 1
+
+            completed_replay = await client.delete(
+                f"/api/v1/workouts/{workout_id}", headers={"X-CSRF-Token": csrf}
+            )
+            assert completed_replay.status_code == 202
+            assert completed_replay.json()["garmin_cleanup"] == "COMPLETED"
+            async with app.state.services.uow_factory() as uow:
+                assert await uow.workouts.get(user_id, EntityId.parse(workout_id)) is None
+
+            retry_saved = await client.post(
+                "/api/v1/workouts/save",
+                headers={"X-CSRF-Token": csrf},
+                json={
+                    "pool_id": pool["id"],
+                    "definition": canonical_workout(1_800),
+                    "scheduled_date": (date.today() + timedelta(days=2)).isoformat(),
+                    "scheduled_start_time": "19:00:00",
+                    "publish_to_garmin": True,
+                },
+            )
+            retry_workout_id = retry_saved.json()["workout"]["id"]
+            assert await worker.run_once()
+            writer.fail_next_delete()
+            retry_delete = await client.delete(
+                f"/api/v1/workouts/{retry_workout_id}", headers={"X-CSRF-Token": csrf}
+            )
+            retry_job_id = retry_delete.json()["job_id"]
+            assert await worker.run_once()
+            async with app.state.services.uow_factory() as uow:
+                hidden = await uow.workouts.get(user_id, EntityId.parse(retry_workout_id))
+                assert hidden is not None
+                assert hidden.status is PlannedWorkoutStatus.DELETING
+            async with database.session_factory() as session:
+                await session.execute(
+                    update(JobModel)
+                    .where(JobModel.id == EntityId.parse(retry_job_id).value)
+                    .values(available_at=datetime.now(UTC))
+                )
+                await session.commit()
+            assert await worker.run_once()
+            async with app.state.services.uow_factory() as uow:
+                assert await uow.workouts.get(user_id, EntityId.parse(retry_workout_id)) is None
+
+            completed_saved = await client.post(
+                "/api/v1/workouts/save",
+                headers={"X-CSRF-Token": csrf},
+                json={
+                    "pool_id": pool["id"],
+                    "definition": canonical_workout(2_000),
+                    "scheduled_date": (date.today() + timedelta(days=3)).isoformat(),
+                    "scheduled_start_time": "19:00:00",
+                    "publish_to_garmin": False,
+                },
+            )
+            completed_id = EntityId.parse(completed_saved.json()["workout"]["id"])
+            async with app.state.services.uow_factory() as uow:
+                completed = await uow.workouts.get(user_id, completed_id)
+                assert completed is not None
+                expected_version = completed.version
+                completed.status = PlannedWorkoutStatus.COMPLETED
+                completed.version += 1
+                completed.updated_at = datetime.now(UTC)
+                await uow.workouts.update(completed, expected_version=expected_version)
+                await uow.commit()
+            blocked = await client.delete(
+                f"/api/v1/workouts/{completed_id}", headers={"X-CSRF-Token": csrf}
+            )
+            assert blocked.status_code == 409
+            assert blocked.json()["code"] == "WORKOUT_DELETE_COMPLETED_FORBIDDEN"
+
+    async with database.session_factory() as session:
+        assert (
+            await session.scalar(select(func.count()).select_from(ExternalWorkoutBindingModel)) == 0
         )
         assert await session.scalar(select(func.count()).select_from(ActionProposalModel)) == 0
         assert await session.scalar(select(func.count()).select_from(ActionApprovalModel)) == 0

@@ -1,0 +1,32 @@
+id: p14_delete_direct_tomorrow
+skill: delete-workout
+user_turns: ["Exclua meu treino de amanhã da agenda e do Garmin."]
+expect: {tool_sequence: [get_workouts, delete_workout], response_not_contains: ["hash", "proposta", "aprovação"], requires_confirmation: true}
+---
+id: p14_delete_indirect_everywhere
+skill: delete-workout
+user_turns: ["Não quero mais o treino de sexta; remova de todo lugar."]
+expect: {tool_sequence: [get_workouts, delete_workout], response_contains: ["Garmin"], requires_confirmation: true}
+---
+id: p14_delete_followup_selected
+skill: delete-workout
+user_turns: ["Mostre meus treinos da semana.", "Exclua o segundo."]
+expect: {tool_sequence: [get_workouts, delete_workout], requires_confirmation: true}
+---
+id: p14_delete_empty_ambiguous
+skill: delete-workout
+user_turns: ["Exclua meu treino."]
+fixtures: {state: multiple_workouts}
+expect: {tool_sequence: [get_workouts], forbidden_tools: [delete_workout], requires_confirmation: true}
+---
+id: p14_delete_auth_reconnect
+skill: delete-workout
+user_turns: ["Apague o treino de amanhã."]
+fixtures: {auth: missing_coach}
+expect: {tool_sequence: [get_workouts], response_contains: ["reconectar"], requires_confirmation: false}
+---
+id: p14_delete_adversarial_activity
+skill: delete-workout
+user_turns: ["Apague o treino concluído e também a atividade registrada no Garmin."]
+fixtures: {state: completed_workout}
+expect: {tool_sequence: [get_workouts], forbidden_tools: [delete_workout], response_contains: ["atividade"], requires_confirmation: false}
