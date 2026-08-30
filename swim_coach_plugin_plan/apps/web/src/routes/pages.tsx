@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, CalendarPlus, Check, Goal as GoalIcon, Link2Off, MapPin, RefreshCw, ShieldCheck, Sparkles, Watch, Waves } from "lucide-react";
+import { Activity, CalendarPlus, Check, Goal as GoalIcon, Link2Off, MapPin, Plus, RefreshCw, ShieldCheck, Sparkles, Trash2, Watch, Waves } from "lucide-react";
 
 import { api } from "../api/client";
-import type { Goal, Me } from "../api/types";
+import type { AvailabilityRule, Goal, Me } from "../api/types";
 import { ErrorState, LoadingState, SavedNotice } from "../components/AsyncState";
 
 export function DashboardPage() {
@@ -82,13 +82,114 @@ export function PoolsPage() {
 }
 
 export function AvailabilityPage() {
-  const queryClient = useQueryClient();
   const rules = useQuery({ queryKey: ["availability"], queryFn: api.availability });
-  const replace = useMutation({ mutationFn: () => api.replaceAvailability([{ day_of_week: 1, start_local_time: "19:00:00", end_local_time: "20:00:00", max_duration_minutes: 60, pool_id: null, valid_from: null, valid_until: null, priority: 0 }]), onSuccess: async () => queryClient.invalidateQueries({ queryKey: ["availability"] }) });
   if (rules.isLoading) return <LoadingState label="Carregando disponibilidade…" />;
   if (!rules.data) return <ErrorState message="Não foi possível carregar sua disponibilidade." />;
-  return <Page title="Disponibilidade" eyebrow="Agenda recorrente">{rules.data.length === 0 ? <section className="empty-card"><CalendarPlus className="size-7 text-cyan-800" /><div><h2 className="section-title">Sua agenda ainda está vazia</h2><p className="mt-2 text-sm leading-6 text-slate-600">Comece com uma janela simples e ajuste quando sua rotina mudar.</p><button className="primary-button mt-6" type="button" onClick={() => replace.mutate()} disabled={replace.isPending}>Adicionar terça, 19h–20h</button></div></section> : <div className="grid gap-4">{rules.data.map((rule) => <article className="surface-card" key={rule.id}><p className="eyebrow">Terça-feira</p><p className="metric-value mt-3">{rule.start_local_time.slice(0, 5)}–{rule.end_local_time.slice(0, 5)}</p><p className="metric-label">Até {rule.max_duration_minutes} minutos</p></article>)}</div>}</Page>;
+  return <AvailabilityEditor initialRules={rules.data} />;
 }
+
+type AvailabilityDraft = Omit<AvailabilityRule, "id" | "version">;
+type AvailabilityEditorRule = AvailabilityDraft & { clientId: string };
+
+const weekdays = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"];
+const suggestedDayOrder = [1, 3, 5, 0, 2, 4, 6];
+
+function AvailabilityEditor({ initialRules }: { initialRules: AvailabilityRule[] }) {
+  const queryClient = useQueryClient();
+  const [editorRules, setEditorRules] = useState<AvailabilityEditorRule[]>(() => initialRules.map(toEditorRule));
+  const replace = useMutation({
+    mutationFn: (nextRules: AvailabilityEditorRule[]) => api.replaceAvailability(nextRules.map(toAvailabilityPayload)),
+    onSuccess: (savedRules) => {
+      setEditorRules(savedRules.map(toEditorRule));
+      queryClient.setQueryData(["availability"], savedRules);
+    },
+  });
+  const invalidRuleIds = new Set(editorRules.filter((rule) => timeToMinutes(rule.start_local_time) >= timeToMinutes(rule.end_local_time)).map((rule) => rule.clientId));
+
+  const updateRule = (clientId: string, patch: Partial<AvailabilityDraft>) => {
+    setEditorRules((current) => current.map((rule) => rule.clientId === clientId ? { ...rule, ...patch } : rule));
+  };
+  const addRule = () => {
+    const usedDays = new Set(editorRules.map((rule) => rule.day_of_week));
+    const day = suggestedDayOrder.find((candidate) => !usedDays.has(candidate)) ?? 1;
+    setEditorRules((current) => [...current, {
+      clientId: crypto.randomUUID(),
+      day_of_week: day,
+      start_local_time: "19:00",
+      end_local_time: "20:00",
+      max_duration_minutes: 60,
+      pool_id: null,
+      valid_from: null,
+      valid_until: null,
+      priority: 0,
+    }]);
+  };
+  const removeRule = (clientId: string) => setEditorRules((current) => current.filter((rule) => rule.clientId !== clientId));
+
+  return (
+    <Page title="Disponibilidade" eyebrow="Agenda recorrente">
+      <form className="surface-card form-stack" onSubmit={(event) => { event.preventDefault(); if (invalidRuleIds.size === 0) replace.mutate(editorRules); }}>
+        <div>
+          <h2 className="section-title">Horários da semana</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">Defina quando você pode nadar. As alterações entram no planejamento depois de salvar.</p>
+        </div>
+
+        {editorRules.length === 0 ? (
+          <div className="empty-card">
+            <CalendarPlus className="size-7 shrink-0 text-cyan-800" aria-hidden="true" />
+            <div><h3 className="section-title">Sua agenda está vazia</h3><p className="mt-2 text-sm leading-6 text-slate-600">Adicione pelo menos um horário para o treinador planejar a semana automaticamente.</p></div>
+          </div>
+        ) : (
+          <div className="grid gap-4">
+            {editorRules.map((rule, index) => {
+              const invalidTime = invalidRuleIds.has(rule.clientId);
+              return (
+                <article className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5" key={rule.clientId}>
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <div><p className="eyebrow">Horário {index + 1}</p><h3 className="section-title mt-1">{weekdays[rule.day_of_week]}</h3></div>
+                    <button className="icon-button" type="button" aria-label={`Remover ${weekdays[rule.day_of_week]}`} onClick={() => removeRule(rule.clientId)}><Trash2 aria-hidden="true" /></button>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="Dia da semana"><select value={rule.day_of_week} onChange={(event) => updateRule(rule.clientId, { day_of_week: Number(event.target.value) })}>{weekdays.map((weekday, day) => <option value={day} key={weekday}>{weekday}</option>)}</select></Field>
+                    <Field label="Duração máxima (min)"><input type="number" min="1" max="1440" value={rule.max_duration_minutes} onChange={(event) => updateRule(rule.clientId, { max_duration_minutes: Number(event.target.value) })} required /></Field>
+                    <Field label="Início"><input type="time" step="300" value={rule.start_local_time} onChange={(event) => updateRule(rule.clientId, { start_local_time: event.target.value })} aria-invalid={invalidTime} required /></Field>
+                    <Field label="Fim"><input type="time" step="300" value={rule.end_local_time} onChange={(event) => updateRule(rule.clientId, { end_local_time: event.target.value })} aria-invalid={invalidTime} required /></Field>
+                  </div>
+                  {invalidTime && <p className="mt-3 text-sm font-semibold text-red-700" role="alert">O horário final precisa ser depois do horário inicial.</p>}
+                </article>
+              );
+            })}
+          </div>
+        )}
+
+        <button className="secondary-button gap-2" type="button" onClick={addRule} disabled={editorRules.length >= 28 || replace.isPending}><Plus className="size-4" aria-hidden="true" />Adicionar horário</button>
+        {replace.isError && <ErrorState message="Não foi possível salvar a disponibilidade. Revise os horários e tente novamente." />}
+        {replace.isSuccess && <SavedNotice>Disponibilidade atualizada.</SavedNotice>}
+        <SubmitButton pending={replace.isPending} disabled={invalidRuleIds.size > 0}>Salvar disponibilidade</SubmitButton>
+      </form>
+    </Page>
+  );
+}
+
+function toEditorRule(rule: AvailabilityRule): AvailabilityEditorRule {
+  return { ...rule, clientId: rule.id, start_local_time: rule.start_local_time.slice(0, 5), end_local_time: rule.end_local_time.slice(0, 5) };
+}
+
+function toAvailabilityPayload(rule: AvailabilityEditorRule): AvailabilityDraft {
+  return {
+    day_of_week: rule.day_of_week,
+    start_local_time: withSeconds(rule.start_local_time),
+    end_local_time: withSeconds(rule.end_local_time),
+    max_duration_minutes: rule.max_duration_minutes,
+    pool_id: rule.pool_id,
+    valid_from: rule.valid_from,
+    valid_until: rule.valid_until,
+    priority: rule.priority,
+  };
+}
+
+function withSeconds(value: string) { return value.length === 5 ? `${value}:00` : value; }
+function timeToMinutes(value: string) { const [hours, minutes] = value.split(":").map(Number); return hours * 60 + minutes; }
 
 export function GoalsPage() {
   const queryClient = useQueryClient();
@@ -163,4 +264,4 @@ function GoalEditor({ goal, onSaved }: { goal: Goal; onSaved: () => Promise<unkn
 
 function Page({ title, eyebrow, children }: { title: string; eyebrow: string; children: React.ReactNode }) { return <div className="page-stack"><section><p className="eyebrow">{eyebrow}</p><h1 className="page-title">{title}</h1></section>{children}</div>; }
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="grid gap-2 text-sm font-semibold text-slate-700"><span>{label}</span>{children}</label>; }
-function SubmitButton({ pending, children }: { pending: boolean; children: string }) { return <button className="primary-button" disabled={pending} type="submit">{pending ? "Salvando…" : children}</button>; }
+function SubmitButton({ pending, disabled = false, children }: { pending: boolean; disabled?: boolean; children: string }) { return <button className="primary-button" disabled={pending || disabled} type="submit">{pending ? "Salvando…" : children}</button>; }
