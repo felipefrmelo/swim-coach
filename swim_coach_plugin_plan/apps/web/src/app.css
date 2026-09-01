@@ -90,6 +90,8 @@
   .feedback-toggle input { width: 20px; min-height: 20px; accent-color: #0e7490; }
   .feedback-toggle span { display: grid; gap: 2px; }
   .feedback-toggle small { color: #64748b; font-weight: 400; }
+  .session-evaluation { display: grid; gap: 14px; border: 1px solid #a5f3fc; border-radius: 20px; background: linear-gradient(145deg, #ecfeff, #f8fafc); padding: 18px; }
+  .evaluation-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
   .privacy-note { display: flex; gap: 12px; border-radius: 20px; background: #f1f5f9; padding: 16px; color: #64748b; font-size: .75rem; line-height: 1.6; }
 }
 

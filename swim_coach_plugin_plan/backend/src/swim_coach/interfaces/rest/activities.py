@@ -82,6 +82,8 @@ class FeedbackResponse(StrictModel):
 
     @classmethod
     def from_domain(cls, feedback: SessionFeedback) -> FeedbackResponse:
+        if feedback.rpe is None:
+            raise ValueError("legacy feedback projection requires a manual integer RPE")
         return cls(
             id=feedback.id.value,
             rpe=feedback.rpe,
@@ -154,7 +156,11 @@ class ActivityDetailResponse(StrictModel):
                 else None
             ),
             match=MatchResponse.from_domain(detail.match) if detail.match else None,
-            feedback=(FeedbackResponse.from_domain(detail.feedback) if detail.feedback else None),
+            feedback=(
+                FeedbackResponse.from_domain(detail.feedback)
+                if detail.feedback is not None and detail.feedback.rpe is not None
+                else None
+            ),
         )
 
 
@@ -241,6 +247,7 @@ async def put_feedback(
         technique_rating=payload.technique_rating,
         fatigue_rating=payload.fatigue_rating,
         enjoyment_rating=payload.enjoyment_rating,
+        feeling_score=None,
         pain_present=payload.pain_present,
         pain_location=payload.pain_location,
         pain_intensity=payload.pain_intensity,
@@ -250,7 +257,10 @@ async def put_feedback(
         correlation_id=correlation_id,
         idempotency_key=idempotency_key,
         request_hash=request_hash,
+        preserve_existing_feeling_score=True,
     )
+    if feedback is None:
+        raise RuntimeError("legacy feedback writes cannot clear feedback")
     return FeedbackResponse.from_domain(feedback)
 
 

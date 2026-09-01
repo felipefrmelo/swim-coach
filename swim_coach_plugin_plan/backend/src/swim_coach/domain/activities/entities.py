@@ -437,6 +437,8 @@ class ActivityNormalization:
     swim_pace_seconds_per_100m: Decimal | None = None
     timer_pace_seconds_per_100m: Decimal | None = None
     session_pace_seconds_per_100m: Decimal | None = None
+    perceived_effort_rpe: Decimal | None = None
+    feeling_score: int | None = None
     provenance: JsonObject = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -463,6 +465,18 @@ class ActivityNormalization:
             (self.session_pace_seconds_per_100m, "normalization session pace"),
         ):
             _non_negative(value, label)
+        if self.perceived_effort_rpe is not None:
+            rpe = self.perceived_effort_rpe
+            if (
+                not rpe.is_finite()
+                or not Decimal(0) <= rpe <= Decimal(10)
+                or rpe * Decimal(10) != (rpe * Decimal(10)).to_integral_value()
+            ):
+                raise DomainValidationError(
+                    "normalization perceived effort RPE must be between 0 and 10 in 0.1 increments"
+                )
+        if self.feeling_score is not None and not 0 <= self.feeling_score <= 100:
+            raise DomainValidationError("normalization feeling score must be between 0 and 100")
         if not Decimal("0") <= self.completeness <= Decimal("1"):
             raise DomainValidationError("normalization completeness must be between zero and one")
 
@@ -563,10 +577,11 @@ class SessionFeedback:
     id: EntityId
     user_id: UserId
     activity_id: EntityId
-    rpe: int
+    rpe: int | None
     technique_rating: int | None = None
     fatigue_rating: int | None = None
     enjoyment_rating: int | None = None
+    feeling_score: int | None = None
     pain_present: bool = False
     pain_location: str | None = None
     pain_intensity: int | None = None
@@ -576,8 +591,10 @@ class SessionFeedback:
     version: int = 1
 
     def __post_init__(self) -> None:
-        if not 1 <= self.rpe <= 10:
+        if self.rpe is not None and not 1 <= self.rpe <= 10:
             raise DomainValidationError("RPE must be between 1 and 10")
+        if self.feeling_score is not None and not 0 <= self.feeling_score <= 100:
+            raise DomainValidationError("feeling score must be between 0 and 100")
         for value, label in (
             (self.technique_rating, "technique rating"),
             (self.fatigue_rating, "fatigue rating"),
@@ -590,7 +607,7 @@ class SessionFeedback:
                 raise DomainValidationError("pain intensity must be between 1 and 10")
             if not self.pain_location or not self.pain_location.strip():
                 raise DomainValidationError("pain location is required when pain is present")
-        elif self.pain_intensity is not None or self.pain_location:
+        elif self.pain_intensity is not None or self.pain_location is not None:
             raise DomainValidationError("pain details require pain_present")
         if self.comment is not None and len(self.comment) > 2_000:
             raise DomainValidationError("feedback comment is too long")
@@ -600,10 +617,11 @@ class SessionFeedback:
     def revise(
         self,
         *,
-        rpe: int,
+        rpe: int | None,
         technique_rating: int | None,
         fatigue_rating: int | None,
         enjoyment_rating: int | None,
+        feeling_score: int | None,
         pain_present: bool,
         pain_location: str | None,
         pain_intensity: int | None,
@@ -617,6 +635,7 @@ class SessionFeedback:
             technique_rating=technique_rating,
             fatigue_rating=fatigue_rating,
             enjoyment_rating=enjoyment_rating,
+            feeling_score=feeling_score,
             pain_present=pain_present,
             pain_location=pain_location,
             pain_intensity=pain_intensity,
@@ -629,6 +648,7 @@ class SessionFeedback:
         self.technique_rating = candidate.technique_rating
         self.fatigue_rating = candidate.fatigue_rating
         self.enjoyment_rating = candidate.enjoyment_rating
+        self.feeling_score = candidate.feeling_score
         self.pain_present = candidate.pain_present
         self.pain_location = candidate.pain_location
         self.pain_intensity = candidate.pain_intensity

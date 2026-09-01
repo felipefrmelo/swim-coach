@@ -27,13 +27,22 @@ const activity = {
   pool: { length_m: 20, active_length_count: 6 },
   provenance: { pool_length_m: { source: "GARMIN" } },
   data_quality: { level: "HIGH", reasons: [] },
+  session_evaluation: {
+    garmin: { rpe: "3.0", feeling_score: 75 },
+    manual_override: { rpe: null, feeling_score: null },
+    effective: { rpe: "3.0", feeling_score: 75 },
+    provenance: {
+      rpe: { source: "GARMIN", raw_field: "session.workout_rpe", transformation: "divide FIT Borg CR10 score by 10", interpretation: "documented" },
+      feeling_score: { source: "GARMIN", raw_field: "session.workout_feel", transformation: "preserve FIT 0-100 workout feeling score", interpretation: "documented" },
+    },
+  },
 };
 
 const detail = {
   ...activity,
   schema_version: "2.0",
   normalization: {
-    parser_version: "garmin-fit:2.0.0",
+    parser_version: "garmin-fit-sdk:21.208.0|swim-coach:2.1.0",
     profile_version: "garmin-fit-profile:21.208.0",
     completeness: "1.000",
     warnings: [],
@@ -99,6 +108,7 @@ test("athlete reviews normalized intervals and records non-diagnostic feedback",
         json: {
           id: "00000000-0000-0000-0000-000000000304",
           rpe: 6,
+          feeling_score: null,
           technique_rating: 4,
           fatigue_rating: null,
           enjoyment_rating: null,
@@ -129,7 +139,9 @@ test("athlete reviews normalized intervals and records non-diagnostic feedback",
   await expect(page.getByText("60 m · livre")).toHaveCount(2);
   await expect(page.getByText(/FIT bruto e payload Garmin não são retornados/)).toBeVisible();
   await expect(page.getByText(/não são diagnóstico médico/)).toBeVisible();
+  await expect(page.getByText("Importado do Garmin: RPE 3/10 · sensação 75/100")).toBeVisible();
 
+  await page.getByRole("button", { name: "Ajustar RPE" }).click();
   await page.getByRole("button", { name: "6" }).first().click();
   await page.getByRole("button", { name: "4" }).last().click();
   await page.getByRole("button", { name: "Salvar feedback" }).click();

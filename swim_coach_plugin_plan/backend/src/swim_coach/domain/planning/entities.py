@@ -6,6 +6,7 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from enum import StrEnum
 from itertools import pairwise
 from typing import Literal, cast
@@ -55,6 +56,11 @@ class PlanningRules(PlanningModel):
     recovery_week_reduction_pct: int = Field(default=20, ge=10, le=50)
     pain_blocks_intensity_at_or_above: int = Field(default=4, ge=1, le=10)
     high_rpe_threshold: int = Field(default=8, ge=6, le=10)
+    low_feeling_threshold: int | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+    )
     low_adherence_threshold: float = Field(default=0.75, ge=0, le=1)
     min_session_distance_m: int = Field(default=600, ge=200, le=2_000)
     max_session_distance_m: int = Field(default=3_000, ge=600, le=10_000)
@@ -88,7 +94,10 @@ class ConstraintSnapshot(PlanningModel):
 class FeedbackSnapshot(PlanningModel):
     activity_id: str
     activity_date: date
-    rpe: int = Field(ge=1, le=10)
+    rpe: Decimal | None = Field(default=None, ge=0, le=10)
+    rpe_source: Literal["GARMIN", "MANUAL_OVERRIDE"] | None = None
+    feeling_score: int | None = Field(default=None, ge=0, le=100)
+    feeling_score_source: Literal["GARMIN", "MANUAL_OVERRIDE"] | None = None
     technique_rating: int | None = Field(default=None, ge=1, le=5)
     pain_present: bool
     pain_intensity: int | None = Field(default=None, ge=1, le=10)
@@ -196,7 +205,7 @@ class TrainingRuleSet:
     def __post_init__(self) -> None:
         if not self.name.strip() or not self.version.strip():
             raise DomainValidationError("planning ruleset name and version are required")
-        expected = canonical_json_hash(self.rules.model_dump(mode="json"))
+        expected = canonical_json_hash(self.rules.model_dump(mode="json", exclude_none=True))
         if self.content_hash != expected:
             raise DomainValidationError("planning ruleset content hash does not match")
         if self.effective_until and self.effective_until < self.effective_from:
@@ -347,15 +356,43 @@ def generate_week(
             ),
         )
 
-    recent_rpes = [item.rpe for item in context.recent_feedback]
+    recent_rpes = [item.rpe for item in context.recent_feedback if item.rpe is not None]
     mean_rpe = sum(recent_rpes) / len(recent_rpes) if recent_rpes else None
+    low_feeling_threshold = ruleset.rules.low_feeling_threshold
+    low_feeling_evidence = (
+        [
+            item
+            for item in context.recent_feedback
+            if context.week_start - timedelta(days=7) <= item.activity_date < context.week_start
+            and item.feeling_score is not None
+            and item.feeling_score <= low_feeling_threshold
+        ]
+        if low_feeling_threshold is not None
+        else []
+    )
+    low_feeling = bool(low_feeling_evidence)
     latest_week = context.recent_weeks[0] if context.recent_weeks else None
     low_adherence = bool(
         latest_week
         and latest_week.adherence is not None
         and latest_week.adherence < ruleset.rules.low_adherence_threshold
     )
-    high_fatigue = bool(mean_rpe is not None and mean_rpe >= ruleset.rules.high_rpe_threshold)
+    high_rpe = bool(mean_rpe is not None and mean_rpe >= ruleset.rules.high_rpe_threshold)
+    recovery_feedback_signal = high_rpe or low_feeling
+
+    if low_feeling:
+        warnings.append("LOW_SESSION_FEELING_RECOVERY_BIAS")
+        decide(
+            "RECOVERY_BIASED_BY_LOW_FEELING",
+            "RULE-FEELING-001",
+            tuple(f"feedback:{item.activity_id}" for item in low_feeling_evidence),
+            {"low_feeling_threshold": low_feeling_threshold},
+            {"recovery_bias": True},
+            (
+                "Sensação pós-treino baixa adicionou um sinal conservador de recuperação; "
+                "esta é uma regra do Swim Coach, não uma interpretação clínica do Garmin."
+            ),
+        )
 
     if latest_week and latest_week.completed_sessions < latest_week.planned_sessions:
         decide(
@@ -384,7 +421,7 @@ def generate_week(
     )
     phase: Literal["base", "build", "recovery"] = "base"
     target_volume = baseline_volume
-    if pain_block or high_fatigue or low_adherence:
+    if pain_block or recovery_feedback_signal or low_adherence:
         target_volume = _round_pool(
             baseline_volume * (100 - ruleset.rules.recovery_week_reduction_pct) / 100,
             pool,
@@ -399,7 +436,10 @@ def generate_week(
             ),
             {"baseline_volume_m": baseline_volume},
             {"target_volume_m": target_volume},
-            "A carga foi reduzida por dor, RPE alto ou baixa aderência, sem diagnóstico.",
+            (
+                "A carga foi reduzida por dor, RPE alto, sensação pós-treino baixa ou "
+                "baixa aderência, sem diagnóstico."
+            ),
         )
     elif context.week_start.isocalendar().week % ruleset.rules.recovery_week_frequency == 0:
         target_volume = _round_pool(
@@ -458,7 +498,7 @@ def generate_week(
     session_types = _session_types(
         session_count,
         pain_block=pain_block,
-        high_fatigue=high_fatigue,
+        high_fatigue=recovery_feedback_signal,
         avoid_high_intensity=preferences.avoid_high_intensity,
         focus=preferences.focus,
     )

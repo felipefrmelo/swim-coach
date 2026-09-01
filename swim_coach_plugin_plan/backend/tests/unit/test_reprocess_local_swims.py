@@ -121,15 +121,15 @@ async def test_local_fit_batch_failure_is_scoped_to_one_activity(
                 raise DomainError("FIT_PARSE_FAILED", "Synthetic corrupt FIT.")
             return SimpleNamespace(
                 normalized=SimpleNamespace(
-                    normalization=SimpleNamespace(parser_version="swim-coach:2.0.0")
+                    normalization=SimpleNamespace(parser_version="swim-coach:2.1.0")
                 )
             )
 
     processor = _Processor()
     user_id = UserId.new()
     assert await _reprocess_fit(processor, user_id, failed_id) is None
-    assert await _reprocess_fit(processor, user_id, successful_id) == "swim-coach:2.0.0"
+    assert await _reprocess_fit(processor, user_id, successful_id) == "swim-coach:2.1.0"
     assert processor.calls == [failed_id, successful_id]
     output = capsys.readouterr().out
     assert f"{failed_id} skipped=FIT_PARSE_FAILED" in output
-    assert f"{successful_id} reprocessed parser=swim-coach:2.0.0" in output
+    assert f"{successful_id} reprocessed parser=swim-coach:2.1.0" in output

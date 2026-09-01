@@ -22,7 +22,7 @@ class ReadyChecks(BaseModel):
 
     application: Literal["ready"] = "ready"
     database: Literal["ready"] = "ready"
-    migration_revision: Literal["000012"] = Field(default="000012", alias="schema")
+    migration_revision: Literal["000013"] = Field(default="000013", alias="schema")
     artifact_storage: Literal["ready"] = "ready"
 
 
@@ -48,7 +48,7 @@ async def ready(request: Request) -> ReadyResponse:
     try:
         await database.ping()
         revision = await database.revision()
-        if revision != "000012":
+        if revision != "000013":
             raise DomainError("SCHEMA_MISMATCH", "The database migration is not current.")
         if not await request.app.state.services.artifact_storage.readiness():
             raise DomainError("STORAGE_UNAVAILABLE", "Artifact storage is not ready.")

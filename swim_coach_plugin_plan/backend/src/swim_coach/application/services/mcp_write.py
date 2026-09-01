@@ -221,14 +221,17 @@ class McpWriteService:
         request_id: str,
         *,
         activity_id: EntityId,
-        rpe: int,
-        technique: str,
+        rpe: int | None,
+        technique: str | None,
         pain: dict[str, Any],
         notes: str | None,
+        feeling_score: int | None = None,
         idempotency_key: str,
         correlation_id: CorrelationId,
+        reuse_idempotency_key_when_state_changed: bool = False,
+        preserve_existing_feeling_score: bool = True,
     ) -> McpResult:
-        technique_rating = self._rating(technique, "technique")
+        technique_rating = self._rating(technique, "technique") if technique is not None else None
         pain_present = bool(pain.get("present", False))
         pain_intensity_raw = pain.get("intensity")
         pain_intensity = int(pain_intensity_raw) if pain_intensity_raw is not None else None
@@ -240,6 +243,7 @@ class McpWriteService:
                     "activity_id": str(activity_id),
                     "rpe": rpe,
                     "technique_rating": technique_rating,
+                    "feeling_score": feeling_score,
                     "pain": pain,
                     "notes": notes,
                 },
@@ -255,6 +259,7 @@ class McpWriteService:
             technique_rating=technique_rating,
             fatigue_rating=None,
             enjoyment_rating=None,
+            feeling_score=feeling_score,
             pain_present=pain_present,
             pain_location=(str(pain.get("location"))[:160] if pain.get("location") else None),
             pain_intensity=pain_intensity,
@@ -264,17 +269,28 @@ class McpWriteService:
             correlation_id=correlation_id,
             idempotency_key=idempotency_key,
             request_hash=request_hash,
+            reuse_idempotency_key_when_state_changed=(reuse_idempotency_key_when_state_changed),
+            preserve_existing_feeling_score=preserve_existing_feeling_score,
         )
         return McpResult(
             request_id=request_id,
             status="OK",
             data={
                 "activity_id": str(activity_id),
-                "feedback_id": str(feedback.id),
-                "version": feedback.version,
-                "pain_present": feedback.pain_present,
+                "feedback_id": str(feedback.id) if feedback is not None else None,
+                "version": feedback.version if feedback is not None else None,
+                "pain_present": feedback.pain_present if feedback is not None else False,
+                "manual_rpe_override": feedback.rpe if feedback is not None else None,
+                "manual_feeling_score_override": (
+                    feedback.feeling_score if feedback is not None else None
+                ),
+                "cleared": feedback is None,
             },
-            human_summary="Post-swim feedback was stored locally.",
+            human_summary=(
+                "Manual post-swim feedback was cleared; Garmin evaluation remains effective."
+                if feedback is None
+                else "Post-swim feedback was stored locally."
+            ),
         )
 
     async def create_workout_draft(

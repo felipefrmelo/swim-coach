@@ -204,6 +204,9 @@ class ActivityDataRepository(Protocol):
     async def upsert_feedback(
         self, feedback: SessionFeedback, *, expected_version: int | None
     ) -> None: ...
+    async def delete_feedback(
+        self, user_id: UserId, activity_id: EntityId, *, expected_version: int
+    ) -> None: ...
 
 
 class ActivityImportsRepository(Protocol):
@@ -381,8 +384,10 @@ class McpToolInvocationsRepository(Protocol):
 
 
 class IdempotencyRepository(Protocol):
+    async def lock(self, scope: str, key: str) -> None: ...
     async def get(self, scope: str, key: str, now: datetime) -> ApiIdempotencyRecord | None: ...
     async def add(self, record: ApiIdempotencyRecord) -> None: ...
+    async def delete(self, scope: str, key: str) -> None: ...
 
 
 class SessionsRepository(Protocol):

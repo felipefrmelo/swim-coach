@@ -6,7 +6,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 import swim_coach.application.services.activity_data as activity_data_module
 from swim_coach.application.ports.garmin import GarminActivityFileDTO
@@ -23,9 +23,14 @@ from swim_coach.domain.activities import (
     ActivityNormalization,
     DataQuality,
     NormalizedActivity,
+    SessionFeedback,
 )
 from swim_coach.domain.shared import CorrelationId
-from swim_coach.domain.shared.errors import DomainError, ResourceNotFoundError
+from swim_coach.domain.shared.errors import (
+    DomainError,
+    DomainValidationError,
+    ResourceNotFoundError,
+)
 from swim_coach.domain.shared.value_objects import EntityId, UserId
 from swim_coach.domain.workouts import CanonicalWorkout
 from swim_coach.infrastructure.db import Database, SqlAlchemyUnitOfWorkFactory
@@ -51,7 +56,7 @@ class ActivityFileProvider(FixtureGarminProvider):
 
 
 def test_activity_analysis_semantic_version_is_bumped() -> None:
-    assert ActivityDataService.ANALYSIS_VERSION == "swim-analysis:2.0.2"
+    assert ActivityDataService.ANALYSIS_VERSION == "swim-analysis:2.1.0"
 
 
 class FixtureParser:
@@ -165,6 +170,8 @@ class FixtureParser:
             swim_pace_seconds_per_100m=Decimal(140),
             timer_pace_seconds_per_100m=Decimal(150),
             session_pace_seconds_per_100m=Decimal("158.333"),
+            perceived_effort_rpe=Decimal("4.5"),
+            feeling_score=80,
             provenance={"moving_seconds": {"source": "garmin"}},
         )
         return NormalizedActivity(normalization, (lap,), tuple(intervals), tuple(lengths))
@@ -265,6 +272,8 @@ async def test_activity_pipeline_replay_versions_feedback_and_preserves_ownershi
     assert replay.normalized is not None
     assert replay.normalized.normalization.id == first.normalized.normalization.id
     assert replay.normalized.normalization.swim_seconds == Decimal(168)
+    assert replay.normalized.normalization.perceived_effort_rpe == Decimal("4.5")
+    assert replay.normalized.normalization.feeling_score == 80
     assert replay.normalized.normalization.provenance["moving_seconds"]["source"] == "garmin"
     assert replay.normalized.intervals[0].planned_role == "work"
     assert replay.normalized.intervals[0].quality_warnings == ("SYNTHETIC_WARNING",)
@@ -273,6 +282,8 @@ async def test_activity_pipeline_replay_versions_feedback_and_preserves_ownershi
     assert replay.analysis.id == first.analysis.id
     assert local_replay.normalized is not None
     assert local_replay.normalized.normalization.id == first.normalized.normalization.id
+    assert local_replay.normalized.normalization.perceived_effort_rpe == Decimal("4.5")
+    assert local_replay.normalized.normalization.feeling_score == 80
     assert local_replay.analysis is not None
     assert local_replay.analysis.id == first.analysis.id
     assert first.analysis.metrics["fade_percent"] == "10.71"
@@ -306,7 +317,22 @@ async def test_activity_pipeline_replay_versions_feedback_and_preserves_ownershi
         actor_id=str(user.id),
         correlation_id=CorrelationId.new(),
     )
+    assert feedback is not None
     assert feedback.version == 1
+    detail_with_override = await service.get(user.id, activity.id)
+    assert detail_with_override.analysis is not None
+    assert detail_with_override.analysis.metrics["session_evaluation"] == {
+        "garmin": {"rpe": "4.5", "feeling_score": 80},
+        "manual_override": {"rpe": 6, "feeling_score": None},
+        "effective": {
+            "rpe": "6",
+            "feeling_score": 80,
+        },
+        "provenance": {
+            "rpe": {"source": "MANUAL_OVERRIDE"},
+            "feeling_score": {"source": "GARMIN"},
+        },
+    }
     async with database.session_factory() as session:
         feedback_count = await session.scalar(
             select(func.count()).select_from(SessionFeedbackModel)
@@ -334,6 +360,379 @@ async def test_activity_pipeline_replay_versions_feedback_and_preserves_ownershi
             correlation_id=CorrelationId.new(),
         )
     assert conflict.value.code == "REVISION_CONFLICT"
+
+    with pytest.raises(DomainValidationError):
+        await service.record_feedback(
+            user.id,
+            activity.id,
+            rpe=None,
+            technique_rating=None,
+            fatigue_rating=None,
+            enjoyment_rating=None,
+            feeling_score=None,
+            pain_present=False,
+            pain_location="should-not-delete",
+            pain_intensity=None,
+            comment=None,
+            expected_version=feedback.version,
+            actor_id=str(user.id),
+            correlation_id=CorrelationId.new(),
+        )
+    async with uow_factory() as uow:
+        assert await uow.activity_data.get_feedback(user.id, activity.id) is not None
+
+    technique_only = await service.record_feedback(
+        user.id,
+        activity.id,
+        rpe=None,
+        technique_rating=4,
+        fatigue_rating=None,
+        enjoyment_rating=None,
+        feeling_score=60,
+        pain_present=False,
+        pain_location=None,
+        pain_intensity=None,
+        comment=None,
+        expected_version=feedback.version,
+        actor_id=str(user.id),
+        correlation_id=CorrelationId.new(),
+    )
+    assert technique_only is not None
+    assert technique_only.rpe is None
+    effective_detail = await service.get(user.id, activity.id)
+    assert effective_detail.analysis is not None
+    assert effective_detail.analysis.metrics["session_evaluation"] == {
+        "garmin": {"rpe": "4.5", "feeling_score": 80},
+        "manual_override": {"rpe": None, "feeling_score": 60},
+        "effective": {"rpe": "4.5", "feeling_score": 60},
+        "provenance": {
+            "rpe": {"source": "GARMIN"},
+            "feeling_score": {"source": "MANUAL_OVERRIDE"},
+        },
+    }
+
+    cleared = await service.record_feedback(
+        user.id,
+        activity.id,
+        rpe=None,
+        technique_rating=None,
+        fatigue_rating=None,
+        enjoyment_rating=None,
+        feeling_score=None,
+        pain_present=False,
+        pain_location=None,
+        pain_intensity=None,
+        comment=None,
+        expected_version=technique_only.version,
+        actor_id=str(user.id),
+        correlation_id=CorrelationId.new(),
+    )
+    assert cleared is None
+    cleared_detail = await service.get(user.id, activity.id)
+    assert cleared_detail.feedback is None
+    assert cleared_detail.analysis is not None
+    assert cleared_detail.analysis.metrics["session_evaluation"] == {
+        "garmin": {"rpe": "4.5", "feeling_score": 80},
+        "manual_override": {"rpe": None, "feeling_score": None},
+        "effective": {"rpe": "4.5", "feeling_score": 80},
+        "provenance": {
+            "rpe": {"source": "GARMIN"},
+            "feeling_score": {"source": "GARMIN"},
+        },
+    }
+    async with database.session_factory() as session:
+        assert await session.scalar(select(func.count()).select_from(SessionFeedbackModel)) == 0
+
+    recreated = await service.record_feedback(
+        user.id,
+        activity.id,
+        rpe=5,
+        technique_rating=3,
+        fatigue_rating=None,
+        enjoyment_rating=None,
+        pain_present=False,
+        pain_location=None,
+        pain_intensity=None,
+        comment=None,
+        expected_version=None,
+        actor_id=str(user.id),
+        correlation_id=CorrelationId.new(),
+    )
+    assert recreated is not None
+    clear_key = "repeatable-mcp-clear"
+    clear_hash = "b" * 64
+    first_clear = await service.record_feedback(
+        user.id,
+        activity.id,
+        rpe=None,
+        technique_rating=None,
+        fatigue_rating=None,
+        enjoyment_rating=None,
+        pain_present=False,
+        pain_location=None,
+        pain_intensity=None,
+        comment=None,
+        expected_version=None,
+        actor_id=str(user.id),
+        correlation_id=CorrelationId.new(),
+        idempotency_key=clear_key,
+        request_hash=clear_hash,
+        reuse_idempotency_key_when_state_changed=True,
+    )
+    assert first_clear is None
+    reapplied = await service.record_feedback(
+        user.id,
+        activity.id,
+        rpe=4,
+        technique_rating=3,
+        fatigue_rating=None,
+        enjoyment_rating=None,
+        pain_present=False,
+        pain_location=None,
+        pain_intensity=None,
+        comment=None,
+        expected_version=None,
+        actor_id=str(user.id),
+        correlation_id=CorrelationId.new(),
+    )
+    assert reapplied is not None
+    second_clear = await service.record_feedback(
+        user.id,
+        activity.id,
+        rpe=None,
+        technique_rating=None,
+        fatigue_rating=None,
+        enjoyment_rating=None,
+        pain_present=False,
+        pain_location=None,
+        pain_intensity=None,
+        comment=None,
+        expected_version=None,
+        actor_id=str(user.id),
+        correlation_id=CorrelationId.new(),
+        idempotency_key=clear_key,
+        request_hash=clear_hash,
+        reuse_idempotency_key_when_state_changed=True,
+    )
+    assert second_clear is None
+    async with uow_factory() as uow:
+        assert await uow.activity_data.get_feedback(user.id, activity.id) is None
+
+    async with database.session_factory() as session:
+        await session.execute(
+            update(ActivityNormalizationModel)
+            .where(ActivityNormalizationModel.id == first.normalized.normalization.id.value)
+            .values(perceived_effort_rpe=None)
+        )
+        await session.commit()
+    manual_without_garmin = await service.record_feedback(
+        user.id,
+        activity.id,
+        rpe=4,
+        technique_rating=None,
+        fatigue_rating=None,
+        enjoyment_rating=None,
+        pain_present=False,
+        pain_location=None,
+        pain_intensity=None,
+        comment=None,
+        expected_version=None,
+        actor_id=str(user.id),
+        correlation_id=CorrelationId.new(),
+    )
+    assert manual_without_garmin is not None
+    cleared_without_garmin = await service.record_feedback(
+        user.id,
+        activity.id,
+        rpe=None,
+        technique_rating=None,
+        fatigue_rating=None,
+        enjoyment_rating=None,
+        pain_present=False,
+        pain_location=None,
+        pain_intensity=None,
+        comment=None,
+        expected_version=manual_without_garmin.version,
+        actor_id=str(user.id),
+        correlation_id=CorrelationId.new(),
+    )
+    assert cleared_without_garmin is None
+
+    feedback_with_v2_feeling = await service.record_feedback(
+        user.id,
+        activity.id,
+        rpe=4,
+        technique_rating=3,
+        fatigue_rating=None,
+        enjoyment_rating=None,
+        feeling_score=70,
+        pain_present=False,
+        pain_location=None,
+        pain_intensity=None,
+        comment=None,
+        expected_version=None,
+        actor_id=str(user.id),
+        correlation_id=CorrelationId.new(),
+    )
+    assert feedback_with_v2_feeling is not None
+    legacy_revision = await service.record_feedback(
+        user.id,
+        activity.id,
+        rpe=5,
+        technique_rating=4,
+        fatigue_rating=None,
+        enjoyment_rating=None,
+        feeling_score=None,
+        pain_present=False,
+        pain_location=None,
+        pain_intensity=None,
+        comment="legacy writer",
+        expected_version=feedback_with_v2_feeling.version,
+        actor_id=str(user.id),
+        correlation_id=CorrelationId.new(),
+        preserve_existing_feeling_score=True,
+    )
+    assert legacy_revision is not None
+    assert legacy_revision.feeling_score == 70
+
+    v2_replacement = await service.record_feedback(
+        user.id,
+        activity.id,
+        rpe=5,
+        technique_rating=4,
+        fatigue_rating=None,
+        enjoyment_rating=None,
+        feeling_score=None,
+        pain_present=False,
+        pain_location=None,
+        pain_intensity=None,
+        comment="v2 replacement",
+        expected_version=legacy_revision.version,
+        actor_id=str(user.id),
+        correlation_id=CorrelationId.new(),
+    )
+    assert v2_replacement is not None
+    assert v2_replacement.feeling_score is None
+
+    rest_key = "rest-stale-feedback-replay"
+    rest_hash = "c" * 64
+    idempotent_feedback = await service.record_feedback(
+        user.id,
+        activity.id,
+        rpe=6,
+        technique_rating=4,
+        fatigue_rating=None,
+        enjoyment_rating=None,
+        feeling_score=None,
+        pain_present=False,
+        pain_location=None,
+        pain_intensity=None,
+        comment=None,
+        expected_version=v2_replacement.version,
+        actor_id=str(user.id),
+        correlation_id=CorrelationId.new(),
+        idempotency_key=rest_key,
+        request_hash=rest_hash,
+    )
+    assert idempotent_feedback is not None
+    newer_feedback = await service.record_feedback(
+        user.id,
+        activity.id,
+        rpe=7,
+        technique_rating=4,
+        fatigue_rating=None,
+        enjoyment_rating=None,
+        feeling_score=None,
+        pain_present=False,
+        pain_location=None,
+        pain_intensity=None,
+        comment=None,
+        expected_version=idempotent_feedback.version,
+        actor_id=str(user.id),
+        correlation_id=CorrelationId.new(),
+    )
+    assert newer_feedback is not None
+    with pytest.raises(DomainError) as stale_replay:
+        await service.record_feedback(
+            user.id,
+            activity.id,
+            rpe=6,
+            technique_rating=4,
+            fatigue_rating=None,
+            enjoyment_rating=None,
+            feeling_score=None,
+            pain_present=False,
+            pain_location=None,
+            pain_intensity=None,
+            comment=None,
+            expected_version=v2_replacement.version,
+            actor_id=str(user.id),
+            correlation_id=CorrelationId.new(),
+            idempotency_key=rest_key,
+            request_hash=rest_hash,
+        )
+    assert stale_replay.value.code == "IDEMPOTENCY_CONFLICT"
+
+    async def concurrent_feedback(
+        *, rpe: int, idempotency_key: str, request_hash: str
+    ) -> SessionFeedback | None:
+        return await service.record_feedback(
+            user.id,
+            activity.id,
+            rpe=rpe,
+            technique_rating=4,
+            fatigue_rating=None,
+            enjoyment_rating=None,
+            feeling_score=None,
+            pain_present=False,
+            pain_location=None,
+            pain_intensity=None,
+            comment=None,
+            expected_version=None,
+            actor_id=str(user.id),
+            correlation_id=CorrelationId.new(),
+            idempotency_key=idempotency_key,
+            request_hash=request_hash,
+        )
+
+    same_hash_results = await asyncio.gather(
+        concurrent_feedback(
+            rpe=8,
+            idempotency_key="concurrent-feedback-same-hash",
+            request_hash="d" * 64,
+        ),
+        concurrent_feedback(
+            rpe=8,
+            idempotency_key="concurrent-feedback-same-hash",
+            request_hash="d" * 64,
+        ),
+    )
+    assert all(item is not None for item in same_hash_results)
+    first_same_hash = same_hash_results[0]
+    assert first_same_hash is not None
+    assert {item.id for item in same_hash_results if item is not None} == {first_same_hash.id}
+    assert {item.version for item in same_hash_results if item is not None} == {
+        first_same_hash.version
+    }
+
+    different_hash_results = await asyncio.gather(
+        concurrent_feedback(
+            rpe=8,
+            idempotency_key="concurrent-feedback-different-hash",
+            request_hash="e" * 64,
+        ),
+        concurrent_feedback(
+            rpe=9,
+            idempotency_key="concurrent-feedback-different-hash",
+            request_hash="f" * 64,
+        ),
+        return_exceptions=True,
+    )
+    winners = [item for item in different_hash_results if isinstance(item, SessionFeedback)]
+    conflicts = [item for item in different_hash_results if isinstance(item, DomainError)]
+    assert len(winners) == 1
+    assert len(conflicts) == 1
+    assert conflicts[0].code == "IDEMPOTENCY_CONFLICT"
 
     with pytest.raises(ResourceNotFoundError):
         await service.get(other.id, activity.id)

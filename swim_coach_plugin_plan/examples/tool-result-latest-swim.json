@@ -76,9 +76,37 @@
         "WORKOUT_STEP_PARTIAL"
       ]
     },
+    "session_evaluation": {
+      "garmin": {
+        "rpe": "3.0",
+        "feeling_score": 75
+      },
+      "manual_override": {
+        "rpe": null,
+        "feeling_score": null
+      },
+      "effective": {
+        "rpe": "3.0",
+        "feeling_score": 75
+      },
+      "provenance": {
+        "rpe": {
+          "source": "GARMIN",
+          "raw_field": "session.workout_rpe",
+          "transformation": "divide FIT Borg CR10 score by 10",
+          "interpretation": "documented"
+        },
+        "feeling_score": {
+          "source": "GARMIN",
+          "raw_field": "session.workout_feel",
+          "transformation": "preserve FIT 0-100 workout feeling score",
+          "interpretation": "documented"
+        }
+      }
+    },
     "schema_version": "2.0",
     "normalization": {
-      "parser_version": "garmin-fit-sdk:21.208.0|swim-coach:2.0.4",
+      "parser_version": "garmin-fit-sdk:21.208.0|swim-coach:2.1.0",
       "profile_version": "21.208.0",
       "completeness": "0.800",
       "warnings": [
@@ -92,7 +120,7 @@
     "intervals": [],
     "lengths": [],
     "analysis": {
-      "version": "swim-analysis:2.0.2",
+      "version": "swim-analysis:2.1.0",
       "quality": "poor",
       "metrics": {
         "distance_m": 860,
@@ -158,6 +186,13 @@
           "ready": null,
           "confidence": "LOW",
           "reasons": ["NO_GOAL_SPECIFIC_ENDURANCE_EVIDENCE"]
+        },
+        "srpe": {
+          "load": "103.78",
+          "rpe": "3.0",
+          "rpe_source": "GARMIN",
+          "duration_basis": "timer_duration_s",
+          "duration_s": "2075.559"
         },
         "data_quality": {
           "level": "LOW",

@@ -143,6 +143,8 @@ internal detection algorithm remain **INFERRED**.
 | `session.pool_length` | metres; scale 100 | DOCUMENTED field/unit | The supplied FIT contains SDK-scaled `20`. **Do not divide by 100 again.** |
 | `session.pool_length_unit` | FIT enum | DOCUMENTED | The supplied FIT contains `metric`; retain the pool configuration unit for quality checks. |
 | `session.num_active_lengths` | lengths | DOCUMENTED | The supplied FIT contains `43`, equal to the 43 decoded `ACTIVE` length messages. |
+| `session.workout_rpe` | unsigned integer encoding Borg CR10 multiplied by 10 | DOCUMENTED field/encoding | The supplied FIT SDK output is `30`, normalized to canonical Borg CR10 `3.0` by `value / 10`. Accept the documented `0..100` encoded range as `0.0..10.0`; do not confuse it with workout-step intensity. The profile's ordinary numeric `scale` remains 1; the ×10 convention is part of the field definition. |
+| `session.workout_feel` | unsigned integer; no scale | DOCUMENTED field/scale | The supplied FIT contains `75`, preserved as canonical `feeling_score=75` on a `0..100` scale. Feeling is not a technique score. |
 | `session.avg_speed` | metres/second; scale 1000 | DOCUMENTED field/unit | Garmin-reported speed. Its calculation population is not specified by the field definition, so preserve it before deriving pace. |
 | `session.enhanced_avg_speed` | metres/second; scale 1000 | DOCUMENTED field/unit | The supplied FIT contains `0.506`. It derives to `197.628 s/100 m`; what Garmin includes in this speed remains INFERRED. |
 | `lap.total_elapsed_time` | seconds; scale 1000 | DOCUMENTED field/unit | Lap elapsed clock. |
@@ -175,9 +177,11 @@ moving time stays nullable, and SWOLF may be a Garmin Connect aggregate or a der
 derived length SWOLF must document the duration basis and stroke-count convention.
 
 The standard session/lap definitions also contain no `avg_swolf`. A decoded field with that
-name is retained without claiming standard FIT semantics. Parser `2.0.4` records
+name is retained without claiming standard FIT semantics. Parser `2.1.0` records
 `pool_length_unit`, compares `session.num_active_lengths` with decoded active lengths, and
-keeps both the Garmin-reported and decoded counts in provenance.
+keeps both the Garmin-reported and decoded counts in provenance. It also normalizes the
+documented session evaluation fields without consulting or assigning semantics to similarly
+named Garmin Connect summary fields.
 
 ### Confirmed structure of the supplied FIT
 
@@ -192,8 +196,8 @@ all 61 length timer durations    = 2075.559 s  -> session.total_timer_time
 ```
 
 Several temporal laps in this FIT report `num_lengths=0` while the range from their
-`first_length_index` to the following lap boundary contains exactly one `IDLE` length. Parser
-`2.0.4` owns that length through the narrow, visible
+`first_length_index` to the following lap boundary contains exactly one `IDLE` length. Since
+parser `2.0.4`, that length is owned through the narrow, visible
 `LAP_IDLE_LENGTH_OWNERSHIP_INFERRED` rule. It does not widen positive counts or absorb
 `ACTIVE`/`UNKNOWN` gaps: those produce `LAP_LENGTH_INDEX_COUNT_MISMATCH`, remain unassigned,
 and lower data quality. A lap whose owned active-length distance disagrees with
@@ -208,6 +212,19 @@ After this FIT normalization is promoted, canonical/public `durations.moving_s` 
 null. The distinct Connect `movingDuration=1699.541` observation remains preserved in the
 private raw summary and provenance; it is neither discarded from raw storage nor substituted
 for the absent FIT moving field.
+
+The same supplied FIT confirms the post-session athlete evaluation independently from its
+swim clocks and metrics:
+
+```text
+session.workout_rpe  = 30 -> 30 / 10 = Borg CR10 3.0
+session.workout_feel = 75 -> feeling score 75/100
+```
+
+Both values retain `GARMIN` provenance, their FIT raw field and the documented transformation.
+Manual values are separate field-level overrides; an override never rewrites the immutable FIT
+fact. No claim is made about Garmin Connect activity-list fields because this evidence comes
+from the decoded FIT session message.
 
 The lap/length assignment supplies a second exact decomposition:
 
@@ -297,6 +314,13 @@ are excluded from the sanitized projection.
   stroke/SWOLF evidence; session-wide averages are not used as a substitute.
 - Automatic planned-workout matching compares its rest-inclusive estimated total duration to
   canonical timer duration and records `duration_basis="timer_duration_s"`.
+- Session evaluation resolves each field independently: manual override first, then Garmin FIT,
+  then unavailable. sRPE uses the effective RPE and canonical timer duration, records both the
+  duration basis and RPE source, and treats Garmin feeling as a separate contextual signal.
+  Weekly planning applies a separate Swim Coach ruleset choice: an effective feeling score at
+  or below `25/100` from the seven days before the planned week adds a conservative recovery
+  signal. This threshold and lookback are product policy, not Garmin/FIT semantics or a clinical
+  interpretation; older low-feeling observations do not repeatedly force recovery weeks.
 - When ordered alignment matches a planned `REST` to a normalized `UNKNOWN` interval with zero
   distance, the analysis overlay may contextualize its timer duration as rest and emits
   `REST_CLASSIFIED_FROM_PLANNED_WORKOUT`. The stored normalized interval remains `UNKNOWN`.
@@ -306,7 +330,7 @@ are excluded from the sanitized projection.
   falling back to a different basis.
 - Equivalent sets containing `UNKNOWN` interval types cannot receive `HIGH` confidence and do
   not publish fade. Goal-readiness confidence is capped by canonical normalization quality.
-- Analysis cache version `swim-analysis:2.0.2` records these semantic boundaries.
+- Analysis cache version `swim-analysis:2.1.0` records these semantic boundaries.
 - Stationary time known only at interval level is not assigned to an arbitrary length. If it
   cannot be reconciled with length-level stationary facts, every affected length becomes a
   conservative continuity boundary and the analysis emits
@@ -388,6 +412,11 @@ same boundaries remains inferred because `session.total_moving_time` is absent.
 - REST v2 exposes activity reads plus versioned aliases for process, feedback and manual-match
   mutations. These reuse the existing authentication, CSRF and applicable idempotency
   semantics; none exposes the raw summary or FIT payload.
+- REST/MCP v2 exposes `session_evaluation.garmin`, `manual_override`, `effective` and field-level
+  provenance. Saving technique, pain or notes may omit manual RPE when a canonical Garmin RPE
+  exists; only an explicitly supplied manual value becomes an override. REST v2 feedback is a
+  full replacement, so omission clears a prior field override and an empty replacement deletes
+  an existing all-manual record. V1 keeps its required integer RPE projection for compatibility.
 
 The application service must use the athlete's configured IANA timezone (for the incident,
 `America/Sao_Paulo`) to derive a zoned local timestamp from `start_time_utc`, then compare its

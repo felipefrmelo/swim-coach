@@ -67,23 +67,104 @@ export function ActivityDetailPage() {
   );
 }
 
-function FeedbackCard({ activityId, detail }: { activityId: string; detail: SwimActivityDetailV2 }) {
+export function FeedbackCard({ activityId, detail }: { activityId: string; detail: SwimActivityDetailV2 }) {
+  return <FeedbackCardForm activityId={activityId} detail={detail} key={feedbackFormStateKey(detail)} />;
+}
+
+function FeedbackCardForm({ activityId, detail }: { activityId: string; detail: SwimActivityDetailV2 }) {
   const queryClient = useQueryClient();
   const current = detail.feedback;
-  const [rpe, setRpe] = useState(current?.rpe ?? 5);
-  const [technique, setTechnique] = useState(current?.technique_rating ?? 3);
+  const evaluation = detail.session_evaluation;
+  const garminRpe = nullableNumber(evaluation.garmin.rpe);
+  const manualRpe = current?.rpe ?? evaluation.manual_override.rpe;
+  const manualFeeling = current?.feeling_score ?? evaluation.manual_override.feeling_score;
+  const [overrideRpe, setOverrideRpe] = useState(manualRpe !== null || garminRpe === null);
+  const [overrideFeeling, setOverrideFeeling] = useState(manualFeeling !== null);
+  const [rpe, setRpe] = useState<number | null>(manualRpe ?? (garminRpe === null ? null : manualRpeDefault(evaluation.effective.rpe)));
+  const [feeling, setFeeling] = useState(manualFeeling ?? evaluation.effective.feeling_score ?? 50);
+  const [technique, setTechnique] = useState<number | null>(current?.technique_rating ?? null);
   const [pain, setPain] = useState(current?.pain_present ?? false);
   const [painLocation, setPainLocation] = useState(current?.pain_location ?? "");
   const [painIntensity, setPainIntensity] = useState(current?.pain_intensity ?? 1);
   const [comment, setComment] = useState(current?.comment ?? "");
+  const [confirmRemoval, setConfirmRemoval] = useState(false);
   const save = useMutation({
-    mutationFn: () => saveFeedbackResilient(activityId, { rpe, technique_rating: technique, fatigue_rating: null, enjoyment_rating: null, pain_present: pain, pain_location: pain ? painLocation : null, pain_intensity: pain ? painIntensity : null, comment: comment || null, version: current?.version ?? null }),
+    mutationFn: () => saveFeedbackResilient(activityId, {
+      ...(overrideRpe && rpe !== null ? { rpe } : {}),
+      ...(overrideFeeling ? { feeling_score: feeling } : {}),
+      technique_rating: technique,
+      fatigue_rating: null,
+      enjoyment_rating: null,
+      pain_present: pain,
+      pain_location: pain ? painLocation : null,
+      pain_intensity: pain ? painIntensity : null,
+      comment: comment || null,
+      version: current?.version ?? null,
+    }),
     onSuccess: async (result) => result === "synced" ? queryClient.invalidateQueries({ queryKey: ["activity", activityId] }) : undefined,
   });
-  return <section className="surface-card form-stack"><div className="flex gap-4"><span className="icon-chip"><HeartPulse className="size-5" /></span><div><p className="eyebrow">Check-in pós-treino</p><h2 className="section-title mt-2">Como você sentiu a sessão?</h2></div></div><ChoiceRow label="Esforço percebido" values={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]} selected={rpe} onSelect={setRpe} suffix="/10" /><ChoiceRow label="Técnica" values={[1, 2, 3, 4, 5]} selected={technique} onSelect={setTechnique} suffix="/5" /><label className="feedback-toggle"><input checked={pain} onChange={(event) => setPain(event.target.checked)} type="checkbox" /><span><strong>Senti dor</strong><small>Registre o sinal; o app não faz diagnóstico.</small></span></label>{pain && <div className="grid gap-4 sm:grid-cols-2"><label className="grid gap-2 text-sm font-semibold">Local<input value={painLocation} onChange={(event) => setPainLocation(event.target.value)} required /></label><label className="grid gap-2 text-sm font-semibold">Intensidade (1–10)<input min="1" max="10" type="number" value={painIntensity} onChange={(event) => setPainIntensity(Number(event.target.value))} /></label></div>}<label className="grid gap-2 text-sm font-semibold">Nota opcional<input maxLength={2000} value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Respiração, técnica, sensação…" /></label>{save.isSuccess && <SavedNotice>{save.data === "queued" ? "Feedback guardado neste aparelho; será sincronizado quando a conexão voltar." : "Feedback salvo e análise versionada."}</SavedNotice>}{save.isError && <ErrorState message="Revise o feedback e tente novamente." />}<button className="primary-button" onClick={() => save.mutate()} disabled={save.isPending || (pain && !painLocation.trim())} type="button">{save.isPending ? "Salvando…" : current ? "Atualizar feedback" : "Salvar feedback"}</button></section>;
+  const removeFeedback = useMutation({
+    mutationFn: () => saveFeedbackResilient(activityId, {
+      technique_rating: null,
+      fatigue_rating: null,
+      enjoyment_rating: null,
+      pain_present: false,
+      pain_location: null,
+      pain_intensity: null,
+      comment: null,
+      version: current?.version ?? null,
+    }),
+    onSuccess: async (result) => {
+      setConfirmRemoval(false);
+      return result === "synced" ? queryClient.invalidateQueries({ queryKey: ["activity", activityId] }) : undefined;
+    },
+  });
+  const hasGarminRpe = garminRpe !== null;
+  const hasGarminFeeling = evaluation.garmin.feeling_score !== null;
+  const hasManualFeedback = current !== null || (overrideRpe && rpe !== null) || overrideFeeling || technique !== null || pain || comment.trim() !== "";
+  return (
+    <section className="surface-card form-stack">
+      <div className="flex gap-4">
+        <span className="icon-chip"><HeartPulse className="size-5" /></span>
+        <div><p className="eyebrow">Check-in pós-treino</p><h2 className="section-title mt-2">Avaliação da sessão</h2></div>
+      </div>
+      <SessionEvaluationSummary evaluation={evaluation} />
+      <div className="evaluation-actions">
+        {hasGarminRpe
+          ? <button aria-pressed={overrideRpe} className="secondary-button" onClick={() => setOverrideRpe((value) => !value)} type="button">{overrideRpe ? "Usar RPE do Garmin" : "Ajustar RPE"}</button>
+          : <p className="text-sm leading-6 text-slate-600">O FIT não trouxe esforço. Informe o RPE para completar o check-in.</p>}
+        <button aria-pressed={overrideFeeling} className="secondary-button" onClick={() => setOverrideFeeling((value) => !value)} type="button">{overrideFeeling ? (hasGarminFeeling ? "Usar sensação do Garmin" : "Remover sensação") : (hasGarminFeeling ? "Ajustar sensação" : "Informar sensação")}</button>
+      </div>
+      {overrideRpe && <ChoiceRow label="Esforço percebido manual" values={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]} selected={rpe} onSelect={setRpe} suffix="/10" />}
+      {overrideFeeling && <label className="grid gap-2 text-sm font-semibold">Sensação manual <span className="font-normal text-slate-400">{feeling}/100</span><input aria-label="Sensação manual" max="100" min="0" onChange={(event) => setFeeling(Number(event.target.value))} step="1" type="range" value={feeling} /></label>}
+      <ChoiceRow label="Técnica (opcional)" values={[1, 2, 3, 4, 5]} selected={technique} onSelect={(value) => setTechnique((selected) => selected === value ? null : value)} suffix="/5" />
+      <label className="feedback-toggle"><input checked={pain} onChange={(event) => setPain(event.target.checked)} type="checkbox" /><span><strong>Senti dor</strong><small>Registre o sinal; o app não faz diagnóstico.</small></span></label>
+      {pain && <div className="grid gap-4 sm:grid-cols-2"><label className="grid gap-2 text-sm font-semibold">Local<input value={painLocation} onChange={(event) => setPainLocation(event.target.value)} required /></label><label className="grid gap-2 text-sm font-semibold">Intensidade (1–10)<input min="1" max="10" type="number" value={painIntensity} onChange={(event) => setPainIntensity(Number(event.target.value))} /></label></div>}
+      <label className="grid gap-2 text-sm font-semibold">Nota opcional<input maxLength={2000} value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Respiração, técnica, sensação…" /></label>
+      {!hasManualFeedback && (hasGarminRpe || hasGarminFeeling) && <p className="text-sm leading-6 text-slate-500" role="status">{importedEvaluationNotice(hasGarminRpe, hasGarminFeeling)}</p>}
+      {save.isSuccess && <SavedNotice>{save.data === "queued" ? "Feedback guardado neste aparelho; será sincronizado quando a conexão voltar." : "Feedback salvo e análise versionada."}</SavedNotice>}
+      {removeFeedback.isSuccess && <SavedNotice>{removeFeedback.data === "queued" ? "Remoção guardada neste aparelho; será sincronizada quando a conexão voltar." : "Feedback manual removido."}</SavedNotice>}
+      {(save.isError || removeFeedback.isError) && <ErrorState message="Revise o feedback e tente novamente." />}
+      {confirmRemoval && <section aria-describedby={`remove-feedback-description-${activityId}`} aria-labelledby={`remove-feedback-title-${activityId}`} className="setup-notice" role="alertdialog"><AlertTriangle className="size-5" /><div className="flex-1"><h3 className="font-semibold" id={`remove-feedback-title-${activityId}`}>Remover todo o feedback manual?</h3><p className="mt-1" id={`remove-feedback-description-${activityId}`}>Isso apaga RPE, sensação, técnica, dor e notas manuais desta atividade. {hasGarminRpe || hasGarminFeeling ? "Os valores importados do Garmin permanecem." : "A atividade ficará sem avaliação de esforço ou sensação."}</p><div className="mt-4 grid grid-cols-2 gap-2"><button className="secondary-button" disabled={removeFeedback.isPending} onClick={() => setConfirmRemoval(false)} type="button">Cancelar</button><button className="secondary-button border-rose-200 text-rose-700 hover:bg-rose-50" disabled={removeFeedback.isPending} onClick={() => removeFeedback.mutate()} type="button">{removeFeedback.isPending ? "Removendo…" : "Confirmar remoção"}</button></div></div></section>}
+      <button className="primary-button" onClick={() => save.mutate()} disabled={!hasManualFeedback || save.isPending || removeFeedback.isPending || (pain && !painLocation.trim())} type="button">{save.isPending ? "Salvando…" : current ? "Atualizar feedback" : "Salvar feedback"}</button>
+      {current && !confirmRemoval && <button className="secondary-button border-rose-200 text-rose-700 hover:bg-rose-50" disabled={save.isPending || removeFeedback.isPending} onClick={() => setConfirmRemoval(true)} type="button">Remover feedback manual</button>}
+    </section>
+  );
 }
 
-function ChoiceRow({ label, values, selected, onSelect, suffix }: { label: string; values: number[]; selected: number; onSelect: (value: number) => void; suffix: string }) { return <fieldset><legend className="mb-3 text-sm font-semibold text-slate-700">{label} <span className="font-normal text-slate-400">{selected}{suffix}</span></legend><div className="choice-row">{values.map((value) => <button aria-pressed={selected === value} className={selected === value ? "selected" : ""} key={value} onClick={() => onSelect(value)} type="button">{value}</button>)}</div></fieldset>; }
+function SessionEvaluationSummary({ evaluation }: { evaluation: SwimActivityDetailV2["session_evaluation"] }) {
+  const garmin = evaluationParts(evaluation.garmin);
+  const effective = evaluationParts(evaluation.effective, evaluation.provenance);
+  return (
+    <div className="session-evaluation">
+      <div><p className="text-xs font-bold uppercase tracking-wider text-cyan-800">Garmin FIT</p><p className="mt-1 font-semibold text-slate-900">{garmin.length ? `Importado do Garmin: ${garmin.join(" · ")}` : "Esta atividade não trouxe esforço ou sensação."}</p></div>
+      {effective.length > 0 && <div><p className="text-xs font-bold uppercase tracking-wider text-slate-500">Valores em uso</p><p className="mt-1 text-sm text-slate-700">{effective.join(" · ")}</p></div>}
+      <p className="text-xs leading-5 text-slate-500">Esforço e sensação podem vir do relógio. Técnica, dor e notas continuam manuais.</p>
+    </div>
+  );
+}
+
+function ChoiceRow({ label, values, selected, onSelect, suffix }: { label: string; values: number[]; selected: number | null; onSelect: (value: number) => void; suffix: string }) { return <fieldset><legend className="mb-3 text-sm font-semibold text-slate-700">{label} <span className="font-normal text-slate-400">{selected === null ? "não informado" : `${selected}${suffix}`}</span></legend><div className="choice-row">{values.map((value) => <button aria-pressed={selected === value} className={selected === value ? "selected" : ""} key={value} onClick={() => onSelect(value)} type="button">{value}</button>)}</div></fieldset>; }
 function HeroMetric({ label, value }: { label: string; value: string }) { return <div><p className="text-xs text-cyan-200">{label}</p><p className="mt-1 font-mono text-sm font-bold">{value}</p></div>; }
 function Metric({ icon: Icon, label, value, detail }: { icon: typeof Gauge; label: string; value: string; detail: string }) { return <article className="analysis-metric"><Icon className="size-5 text-cyan-700" /><div><p className="font-mono text-xl font-bold tracking-tight">{value}</p><p className="text-xs font-semibold text-slate-600">{label}</p><p className="mt-1 text-[11px] text-slate-400">{detail}</p></div></article>; }
 function Page({ title, eyebrow, children }: { title: string; eyebrow: string; children: React.ReactNode }) { return <div className="page-stack"><section><p className="eyebrow">{eyebrow}</p><h1 className="page-title">{title}</h1></section>{children}</div>; }
@@ -93,6 +174,21 @@ function formatPace(value: unknown) { const seconds = Number(value); if (!Number
 function formatPercent(value: unknown) { const number = Number(value); return Number.isFinite(number) ? `${(number * 100).toFixed(1)}%` : "—"; }
 function formatSignedPercent(value: unknown) { const number = Number(value); return Number.isFinite(number) ? `${number > 0 ? "+" : ""}${number.toFixed(1)}%` : "—"; }
 function formatNumber(value: unknown) { const number = Number(value); return Number.isFinite(number) ? number.toFixed(1) : "—"; }
+function nullableNumber(value: unknown) { if (value === null || value === undefined || value === "") return null; const number = Number(value); return Number.isFinite(number) ? number : null; }
+function manualRpeDefault(value: unknown) { const number = nullableNumber(value); return number === null ? 5 : Math.min(10, Math.max(1, Math.round(number))); }
+function formatRpe(value: unknown) { const number = nullableNumber(value); return number === null ? "—" : number.toLocaleString("pt-BR", { maximumFractionDigits: 1 }); }
+function evaluationParts(
+  values: SwimActivityDetailV2["session_evaluation"]["garmin"],
+  provenance?: SwimActivityDetailV2["session_evaluation"]["provenance"],
+) {
+  const result: string[] = [];
+  if (values.rpe !== null) result.push(`RPE ${formatRpe(values.rpe)}/10${evaluationSourceSuffix(provenance?.rpe.source)}`);
+  if (values.feeling_score !== null) result.push(`sensação ${values.feeling_score}/100${evaluationSourceSuffix(provenance?.feeling_score.source)}`);
+  return result;
+}
+function evaluationSourceSuffix(source: "MANUAL_OVERRIDE" | "GARMIN" | null | undefined) { return source === "MANUAL_OVERRIDE" ? " (ajuste manual)" : source === "GARMIN" ? " (Garmin)" : ""; }
+function importedEvaluationNotice(hasRpe: boolean, hasFeeling: boolean) { const imported = hasRpe && hasFeeling ? "Esforço e sensação já foram importados" : hasRpe ? "O esforço já foi importado" : "A sensação já foi importada"; return `${imported} do Garmin. Salve apenas se quiser acrescentar ou ajustar algo.`; }
+function feedbackFormStateKey(detail: SwimActivityDetailV2) { const evaluation = detail.session_evaluation; return JSON.stringify([detail.activity_id, evaluation.garmin.rpe, evaluation.garmin.feeling_score, evaluation.manual_override.rpe, evaluation.manual_override.feeling_score, evaluation.provenance.rpe.source, evaluation.provenance.feeling_score.source, detail.feedback?.id ?? null, detail.feedback?.version ?? null]); }
 function poolLabel(value: number | null) { return value === null ? "piscina desconhecida" : `piscina de ${value} m`; }
 function qualityLabel(value: SwimActivityDetailV2["data_quality"]["level"]) { return ({ HIGH: "alta", MEDIUM: "parcial", LOW: "limitada" } as Record<string, string>)[value] ?? "pendente"; }
 function warningLabel(value: string) { return ({ SESSION_LENGTH_DISTANCE_MISMATCH: "distância da sessão divergiu das extensões", LENGTH_MESSAGES_UNAVAILABLE: "extensões ausentes", LAP_MESSAGES_SYNTHESIZED: "série reconstruída do resumo", PACE_SERIES_UNAVAILABLE: "ritmo por série ausente", CONSISTENCY_SAMPLE_INSUFFICIENT: "amostra curta para consistência", FADE_SAMPLE_INSUFFICIENT: "amostra curta para fade", SWOLF_UNAVAILABLE: "SWOLF ausente" } as Record<string, string>)[value] ?? value.toLocaleLowerCase().replaceAll("_", " "); }

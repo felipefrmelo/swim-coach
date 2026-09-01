@@ -28,6 +28,9 @@ class _Observation(TypedDict):
     average_strokes_per_length: Decimal | None
     average_swolf: Decimal | None
     rpe: Decimal | None
+    rpe_source: str | None
+    feeling_score: Decimal | None
+    feeling_score_source: str | None
     session_quality: str
     set_quality: str
     equivalent_blocks_in_session: NotRequired[int]
@@ -158,6 +161,21 @@ def _observation(
         mean_pace=mean_pace,
     )
     srpe = _mapping(metrics.get("srpe"))
+    session_evaluation = _mapping(metrics.get("session_evaluation"))
+    effective_evaluation = (
+        _mapping(session_evaluation.get("effective")) if session_evaluation is not None else None
+    )
+    evaluation_provenance = (
+        _mapping(session_evaluation.get("provenance")) if session_evaluation is not None else None
+    )
+    rpe_provenance = (
+        _mapping(evaluation_provenance.get("rpe")) if evaluation_provenance is not None else None
+    )
+    feeling_provenance = (
+        _mapping(evaluation_provenance.get("feeling_score"))
+        if evaluation_provenance is not None
+        else None
+    )
     return {
         "started_at_utc": started_at_utc,
         "distance_m": distance_m,
@@ -176,6 +194,21 @@ def _observation(
         "average_strokes_per_length": average_strokes,
         "average_swolf": average_swolf,
         "rpe": _decimal(srpe.get("rpe")) if srpe is not None else None,
+        "rpe_source": (
+            str(rpe_provenance.get("source"))
+            if rpe_provenance is not None and rpe_provenance.get("source") is not None
+            else None
+        ),
+        "feeling_score": (
+            _decimal(effective_evaluation.get("feeling_score"))
+            if effective_evaluation is not None
+            else None
+        ),
+        "feeling_score_source": (
+            str(feeling_provenance.get("source"))
+            if feeling_provenance is not None and feeling_provenance.get("source") is not None
+            else None
+        ),
         "session_quality": session_quality,
         "set_quality": str(set_record.get("quality") or "LOW").upper(),
     }
@@ -211,6 +244,9 @@ def _collapse_session(observations: Sequence[_Observation]) -> _Observation:
         average_strokes_per_length=averaged("average_strokes_per_length"),
         average_swolf=averaged("average_swolf"),
         rpe=averaged("rpe"),
+        rpe_source=first["rpe_source"],
+        feeling_score=averaged("feeling_score"),
+        feeling_score_source=first["feeling_score_source"],
         session_quality=min(
             (item["session_quality"] for item in observations),
             key=lambda value: {"LOW": 0, "MEDIUM": 1, "HIGH": 2}.get(value, 0),
@@ -305,6 +341,8 @@ def historical_equivalent_set_trends(
         latest_swolf = latest.get("average_swolf")
         first_rpe = first.get("rpe")
         latest_rpe = latest.get("rpe")
+        first_feeling = first.get("feeling_score")
+        latest_feeling = latest.get("feeling_score")
         complete_context = all(
             isinstance(value, Decimal)
             for value in (first_cv, latest_cv, first_fade, latest_fade, first_rest, latest_rest)
@@ -424,6 +462,15 @@ def historical_equivalent_set_trends(
                     "first": _number(first_rpe),
                     "latest": _number(latest_rpe),
                     "delta": _delta(latest_rpe, first_rpe),
+                    "first_source": first.get("rpe_source"),
+                    "latest_source": latest.get("rpe_source"),
+                },
+                "feeling": {
+                    "first_score": _number(first_feeling),
+                    "latest_score": _number(latest_feeling),
+                    "delta": _delta(latest_feeling, first_feeling),
+                    "first_source": first.get("feeling_score_source"),
+                    "latest_source": latest.get("feeling_score_source"),
                 },
                 "confidence": {"level": confidence, "reasons": reasons},
             }

@@ -43,6 +43,8 @@ def test_fit_debug_projection_is_allowlisted_and_redacts_timestamps_by_default()
                 "pool_length": 20,
                 "total_distance": 860,
                 "enhanced_avg_speed": 0.506,
+                "workout_rpe": 30,
+                "workout_feel": 75,
                 "start_position_lat": 123456,
                 "start_position_long": -654321,
                 "sport_profile_name": "Clube privado",
@@ -62,6 +64,8 @@ def test_fit_debug_projection_is_allowlisted_and_redacts_timestamps_by_default()
             "pool_length": 20,
             "total_distance": 860,
             "enhanced_avg_speed": 0.506,
+            "workout_rpe": 30,
+            "workout_feel": 75,
         }
     ]
 

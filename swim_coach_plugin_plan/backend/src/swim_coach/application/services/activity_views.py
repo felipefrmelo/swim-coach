@@ -7,7 +7,13 @@ from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from swim_coach.application.services.activity_data import ActivityDetail
-from swim_coach.domain.activities import ActivityNormalization, NormalizedActivity
+from swim_coach.domain.activities import (
+    ActivityNormalization,
+    NormalizedActivity,
+    SessionEvaluationSource,
+    SessionFeedback,
+    resolve_session_evaluation,
+)
 from swim_coach.domain.garmin import Activity
 
 _LEGACY_NORMALIZER_MARKER = "|swim-coach:1."
@@ -41,6 +47,7 @@ _V2_ANALYSIS_METRIC_KEYS = frozenset(
         "goal_readiness",
         "planned_vs_actual",
         "stroke_efficiency",
+        "session_evaluation",
         "srpe",
         "data_quality",
         "active_length_count",
@@ -103,6 +110,51 @@ def _normalization_fact(
 
 def _canonical_normalized(normalized: NormalizedActivity | None) -> NormalizedActivity | None:
     return normalized if _normalization_fact(normalized) is not None else None
+
+
+def session_evaluation_v2(
+    normalized: NormalizedActivity | ActivityNormalization | None,
+    feedback: SessionFeedback | None,
+) -> dict[str, Any]:
+    """Project Garmin facts, field-level overrides and their effective values."""
+
+    normalization = _normalization_fact(normalized)
+    evaluation = resolve_session_evaluation(normalization, feedback)
+
+    def provenance(field: str, source: SessionEvaluationSource | None) -> dict[str, Any]:
+        if source is SessionEvaluationSource.MANUAL_OVERRIDE:
+            return {"source": source.value}
+        if source is None or normalization is None:
+            return {"source": None}
+        raw = normalization.provenance.get(field)
+        fact = raw if isinstance(raw, dict) else {}
+        return {
+            "source": source.value,
+            **{
+                key: fact[key]
+                for key in ("raw_field", "transformation", "interpretation")
+                if key in fact and isinstance(fact[key], str)
+            },
+        }
+
+    return {
+        "garmin": {
+            "rpe": _number(evaluation.garmin_rpe),
+            "feeling_score": evaluation.garmin_feeling_score,
+        },
+        "manual_override": {
+            "rpe": evaluation.manual_rpe,
+            "feeling_score": evaluation.manual_feeling_score,
+        },
+        "effective": {
+            "rpe": _number(evaluation.effective_rpe),
+            "feeling_score": evaluation.effective_feeling_score,
+        },
+        "provenance": {
+            "rpe": provenance("perceived_effort_rpe", evaluation.rpe_source),
+            "feeling_score": provenance("feeling_score", evaluation.feeling_score_source),
+        },
+    }
 
 
 def analysis_metrics_v1(metrics: dict[str, Any]) -> dict[str, Any]:
@@ -225,6 +277,7 @@ def activity_summary_v2(
     normalized: NormalizedActivity | ActivityNormalization | None = None,
     *,
     timezone_name: str | None = None,
+    feedback: SessionFeedback | None = None,
 ) -> dict[str, Any]:
     normalization = _normalization_fact(normalized)
     requested_zone_name = timezone_name or activity.timezone
@@ -315,6 +368,7 @@ def activity_summary_v2(
             normalized,
             extra_reasons=("INVALID_TIMEZONE_FALLBACK_UTC",) if invalid_timezone else (),
         ),
+        "session_evaluation": session_evaluation_v2(normalized, feedback),
     }
 
 
@@ -329,7 +383,12 @@ def activity_detail_v2(
         and detail.analysis.normalization_id == normalized.normalization.id
         else None
     )
-    result = activity_summary_v2(detail.activity, detail.normalized, timezone_name=timezone_name)
+    result = activity_summary_v2(
+        detail.activity,
+        detail.normalized,
+        timezone_name=timezone_name,
+        feedback=detail.feedback,
+    )
     alignment_by_actual: dict[int, dict[str, Any]] = {}
     if analysis:
         planned_actual = analysis.metrics.get("planned_vs_actual")
@@ -395,6 +454,7 @@ def activity_detail_v2(
                     "technique_rating": detail.feedback.technique_rating,
                     "fatigue_rating": detail.feedback.fatigue_rating,
                     "enjoyment_rating": detail.feedback.enjoyment_rating,
+                    "feeling_score": detail.feedback.feeling_score,
                     "pain_present": detail.feedback.pain_present,
                     "pain_location": detail.feedback.pain_location,
                     "pain_intensity": detail.feedback.pain_intensity,

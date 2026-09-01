@@ -32,6 +32,7 @@ from swim_coach.domain.shared.value_objects import EntityId, UserId
 
 ZERO = Decimal(0)
 MILLISECOND = Decimal("0.001")
+RPE_TENTH = Decimal("0.1")
 
 
 def _milliseconds(value: Decimal) -> Decimal:
@@ -61,6 +62,51 @@ def _integer(value: object) -> int | None:
     if result != result.to_integral_value():
         raise DomainError("FIT_PARSE_FAILED", "FIT contains a non-integral count field.")
     return int(result)
+
+
+def _session_evaluation(
+    session: Mapping[str, Any], warnings: list[str]
+) -> tuple[Decimal | None, int | None]:
+    """Normalize documented FIT session evaluation fields without guessing.
+
+    FIT Profile 21.208 defines ``workout_rpe`` as the Borg CR10 value
+    multiplied by ten and ``workout_feel`` as an integer 0-100 score.  Invalid
+    decoded values remain recoverable from the immutable FIT artifact but are
+    not promoted into canonical facts.
+    """
+
+    perceived_effort_rpe: Decimal | None = None
+    raw_rpe = session.get("workout_rpe")
+    if raw_rpe is not None:
+        try:
+            parsed_rpe = Decimal(str(raw_rpe))
+        except (InvalidOperation, ValueError):
+            parsed_rpe = Decimal("NaN")
+        if (
+            parsed_rpe.is_finite()
+            and parsed_rpe == parsed_rpe.to_integral_value()
+            and ZERO <= parsed_rpe <= Decimal(100)
+        ):
+            perceived_effort_rpe = (parsed_rpe / Decimal(10)).quantize(RPE_TENTH)
+        else:
+            warnings.append("SESSION_WORKOUT_RPE_INVALID")
+
+    feeling_score: int | None = None
+    raw_feel = session.get("workout_feel")
+    if raw_feel is not None:
+        try:
+            parsed_feel = Decimal(str(raw_feel))
+        except (InvalidOperation, ValueError):
+            parsed_feel = Decimal("NaN")
+        if (
+            parsed_feel.is_finite()
+            and parsed_feel == parsed_feel.to_integral_value()
+            and ZERO <= parsed_feel <= Decimal(100)
+        ):
+            feeling_score = int(parsed_feel)
+        else:
+            warnings.append("SESSION_WORKOUT_FEEL_INVALID")
+    return perceived_effort_rpe, feeling_score
 
 
 def _whole_metres(value: object) -> int | None:
@@ -369,7 +415,7 @@ def _lap_length_messages(
 
 
 class GarminFitActivityParser:
-    NORMALIZER_VERSION = "2.0.4"
+    NORMALIZER_VERSION = "2.1.0"
 
     def __init__(self, *, max_size_bytes: int = 50 * 1024 * 1024) -> None:
         self._max_size_bytes = max_size_bytes
@@ -429,6 +475,7 @@ class GarminFitActivityParser:
         records = _messages(decoded, "record")
         session = sessions[0] if sessions else {}
         warnings: list[str] = []
+        perceived_effort_rpe, feeling_score = _session_evaluation(session, warnings)
 
         raw_pool_length = _whole_metres(session.get("pool_length"))
         raw_pool_length_unit = session.get("pool_length_unit")
@@ -1535,6 +1582,8 @@ class GarminFitActivityParser:
             swim_pace_seconds_per_100m=_pace(swim_seconds, distance_m),
             timer_pace_seconds_per_100m=timer_pace,
             session_pace_seconds_per_100m=_pace(elapsed_seconds, distance_m),
+            perceived_effort_rpe=perceived_effort_rpe,
+            feeling_score=feeling_score,
             active_length_count=parsed_active_length_count,
             completeness=completeness.quantize(Decimal("0.001")),
             quality=quality,
@@ -1632,6 +1681,34 @@ class GarminFitActivityParser:
                 "session_pace_seconds_per_100m": _fact(
                     ProvenanceSource.DERIVED,
                     transformation="elapsed_seconds / distance_m * 100",
+                ),
+                "perceived_effort_rpe": _fact(
+                    (
+                        ProvenanceSource.GARMIN
+                        if perceived_effort_rpe is not None
+                        else ProvenanceSource.INFERRED
+                    ),
+                    raw_field=("session.workout_rpe" if perceived_effort_rpe is not None else None),
+                    transformation=(
+                        "divide FIT Borg CR10 score by 10"
+                        if perceived_effort_rpe is not None
+                        else "value unavailable or invalid"
+                    ),
+                    interpretation="documented",
+                ),
+                "feeling_score": _fact(
+                    (
+                        ProvenanceSource.GARMIN
+                        if feeling_score is not None
+                        else ProvenanceSource.INFERRED
+                    ),
+                    raw_field=("session.workout_feel" if feeling_score is not None else None),
+                    transformation=(
+                        "preserve FIT 0-100 workout feeling score"
+                        if feeling_score is not None
+                        else "value unavailable or invalid"
+                    ),
+                    interpretation="documented",
                 ),
             },
         )

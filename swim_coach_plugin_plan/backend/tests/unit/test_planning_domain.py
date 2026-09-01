@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from itertools import pairwise
 
 import pytest
@@ -22,15 +23,20 @@ from swim_coach.domain.planning import (
 from swim_coach.domain.shared.value_objects import EntityId
 
 
-def ruleset(rules: PlanningRules | None = None) -> TrainingRuleSet:
+def ruleset(
+    rules: PlanningRules | None = None,
+    *,
+    version: str = "1.0.0",
+    effective_from: date = date(2026, 8, 10),
+) -> TrainingRuleSet:
     selected = rules or PlanningRules()
     return TrainingRuleSet(
         id=EntityId.parse("00000000-0000-0000-0000-000000001010"),
         name="conservative",
-        version="1.0.0",
+        version=version,
         rules=selected,
-        content_hash=canonical_json_hash(selected.model_dump(mode="json")),
-        effective_from=date(2026, 8, 10),
+        content_hash=canonical_json_hash(selected.model_dump(mode="json", exclude_none=True)),
+        effective_from=effective_from,
         created_at=datetime(2026, 8, 10, tzinfo=UTC),
     )
 
@@ -39,8 +45,8 @@ def context(
     *,
     feedback: tuple[FeedbackSnapshot, ...] = (),
     adherence: float | None = 0.9,
+    week_start: date = date(2026, 8, 17),
 ) -> PlanningContext:
-    week_start = date(2026, 8, 17)
     return PlanningContext(
         user_id="00000000-0000-0000-0000-000000001001",
         week_start=week_start,
@@ -104,7 +110,7 @@ def test_relevant_pain_forces_recovery_and_blocks_intensity() -> None:
         FeedbackSnapshot(
             activity_id="00000000-0000-0000-0000-000000001020",
             activity_date=date(2026, 8, 15),
-            rpe=9,
+            rpe=Decimal("9"),
             technique_rating=2,
             pain_present=True,
             pain_intensity=6,
@@ -122,6 +128,89 @@ def test_relevant_pain_forces_recovery_and_blocks_intensity() -> None:
     assert all(item.session_type != "threshold_css" for item in result.sessions)
     assert result.target_volume_m <= 4800 * 0.8
     assert result.decisions[0].rule_id == "RULE-SAFETY-PAIN-001"
+
+
+def test_low_effective_feeling_adds_a_distinct_conservative_recovery_signal() -> None:
+    week_start = date(2026, 9, 7)
+    feedback = (
+        FeedbackSnapshot(
+            activity_id="00000000-0000-0000-0000-000000001021",
+            activity_date=date(2026, 9, 5),
+            rpe=None,
+            rpe_source=None,
+            feeling_score=25,
+            feeling_score_source="GARMIN",
+            pain_present=False,
+        ),
+    )
+
+    result = generate_week(
+        context(feedback=feedback, week_start=week_start),
+        ruleset(
+            PlanningRules(low_feeling_threshold=25),
+            version="1.1.0",
+            effective_from=date(2026, 9, 1),
+        ),
+        PlanningPreferences(focus="GOAL_PACE"),
+    )
+
+    assert result.phase == "recovery"
+    assert "LOW_SESSION_FEELING_RECOVERY_BIAS" in result.warnings
+    decision = next(item for item in result.decisions if item.rule_id == "RULE-FEELING-001")
+    assert decision.decision_type == "RECOVERY_BIASED_BY_LOW_FEELING"
+    assert all(not item.hard for item in result.sessions)
+
+
+def test_low_feeling_older_than_seven_days_does_not_force_recovery() -> None:
+    week_start = date(2026, 9, 14)
+    feedback = (
+        FeedbackSnapshot(
+            activity_id="00000000-0000-0000-0000-000000001022",
+            activity_date=date(2026, 9, 5),
+            rpe=Decimal("3"),
+            rpe_source="GARMIN",
+            feeling_score=10,
+            feeling_score_source="GARMIN",
+            pain_present=False,
+        ),
+    )
+
+    result = generate_week(
+        context(feedback=feedback, week_start=week_start),
+        ruleset(
+            PlanningRules(low_feeling_threshold=25),
+            version="1.1.0",
+            effective_from=date(2026, 9, 1),
+        ),
+        PlanningPreferences(focus="GOAL_PACE"),
+    )
+
+    assert result.phase == "build"
+    assert "LOW_SESSION_FEELING_RECOVERY_BIAS" not in result.warnings
+    assert all(item.rule_id != "RULE-FEELING-001" for item in result.decisions)
+
+
+def test_legacy_august_ruleset_does_not_apply_future_low_feeling_policy() -> None:
+    feedback = (
+        FeedbackSnapshot(
+            activity_id="00000000-0000-0000-0000-000000001023",
+            activity_date=date(2026, 8, 15),
+            rpe=None,
+            feeling_score=5,
+            feeling_score_source="GARMIN",
+            pain_present=False,
+        ),
+    )
+
+    result = generate_week(
+        context(feedback=feedback),
+        ruleset(),
+        PlanningPreferences(focus="GOAL_PACE"),
+    )
+
+    assert result.phase == "build"
+    assert "LOW_SESSION_FEELING_RECOVERY_BIAS" not in result.warnings
+    assert all(item.rule_id != "RULE-FEELING-001" for item in result.decisions)
 
 
 @pytest.mark.parametrize("adherence", [0.0, 0.5, 0.74])

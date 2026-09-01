@@ -1774,8 +1774,9 @@ def _register_v2_tools(
     async def save_feedback(
         ctx: Context[Any, Any, Any],
         activity_id: UUID,
-        rpe: Annotated[int, Field(ge=1, le=10)],
-        technique: str = "ok",
+        rpe: Annotated[int | None, Field(ge=1, le=10)] = None,
+        technique: str | None = None,
+        feeling_score: Annotated[int | None, Field(ge=0, le=100)] = None,
         pain_present: bool = False,
         pain_location: Annotated[str | None, Field(max_length=120)] = None,
         pain_intensity: Annotated[int | None, Field(ge=1, le=10)] = None,
@@ -1785,6 +1786,7 @@ def _register_v2_tools(
             "activity_id": str(activity_id),
             "rpe": rpe,
             "technique": technique,
+            "feeling_score": feeling_score,
             "pain_present": pain_present,
             "pain_location": pain_location,
             "pain_intensity": pain_intensity,
@@ -1803,6 +1805,7 @@ def _register_v2_tools(
                 activity_id=EntityId(activity_id),
                 rpe=rpe,
                 technique=technique,
+                feeling_score=feeling_score,
                 pain={
                     "present": pain_present,
                     "location": pain_location,
@@ -1811,6 +1814,8 @@ def _register_v2_tools(
                 notes=notes,
                 idempotency_key=f"coach-feedback:{digest}",
                 correlation_id=correlation_id,
+                reuse_idempotency_key_when_state_changed=True,
+                preserve_existing_feeling_score=False,
             )
 
         return _as_v2_result(await execute_write("save_feedback", ctx, scope, args, command))

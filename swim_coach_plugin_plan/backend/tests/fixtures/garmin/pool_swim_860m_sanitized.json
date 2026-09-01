@@ -49,7 +49,9 @@
         "enhanced_avg_speed": 0.506,
         "pool_length": 20,
         "pool_length_unit": "metric",
-        "num_active_lengths": 43
+        "num_active_lengths": 43,
+        "workout_rpe": 30,
+        "workout_feel": 75
       }
     ],
     "lap_mesgs": [

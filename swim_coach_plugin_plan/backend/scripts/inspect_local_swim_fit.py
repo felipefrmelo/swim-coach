@@ -35,6 +35,8 @@ SAFE_MESSAGE_FIELDS = {
             "pool_length_unit",
             "num_active_lengths",
             "swim_stroke",
+            "workout_rpe",
+            "workout_feel",
         }
     ),
     "lap_mesgs": frozenset(

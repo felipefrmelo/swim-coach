@@ -176,7 +176,7 @@ interval and length facts. Legacy columns remain readable. A normalization is im
 identified by FIT checksum plus parser version; promotion of a fully saved normalization is
 atomic and reprocessing is idempotent.
 
-Parser `2.0.4` treats a present `session.total_distance` as the canonical Garmin fact and
+Parser `2.1.0` treats a present `session.total_distance` as the canonical Garmin fact and
 never overwrites it with `active lengths * pool length`. That reconstruction is retained as
 corroborating provenance and raises a data-quality warning on disagreement; it becomes the
 canonical distance only when the Garmin session field is absent. The same provenance records
@@ -251,7 +251,20 @@ without a local FIT are left unchanged and are listed as `skipped=FIT_FILE_UNAVA
   `contracts/tool-result-envelope-v2.schema.json`.
 - V2 exposes `started_at_utc`, `started_at_local`, `timezone`, explicit `durations`, preserved
   Garmin `speeds`, explicit derived `paces`, pool facts, provenance, data quality, sets and
-  planned-versus-actual analysis.
+  planned-versus-actual analysis. It also exposes `session_evaluation` with immutable Garmin
+  FIT values, field-level manual overrides, effective values and provenance. Garmin
+  `workout_rpe` is normalized from `0..100` to Borg CR10 `0.0..10.0`; `workout_feel` remains a
+  separate `0..100` feeling score and is never treated as technique.
+- V2 feedback may omit RPE when the activity already has an effective Garmin RPE. Sending an
+  RPE or feeling score is an explicit field-level manual override; technique, pain and notes
+  remain independent manual observations. PUT uses full-replacement semantics: omitting an
+  existing RPE or feeling override clears that override, and an empty replacement removes the
+  manual feedback row and returns `null`. An empty write with nothing to clear is rejected. V1
+  retains its required integer RPE contract.
+- Planning ruleset `1.1.0` carries effective RPE and feeling with their source. A feeling score
+  at or below the Swim Coach threshold of `25/100` from the preceding seven days is a
+  conservative recovery signal; that threshold is a versioned product rule, not a Garmin label
+  or a clinical interpretation.
 - After FIT promotion, v2 `durations.moving_s` is populated exclusively from FIT
   `session.total_moving_time`. It is null for this activity because that FIT field is absent;
   the private Connect raw-summary `movingDuration=1699.541` remains retained for debugging and

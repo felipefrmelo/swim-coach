@@ -102,17 +102,18 @@ tools:
     input: {type: object, additionalProperties: false, properties: {from_date: {type: [string, "null"], format: date}, force: {type: boolean, default: false}}}
   - name: save_feedback
     title: Save post-swim feedback
-    description: Store effort, technique, pain signal, and notes for a pool swim; this is not medical diagnosis.
+    description: Store optional field-level overrides or manual technique, pain, and notes for a pool swim; Garmin FIT effort may remain effective when RPE is omitted.
     scopes: [coach]
     annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
     input:
       type: object
       additionalProperties: false
-      required: [activity_id, rpe]
+      required: [activity_id]
       properties:
         activity_id: {type: string, format: uuid}
         rpe: {type: integer, minimum: 1, maximum: 10}
-        technique: {type: string, default: NORMAL}
+        feeling_score: {type: integer, minimum: 0, maximum: 100}
+        technique: {type: [string, "null"]}
         pain_present: {type: boolean, default: false}
         pain_location: {type: [string, "null"], maxLength: 120}
         pain_intensity: {type: [integer, "null"], minimum: 1, maximum: 10}

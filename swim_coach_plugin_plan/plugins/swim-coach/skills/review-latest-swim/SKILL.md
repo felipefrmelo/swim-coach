@@ -10,9 +10,13 @@ description: Review and explain the user's latest or selected pool swim with Swi
 2. Call `get_coach_context` only when Garmin freshness or the active goal is
    relevant to the question.
 3. Respect the tool's data-quality flags and warnings. Use only returned metrics.
+   When `session_evaluation` is present, distinguish imported Garmin RPE and
+   feeling from manual overrides, and never describe Garmin feeling as a
+   technique score.
 4. When a planned-workout match exists, compare planned and completed values;
    otherwise state that no reliable match is available.
-5. Report two to four useful facts, then separate any inference from observation.
+5. Report two to four useful facts, including effective RPE or feeling when they
+   are relevant, then separate any inference from observation.
    Prefer concise prose over a metric dump.
 
 If no activity exists, explain that clearly and report the returned sync state.

@@ -16,6 +16,11 @@ from swim_coach.domain.activities.entities import (
     SessionFeedback,
     WorkoutExecutionMatch,
 )
+from swim_coach.domain.activities.evaluation import (
+    SessionEvaluation,
+    SessionEvaluationSource,
+    resolve_session_evaluation,
+)
 from swim_coach.domain.activities.metrics import (
     analyze_swim,
     coefficient_of_variation,
@@ -38,6 +43,8 @@ __all__ = [
     "NormalizedActivity",
     "PlannedRole",
     "ProvenanceSource",
+    "SessionEvaluation",
+    "SessionEvaluationSource",
     "SessionFeedback",
     "WorkoutExecutionMatch",
     "analyze_swim",
@@ -45,5 +52,6 @@ __all__ = [
     "completion_ratio",
     "fade_percent",
     "pace_seconds_per_100m",
+    "resolve_session_evaluation",
     "srpe_load",
 ]

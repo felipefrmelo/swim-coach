@@ -6,14 +6,20 @@ description: Record bounded post-swim feedback for a recent Swim Coach activity.
 # Record a post-swim check-in
 
 1. Resolve the activity with `get_swims`, unless the user supplied its internal
-   activity ID.
-2. Collect only missing required fields: RPE from 1–10, technique from 1–5 (or
-   poor/fair/ok/good/excellent), and whether pain was present. Pain location and
-   intensity and a short note are optional.
-3. When the user's message clearly asks to record the check-in, call
-   `save_feedback` once. Otherwise ask only for the missing values.
-4. Report that the feedback was saved without exposing provider identifiers or
-   internal version/idempotency fields.
+   activity ID, and inspect `session_evaluation` before asking questions.
+2. Treat Garmin perceived effort and Garmin feeling as distinct imported facts.
+   Never reinterpret feeling as technique. If an effective Garmin RPE already
+   exists, do not ask the athlete to repeat it.
+3. Collect only information the athlete wants to add or override. Technique,
+   pain and notes are optional. Ask for RPE only when no effective RPE exists or
+   when the athlete explicitly wants to override it; ask for feeling only for an
+   explicit override. Pain location and intensity are required only when pain is
+   reported.
+4. When the user's message clearly asks to record manual additions or overrides,
+   call `save_feedback` once. Otherwise report the imported Garmin assessment and
+   ask at most for the genuinely missing information needed by the request.
+5. Report what was imported and what was saved manually without exposing
+   provider identifiers or internal version/idempotency fields.
 
 Do not diagnose pain, infer an injury, or prescribe treatment. If pain is severe,
 new, or alarming, recommend stopping and seeking qualified medical care in plain
