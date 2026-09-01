@@ -1,0 +1,135 @@
+name: Deploy production
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: swim-coach-production-deploy
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  deploy:
+    if: >-
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository) ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: production
+      deployment: false
+    env:
+      DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+      DEPLOY_PORT: ${{ vars.DEPLOY_PORT }}
+    steps:
+      - name: Resolve and verify target commit
+        id: target
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -Eeuo pipefail
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_run" ]]; then
+            target_sha="${WORKFLOW_RUN_SHA}"
+          else
+            target_sha="${GITHUB_SHA}"
+          fi
+
+          if [[ ! "${target_sha}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Invalid target SHA." >&2
+            exit 1
+          fi
+
+          main_sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)"
+          if [[ "${target_sha}" != "${main_sha}" ]]; then
+            echo "Refusing to deploy ${target_sha}: current main is ${main_sha}." >&2
+            exit 1
+          fi
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            successful_runs="$(
+              gh api \
+                "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${target_sha}&status=completed&event=push&per_page=100" \
+                --jq '[.workflow_runs[] | select(.conclusion == "success")] | length'
+            )"
+            if [[ "${successful_runs}" -lt 1 ]]; then
+              echo "Refusing manual deploy: no successful main CI run exists for ${target_sha}." >&2
+              exit 1
+            fi
+          fi
+
+          echo "sha=${target_sha}" >> "${GITHUB_OUTPUT}"
+          echo "Deploy target: ${target_sha}" >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Configure restricted SSH identity
+        env:
+          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+
+          for value in DEPLOY_HOST DEPLOY_USER DEPLOY_PORT DEPLOY_SSH_PRIVATE_KEY DEPLOY_SSH_KNOWN_HOSTS; do
+            if [[ -z "${!value:-}" ]]; then
+              echo "Missing production environment configuration: ${value}." >&2
+              exit 1
+            fi
+          done
+
+          install -m 700 -d "${HOME}/.ssh"
+          umask 077
+          printf '%s\n' "${DEPLOY_SSH_PRIVATE_KEY}" > "${HOME}/.ssh/swim-coach-deploy"
+          printf '%s\n' "${DEPLOY_SSH_KNOWN_HOSTS}" > "${HOME}/.ssh/known_hosts"
+          chmod 600 "${HOME}/.ssh/swim-coach-deploy" "${HOME}/.ssh/known_hosts"
+          ssh-keygen -y -f "${HOME}/.ssh/swim-coach-deploy" > /dev/null
+
+      - name: Deploy exact commit
+        env:
+          TARGET_SHA: ${{ steps.target.outputs.sha }}
+        run: |
+          set -Eeuo pipefail
+          ssh \
+            -i "${HOME}/.ssh/swim-coach-deploy" \
+            -p "${DEPLOY_PORT}" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" \
+            -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=8 \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "deploy ${TARGET_SHA}"
+
+      - name: Run public production smoke
+        run: |
+          set -Eeuo pipefail
+
+          curl --fail --silent --show-error \
+            --retry 5 --retry-all-errors --retry-delay 3 \
+            https://swim-coach.ozix.com.br/ > /dev/null
+
+          login_status="$(
+            curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+              https://swim-coach.ozix.com.br/api/v1/auth/login
+          )"
+          mcp_status="$(
+            curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+              https://swim-coach.ozix.com.br/mcp/
+          )"
+
+          [[ "${login_status}" == "303" ]]
+          [[ "${mcp_status}" == "401" ]]
+          echo "Public root, login redirect, and unauthenticated MCP checks passed." >> "${GITHUB_STEP_SUMMARY}"

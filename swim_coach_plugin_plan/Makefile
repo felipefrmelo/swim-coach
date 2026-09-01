@@ -2,7 +2,7 @@ UV_CACHE_DIR ?= /tmp/swim-coach-uv-cache
 PNPM_STORE_DIR ?= /tmp/swim-coach-pnpm-store
 GIT_ROOT := $(shell git rev-parse --show-toplevel)
 
-.PHONY: bootstrap build check dependency-scan dev down e2e format-check image-scan lint load-smoke sbom secret-scan security-scan test typecheck validate
+.PHONY: bootstrap build check dependency-scan deploy-check dev down e2e format-check image-scan lint load-smoke sbom secret-scan security-scan test typecheck validate
 
 bootstrap:
 	UV_CACHE_DIR=$(UV_CACHE_DIR) uv sync --all-groups --frozen
@@ -29,11 +29,14 @@ e2e:
 validate:
 	UV_CACHE_DIR=$(UV_CACHE_DIR) uv run python tools/validate_repository.py
 
+deploy-check:
+	bash -n ops/deploy-entrypoint.sh ops/deploy-vm.sh
+
 build:
 	corepack pnpm build
 	docker compose build
 
-check: format-check lint typecheck test validate
+check: format-check lint typecheck test validate deploy-check
 
 dependency-scan:
 	UV_CACHE_DIR=$(UV_CACHE_DIR) uv run pip-audit --cache-dir /tmp/swim-coach-pip-audit-cache
