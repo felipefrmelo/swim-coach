@@ -24,6 +24,22 @@ painel auxiliar e rode os smokes. Se uma verificação falhar, desligue
 quando o arquivo Alembic declara downgrade seguro. Para perda/corrupção de dados,
 não tente downgrade: restaure o último backup verificado em destino isolado.
 
+### Deploy automatizado na VM pessoal
+
+O workflow `Deploy production` roda somente depois do `CI` verde em um push da
+`main`, ou por disparo manual da própria `main`. Em ambos os casos o SHA precisa
+ser a ponta atual da branch e possuir CI verde. O ambiente GitHub `production`
+fornece `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT`, `DEPLOY_SSH_PRIVATE_KEY` e
+`DEPLOY_SSH_KNOWN_HOSTS`.
+
+A chave SSH é exclusiva do deploy e usa forced command para chamar
+`/opt/swim-coach/deploy-main.sh`; ela não libera shell, PTY ou forwarding. O
+entrypoint extrai `ops/deploy-vm.sh` do SHA aprovado. O script serializa deploys,
+valida espaço, cria e verifica o dump pré-deploy, constrói antes da parada, roda
+a migration one-shot e só grava `.deployed-commit` depois dos health checks. Em
+falha após a parada, ele tenta restaurar as imagens anteriores sem executar
+downgrade automático do banco.
+
 ## Backup e restore
 
 Gere uma chave de 32 bytes, codifique em base64 URL-safe e salve em arquivo `0600`
