@@ -13,10 +13,10 @@ RUN apk upgrade --no-cache && adduser -D -u 10001 swim-coach
 WORKDIR /app
 COPY --from=uv /uv /usr/local/bin/uv
 COPY pyproject.toml uv.lock README.md ./
-COPY backend/src ./backend/src
+COPY --chown=swim-coach:swim-coach backend/src ./backend/src
 RUN uv sync --frozen --no-dev --no-cache
-COPY backend/alembic.ini ./backend/alembic.ini
-COPY backend/alembic ./backend/alembic
+COPY --chown=swim-coach:swim-coach backend/alembic.ini ./backend/alembic.ini
+COPY --chown=swim-coach:swim-coach backend/alembic ./backend/alembic
 
 USER swim-coach
 EXPOSE 8000

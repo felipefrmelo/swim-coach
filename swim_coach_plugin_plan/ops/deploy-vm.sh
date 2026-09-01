@@ -133,6 +133,10 @@ git merge --ff-only "${target_commit}"
 cd "${application_root}"
 compose config --quiet
 compose build api worker migrate web
+# Exercise the exact unprivileged migration image while the current services are
+# still running. This catches unreadable application or Alembic files before the
+# deployment enters its downtime window.
+compose run --rm migrate alembic -c backend/alembic.ini current
 
 services_stopped=true
 compose stop worker
