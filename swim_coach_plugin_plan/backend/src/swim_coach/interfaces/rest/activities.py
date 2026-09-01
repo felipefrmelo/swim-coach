@@ -13,6 +13,7 @@ from fastapi import APIRouter, Header, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from swim_coach.application.services.activity_data import ActivityDetail
+from swim_coach.application.services.activity_views import analysis_metrics_v1
 from swim_coach.domain.activities import SessionFeedback, WorkoutExecutionMatch
 from swim_coach.domain.operations import Job
 from swim_coach.domain.shared.errors import ResourceNotFoundError
@@ -126,7 +127,9 @@ class ActivityDetailResponse(StrictModel):
                 [
                     IntervalResponse(
                         index=item.interval_index,
-                        interval_type=item.interval_type,
+                        # Freeze the v1 vocabulary. Canonical v2 types are
+                        # projected through /api/v2/activities instead.
+                        interval_type=("rest" if item.interval_type == "rest" else "work"),
                         distance_m=item.distance_m,
                         duration_seconds=item.duration_seconds,
                         rest_seconds=item.rest_seconds,
@@ -144,7 +147,7 @@ class ActivityDetailResponse(StrictModel):
                     version=detail.analysis.analysis_version,
                     parser_version=detail.analysis.parser_version,
                     quality=detail.analysis.quality.value,
-                    metrics=dict(detail.analysis.metrics),
+                    metrics=analysis_metrics_v1(dict(detail.analysis.metrics)),
                     flags=list(detail.analysis.flags),
                 )
                 if detail.analysis

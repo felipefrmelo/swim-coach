@@ -5,7 +5,7 @@ server:
   path: /mcp
   auth: oauth-2.1
   scopes: [coach]
-result_envelope: ./tool-result-envelope.schema.json
+result_envelope: ./tool-result-envelope-v2.schema.json
 tools:
   - name: get_coach_context
     title: Get swim coach context

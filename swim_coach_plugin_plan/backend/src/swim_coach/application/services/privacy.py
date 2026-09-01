@@ -210,7 +210,7 @@ class PrivacyService:
                     payload={"user_id": str(user_id), "request_id": str(request.id)},
                     available_at=request.execute_after,
                     idempotency_key=f"privacy-delete:{request.id}",
-                    max_attempts=1,
+                    max_attempts=5,
                 )
             )
             await uow.audit.add(
@@ -236,6 +236,9 @@ class PrivacyService:
 
     async def execute_deletion(self, user_id: UserId, request_id: EntityId) -> None:
         now = datetime.now(UTC)
+        # Read and retain the durable deletion manifest before touching storage.
+        # If any idempotent blob deletion fails, the user and all metadata remain
+        # available for a later job attempt to resume from the same key list.
         async with self._uow_factory() as uow:
             request = await uow.privacy_requests.get_deletion(user_id, request_id)
             if request is None:
@@ -244,6 +247,28 @@ class PrivacyService:
                 raise DomainError("DELETION_NOT_DUE", "Deletion is not due for execution.")
             artifacts = await uow.activity_data.list_artifacts(user_id)
             export_keys = await uow.privacy_requests.list_export_keys(user_id)
+
+        storage_keys = tuple(
+            dict.fromkeys([*(artifact.storage_key for artifact in artifacts), *export_keys])
+        )
+        try:
+            for key in storage_keys:
+                await self._storage.delete(key)
+        except Exception as exc:
+            raise DomainError(
+                "PRIVACY_STORAGE_DELETE_FAILED",
+                "Private storage deletion did not complete and will be retried.",
+            ) from exc
+
+        # Only destroy the database ownership graph after every blob delete has
+        # succeeded. Re-read the request so state/due-time is revalidated after
+        # the external storage operations.
+        async with self._uow_factory() as uow:
+            request = await uow.privacy_requests.get_deletion(user_id, request_id)
+            if request is None:
+                raise ResourceNotFoundError("deletion request")
+            if request.status is not DeletionRequestStatus.CONFIRMED or now < request.execute_after:
+                raise DomainError("DELETION_NOT_DUE", "Deletion is not due for execution.")
             request.status = DeletionRequestStatus.EXECUTED
             request.executed_at = now
             await uow.privacy_requests.update_deletion(request)
@@ -263,8 +288,6 @@ class PrivacyService:
             if not await uow.privacy_requests.delete_user(user_id):
                 raise ResourceNotFoundError("user")
             await uow.commit()
-        for key in [*(artifact.storage_key for artifact in artifacts), *export_keys]:
-            await self._storage.delete(key)
 
     async def _snapshot(self, user_id: UserId) -> tuple[JsonObject, list[FileArtifact]]:
         async with self._uow_factory() as uow:

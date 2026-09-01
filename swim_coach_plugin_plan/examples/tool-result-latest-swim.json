@@ -1,29 +1,221 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "request_id": "req_example_latest_swim",
   "status": "OK",
   "data": {
-    "activity_id": "37a9523f-09d5-47b1-9f36-4b596c500103",
-    "started_local": "2026-08-03T18:30:00-03:00",
-    "distance_m": 2000,
-    "moving_seconds": 2820,
-    "pace_seconds_per_100m": 141.0,
-    "pool_length_m": 20,
-    "analysis": {
-      "consistency_cv": 0.043,
-      "fade_pct": 6.2,
-      "avg_swolf": 46,
-      "data_quality": "GOOD"
+    "activity_id": "00000000-0000-0000-0000-000000000860",
+    "name": "Natação em piscina",
+    "subtype": "lap_swimming",
+    "started_at_utc": "2000-07-01T12:00:00+00:00",
+    "started_at_local": "2000-07-01T09:00:00-03:00",
+    "timezone": "America/Sao_Paulo",
+    "distance_m": 860,
+    "durations": {
+      "elapsed_s": "2089.629",
+      "timer_s": "2075.559",
+      "moving_s": null,
+      "swim_s": "1699.541",
+      "rest_s": "376.018",
+      "stationary_s": null
     },
-    "feedback": null
+    "speeds": {
+      "garmin_reported_m_per_s": "0.506"
+    },
+    "paces": {
+      "pace_from_garmin_reported_speed_s_per_100m": "197.628",
+      "moving_s_per_100m": null,
+      "swim_s_per_100m": "197.621",
+      "timer_s_per_100m": "241.344",
+      "session_s_per_100m": "242.980"
+    },
+    "pool": {
+      "length_m": 20,
+      "active_length_count": 43
+    },
+    "provenance": {
+      "moving_seconds": {
+        "source": "inferred",
+        "interpretation": "inferred",
+        "transformation": "value unavailable"
+      },
+      "swim_seconds": {
+        "source": "derived",
+        "interpretation": "inferred",
+        "transformation": "sum(active length total_timer_time)"
+      },
+      "pool_length_m": {
+        "source": "garmin",
+        "raw_field": "session.pool_length",
+        "transformation": "FIT SDK profile scaling to metres"
+      },
+      "rest_seconds": {
+        "source": "derived",
+        "interpretation": "inferred",
+        "transformation": "sum(interval rest backed by idle length evidence)"
+      },
+      "garmin_reported_speed_m_per_s": {
+        "source": "garmin",
+        "interpretation": "inferred",
+        "raw_field": "session.enhanced_avg_speed",
+        "transformation": "FIT SDK profile scaling to metres per second",
+        "field_unit_semantics": "documented",
+        "calculation_basis": "inferred"
+      }
+    },
+    "data_quality": {
+      "level": "LOW",
+      "reasons": [
+        "MOVING_DURATION_UNAVAILABLE",
+        "LAP_MOVING_DURATION_UNAVAILABLE",
+        "LAP_PACE_FROM_GARMIN_REPORTED_SPEED_DIFFERS_FROM_TIMER_PACE",
+        "LAP_IDLE_LENGTH_OWNERSHIP_INFERRED",
+        "SESSION_PACE_FROM_GARMIN_REPORTED_SPEED_DIFFERS_FROM_TIMER_PACE",
+        "NORMALIZATION_QUALITY_PARTIAL",
+        "MISSING_MOVING_DURATION",
+        "GARMIN_TIMER_PACE_DIFFERENCE",
+        "WORKOUT_STEP_PARTIAL"
+      ]
+    },
+    "schema_version": "2.0",
+    "normalization": {
+      "parser_version": "garmin-fit-sdk:21.208.0|swim-coach:2.0.4",
+      "profile_version": "21.208.0",
+      "completeness": "0.800",
+      "warnings": [
+        "MOVING_DURATION_UNAVAILABLE",
+        "LAP_MOVING_DURATION_UNAVAILABLE",
+        "LAP_PACE_FROM_GARMIN_REPORTED_SPEED_DIFFERS_FROM_TIMER_PACE",
+        "LAP_IDLE_LENGTH_OWNERSHIP_INFERRED",
+        "SESSION_PACE_FROM_GARMIN_REPORTED_SPEED_DIFFERS_FROM_TIMER_PACE"
+      ]
+    },
+    "intervals": [],
+    "lengths": [],
+    "analysis": {
+      "version": "swim-analysis:2.0.2",
+      "quality": "poor",
+      "metrics": {
+        "distance_m": 860,
+        "durations": {
+          "elapsed_s": "2089.629",
+          "timer_s": "2075.559",
+          "moving_s": null,
+          "swim_s": "1699.541",
+          "rest_s": "376.018",
+          "stationary_s": null
+        },
+        "paces": {
+          "pace_from_garmin_reported_speed_s_per_100m": "197.628",
+          "moving_s_per_100m": null,
+          "swim_s_per_100m": "197.621",
+          "timer_s_per_100m": "241.344",
+          "session_s_per_100m": "242.980"
+        },
+        "planned_vs_actual": {
+          "planned_distance_m": 880,
+          "actual_distance_m": 860,
+          "distance_difference_m": -20,
+          "distance_adherence_ratio": "0.9773",
+          "matched_step_ratio": "1.0000",
+          "mean_alignment_confidence": "0.9487",
+          "quality": {
+            "level": "MEDIUM",
+            "reasons": [
+              "WORKOUT_STEP_PARTIAL",
+              "UNMATCHED_ACTUAL_INTERVALS"
+            ]
+          }
+        },
+        "sets": [
+          {
+            "key": {
+              "distance_m": 80,
+              "stroke": "MIXED",
+              "planned_role": "WORK",
+              "set_id": "main-4x80"
+            },
+            "pace_basis": "swim",
+            "paces_s_per_100m": ["168.964", "194.359", "178.626", "174.990"],
+            "mean_pace_s_per_100m": "179.235",
+            "best_pace_s_per_100m": "168.964",
+            "worst_pace_s_per_100m": "194.359",
+            "amplitude_s_per_100m": "25.395",
+            "coefficient_of_variation": "0.0524",
+            "trend": "STABLE",
+            "negative_split": true,
+            "fade_percent": "-2.67",
+            "planned_rest_duration_s": "100.000",
+            "actual_rest_duration_s": "100.121",
+            "quality": "MEDIUM",
+            "quality_reasons": ["SET_USES_SWIM_PACE"]
+          }
+        ],
+        "goal_readiness": {
+          "goal_distance_m": 2000,
+          "goal_pace_s_per_100m": "135",
+          "longest_evidence_distance_m": 60,
+          "evidence_pace_basis": "swim_length",
+          "ready": null,
+          "confidence": "LOW",
+          "reasons": ["NO_GOAL_SPECIFIC_ENDURANCE_EVIDENCE"]
+        },
+        "data_quality": {
+          "level": "LOW",
+          "reasons": [
+            "MOVING_DURATION_UNAVAILABLE",
+            "LAP_MOVING_DURATION_UNAVAILABLE",
+            "LAP_PACE_FROM_GARMIN_REPORTED_SPEED_DIFFERS_FROM_TIMER_PACE",
+            "LAP_IDLE_LENGTH_OWNERSHIP_INFERRED",
+            "SESSION_PACE_FROM_GARMIN_REPORTED_SPEED_DIFFERS_FROM_TIMER_PACE",
+            "NORMALIZATION_QUALITY_PARTIAL",
+            "MISSING_MOVING_DURATION",
+            "GARMIN_TIMER_PACE_DIFFERENCE",
+            "WORKOUT_STEP_PARTIAL"
+          ]
+        }
+      },
+      "flags": [
+        "MOVING_DURATION_UNAVAILABLE",
+        "LAP_MOVING_DURATION_UNAVAILABLE",
+        "LAP_PACE_FROM_GARMIN_REPORTED_SPEED_DIFFERS_FROM_TIMER_PACE",
+        "LAP_IDLE_LENGTH_OWNERSHIP_INFERRED",
+        "SESSION_PACE_FROM_GARMIN_REPORTED_SPEED_DIFFERS_FROM_TIMER_PACE",
+        "PROFILE_ANALYSIS_USES_SWIM_PACE",
+        "SET_ANALYSIS_USES_SWIM_PACE",
+        "NORMALIZATION_QUALITY_PARTIAL",
+        "MISSING_MOVING_DURATION",
+        "GARMIN_TIMER_PACE_DIFFERENCE",
+        "WORKOUT_STEP_PARTIAL",
+        "NO_CONTIGUOUS_100M_WINDOW",
+        "NO_CONTIGUOUS_200M_WINDOW",
+        "NO_CONTIGUOUS_400M_WINDOW",
+        "NO_CONTIGUOUS_800M_WINDOW"
+      ],
+      "summary": {
+        "headline": "Análise contextual da atividade",
+        "pace_semantics": "explicit_basis_only",
+        "set_pace_basis": "per_set_explicit",
+        "profile_pace_basis": "swim",
+        "quality": "LOW",
+        "medical_interpretation": false,
+        "css_estimated": false
+      }
+    },
+    "match": {
+      "planned_workout_id": "00000000-0000-0000-0000-000000000880",
+      "confidence": "0.900",
+      "method": "automatic"
+    },
+    "feedback": null,
+    "raw_fit_exposed": false
   },
   "warnings": [],
   "next_actions": [
     {
-      "action": "record_session_feedback",
+      "action": "save_feedback",
       "label": "Registrar esforço e técnica",
-      "required_scope": "feedback:write"
+      "required_scope": "coach"
     }
   ],
-  "human_summary": "Natação de 2.000 m concluída em ritmo médio de 2:21/100 m; feedback ainda não registrado."
+  "human_summary": "Swim covered 860 m in 1699.541 swim seconds."
 }

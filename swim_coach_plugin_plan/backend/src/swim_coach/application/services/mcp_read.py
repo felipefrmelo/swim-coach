@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -15,7 +16,16 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from swim_coach.application.ports.repositories import UnitOfWorkFactory
 from swim_coach.application.services.activity_data import ActivityDataService
+from swim_coach.application.services.activity_views import (
+    activity_detail_v2,
+    activity_summary_v2,
+    analysis_metrics_v1,
+    planned_vs_actual_summary_v2,
+)
 from swim_coach.application.services.context import ContextService
+from swim_coach.application.services.equivalent_set_history import (
+    historical_equivalent_set_trends,
+)
 from swim_coach.application.services.identity import IdentityService
 from swim_coach.application.services.workouts import WorkoutDetail, WorkoutService
 from swim_coach.domain.activities import coefficient_of_variation
@@ -58,11 +68,15 @@ class McpWarning(McpModel):
 
 class McpNextAction(McpModel):
     action: str
-    reason: str
+    label: str
+    required_scope: str | None = None
 
 
 class McpResult(McpModel):
-    schema_version: Literal["1.0"] = "1.0"
+    # Result envelope v2 makes the activity semantic break detectable.  The
+    # canonical workout schema has its own version and intentionally remains
+    # at 1.0.
+    schema_version: Literal["1.0", "2.0"] = "2.0"
     request_id: str
     status: Literal[
         "OK",
@@ -80,11 +94,37 @@ class McpResult(McpModel):
     human_summary: str
 
 
+class McpResultV2(McpResult):
+    """Exact public v2 envelope used by MCP output-schema generation."""
+
+    schema_version: Literal["2.0"] = "2.0"
+
+
 @dataclass(frozen=True, slots=True)
 class McpPrincipal:
     user_id: UserId
     subject: str
     scopes: frozenset[str]
+    timezone: str | None = None
+
+
+def _mapping(value: object) -> Mapping[str, Any] | None:
+    return value if isinstance(value, Mapping) else None
+
+
+def _decimal_value(value: object) -> Decimal | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        result = Decimal(str(value))
+    except (ValueError, ArithmeticError):
+        return None
+    return result if result.is_finite() else None
+
+
+def _integer_value(value: object) -> int | None:
+    number = _decimal_value(value)
+    return int(number) if number is not None else None
 
 
 class McpReadService:
@@ -115,7 +155,7 @@ class McpReadService:
                 details={"scope": " ".join(missing)},
             )
         user = await self._identity.resolve_identity(provider="oidc", subject=subject)
-        return McpPrincipal(user.id, subject, granted)
+        return McpPrincipal(user.id, subject, granted, user.timezone)
 
     async def get_capabilities(self, request_id: str) -> McpResult:
         return McpResult(
@@ -327,6 +367,78 @@ class McpReadService:
             activities = await uow.activities.list_recent(
                 principal.user_id, limit=limit, before=before
             )
+            normalization_facts = await uow.activity_data.list_current_normalization_facts(
+                principal.user_id, [item.id for item in activities]
+            )
+            normalized_by_activity = {item.activity_id: item for item in normalization_facts}
+            analyses = (
+                await uow.activity_data.list_analyses(
+                    principal.user_id, [item.id for item in activities]
+                )
+                if include_analysis_summary
+                else []
+            )
+            analyses_by_activity = {item.activity_id: item for item in analyses}
+            items = []
+            for activity in activities:
+                normalization = normalized_by_activity.get(activity.id)
+                view = activity_summary_v2(
+                    activity,
+                    normalization,
+                    timezone_name=principal.timezone or activity.timezone,
+                )
+                analysis = analyses_by_activity.get(activity.id)
+                metrics = (
+                    analysis.metrics
+                    if analysis is not None
+                    and normalization is not None
+                    and analysis.normalization_id == normalization.id
+                    else None
+                )
+                contextual_paces = _mapping(metrics.get("contextual_paces")) if metrics else None
+                view["analysis_summary"] = (
+                    {
+                        "sets": metrics.get("sets", []),
+                        "freestyle_work": (
+                            contextual_paces.get("freestyle_work")
+                            if contextual_paces is not None
+                            else None
+                        ),
+                        "goal_readiness": metrics.get("goal_readiness"),
+                        "planned_vs_actual": planned_vs_actual_summary_v2(
+                            metrics.get("planned_vs_actual")
+                        ),
+                        "data_quality": metrics.get("data_quality"),
+                    }
+                    if metrics
+                    else None
+                )
+                items.append(view)
+        next_cursor = (
+            activities[-1].start_time_utc.isoformat() if len(activities) == limit else None
+        )
+        return McpResult(
+            request_id=request_id,
+            status="OK",
+            data={"items": items, "next_before": next_cursor, "limit": limit},
+            human_summary=f"Found {len(items)} recent pool swims in local storage.",
+        )
+
+    async def list_recent_swims_v1(
+        self,
+        principal: McpPrincipal,
+        request_id: str,
+        *,
+        limit: int,
+        before: datetime | None,
+        include_analysis_summary: bool,
+    ) -> McpResult:
+        """Project recent swims with the frozen, historically ambiguous v1 fields."""
+
+        async with self._uow_factory() as uow:
+            activities = await uow.activities.list_recent(
+                principal.user_id, limit=limit, before=before
+            )
             analyses = (
                 await uow.activity_data.list_analyses(
                     principal.user_id, [item.id for item in activities]
@@ -343,6 +455,7 @@ class McpReadService:
             activities[-1].start_time_utc.isoformat() if len(activities) == limit else None
         )
         return McpResult(
+            schema_version="1.0",
             request_id=request_id,
             status="OK",
             data={"items": items, "next_before": next_cursor, "limit": limit},
@@ -359,6 +472,82 @@ class McpReadService:
         include_lengths: bool,
         max_intervals: int,
     ) -> McpResult:
+        detail = await self._activity_data.get(principal.user_id, activity_id)
+        normalized = detail.normalized
+        warnings = []
+        if normalized is None:
+            warnings.append(
+                McpWarning(code="DATA_INCOMPLETE", message="FIT normalization is unavailable.")
+            )
+        elif include_intervals and len(normalized.intervals) > max_intervals:
+            warnings.append(
+                McpWarning(code="RESULT_TRUNCATED", message="Intervals were truncated.")
+            )
+        if normalized and include_lengths and len(normalized.lengths) > 100:
+            warnings.append(
+                McpWarning(code="RESULT_TRUNCATED", message="Lengths were truncated at 100.")
+            )
+        view = activity_detail_v2(
+            detail,
+            timezone_name=principal.timezone or detail.activity.timezone,
+        )
+        if view["normalization"] is None and not any(
+            warning.code == "DATA_INCOMPLETE" for warning in warnings
+        ):
+            warnings.append(
+                McpWarning(
+                    code="DATA_INCOMPLETE",
+                    message="Canonical FIT normalization is unavailable.",
+                )
+            )
+        if not include_intervals:
+            view["intervals"] = []
+        else:
+            view["intervals"] = view["intervals"][:max_intervals]
+        if not include_lengths:
+            view["lengths"] = []
+        else:
+            view["lengths"] = view["lengths"][:100]
+        canonical = view["normalization"] is not None
+        canonical_distance = view["distance_m"] if canonical else None
+        canonical_durations = _mapping(view.get("durations")) if canonical else None
+        moving = canonical_durations.get("moving_s") if canonical_durations else None
+        swim = canonical_durations.get("swim_s") if canonical_durations else None
+        timer = canonical_durations.get("timer_s") if canonical_durations else None
+        if moving is not None:
+            duration_label = "moving"
+            duration = moving
+        elif swim is not None:
+            duration_label = "swim"
+            duration = swim
+        else:
+            duration_label = "timer"
+            duration = timer
+        human_summary = (
+            f"Swim covered {canonical_distance} m in {duration} {duration_label} seconds."
+            if canonical_distance is not None and duration is not None
+            else "Canonical FIT normalization is unavailable for this swim."
+        )
+        return McpResult(
+            request_id=request_id,
+            status="PARTIAL" if warnings else "OK",
+            data=view,
+            warnings=warnings,
+            human_summary=human_summary,
+        )
+
+    async def get_swim_activity_v1(
+        self,
+        principal: McpPrincipal,
+        request_id: str,
+        *,
+        activity_id: EntityId,
+        include_intervals: bool,
+        include_lengths: bool,
+        max_intervals: int,
+    ) -> McpResult:
+        """Project one swim exactly as the pre-v2 MCP activity contract did."""
+
         detail = await self._activity_data.get(principal.user_id, activity_id)
         normalized = detail.normalized
         intervals = (
@@ -379,6 +568,7 @@ class McpReadService:
                 McpWarning(code="RESULT_TRUNCATED", message="Lengths were truncated at 100.")
             )
         return McpResult(
+            schema_version="1.0",
             request_id=request_id,
             status="PARTIAL" if warnings else "OK",
             data={
@@ -389,12 +579,16 @@ class McpReadService:
                 "completeness": self._number(normalized.normalization.completeness)
                 if normalized
                 else None,
-                "analysis": dict(detail.analysis.metrics) if detail.analysis else None,
+                "analysis": (
+                    analysis_metrics_v1(dict(detail.analysis.metrics)) if detail.analysis else None
+                ),
                 "analysis_flags": list(detail.analysis.flags) if detail.analysis else [],
                 "intervals": [
                     {
                         "index": item.interval_index,
-                        "type": item.interval_type,
+                        # Keep the frozen v1 vocabulary even when the stored
+                        # normalization was produced by the canonical v2 parser.
+                        "type": "rest" if item.interval_type == "rest" else "work",
                         "distance_m": item.distance_m,
                         "duration_seconds": self._number(item.duration_seconds),
                         "rest_seconds": self._number(item.rest_seconds),
@@ -463,6 +657,275 @@ class McpReadService:
                 for activity in activities
                 if activity.id in metrics_by_activity
             ]
+        target_distance = goal.target_distance.meters
+        target_pace = goal.target_pace.seconds_per_100m
+        goal_specific_minimum = min(400, target_distance)
+        evidence_candidates: list[tuple[int, Decimal | None, str, str]] = []
+        set_cvs: list[Decimal] = []
+        profiles: list[Mapping[str, Any]] = []
+        for _activity, metrics in samples:
+            readiness = _mapping(metrics.get("goal_readiness"))
+            if readiness is not None:
+                evidence_distance = _integer_value(readiness.get("longest_evidence_distance_m"))
+                evidence_pace = _decimal_value(readiness.get("evidence_pace_s_per_100m"))
+                if evidence_distance is not None and evidence_distance > 0:
+                    raw_quality = str(readiness.get("confidence") or "LOW").upper()
+                    evidence_quality = raw_quality if raw_quality in {"HIGH", "MEDIUM"} else "LOW"
+                    evidence_candidates.append(
+                        (
+                            evidence_distance,
+                            evidence_pace,
+                            str(readiness.get("evidence_pace_basis") or "unknown"),
+                            evidence_quality,
+                        )
+                    )
+            speed_endurance = _mapping(metrics.get("speed_endurance"))
+            if speed_endurance is not None:
+                profiles.append(speed_endurance)
+            raw_sets = metrics.get("sets")
+            if isinstance(raw_sets, list):
+                for raw_set in raw_sets:
+                    set_record = _mapping(raw_set)
+                    if set_record is None:
+                        continue
+                    cv = _decimal_value(set_record.get("coefficient_of_variation"))
+                    if cv is not None:
+                        set_cvs.append(cv)
+
+        evidence = tuple(item for item in evidence_candidates if item[0] >= goal_specific_minimum)
+        short_distance_indicators = tuple(
+            item for item in evidence_candidates if item[0] < goal_specific_minimum
+        )
+        longest_distance = max((item[0] for item in evidence), default=0)
+        strongest_candidates = tuple(
+            item for item in evidence if item[0] == longest_distance and item[1] is not None
+        )
+        strongest = min(
+            strongest_candidates,
+            key=lambda item: item[1] if item[1] is not None else Decimal("Infinity"),
+            default=None,
+        )
+        evidence_pace = strongest[1] if strongest is not None else None
+        pace_basis = strongest[2] if strongest is not None else None
+        selected_evidence_quality = strongest[3] if strongest is not None else None
+        distance_ratio = (
+            Decimal(longest_distance) / Decimal(target_distance) if target_distance else None
+        )
+        pace_gap = evidence_pace - target_pace if isinstance(evidence_pace, Decimal) else None
+        pace_ratio = (
+            target_pace / evidence_pace
+            if isinstance(evidence_pace, Decimal) and evidence_pace > 0
+            else None
+        )
+        mean_set_cv = sum(set_cvs, start=Decimal(0)) / Decimal(len(set_cvs)) if set_cvs else None
+        equivalent_set_history = historical_equivalent_set_trends(
+            [(activity.start_time_utc, metrics) for activity, metrics in samples]
+        )
+        consistency_score = (
+            max(Decimal(0), Decimal(1) - min(mean_set_cv, Decimal(1)))
+            if mean_set_cv is not None
+            else None
+        )
+        sample_factor = min(Decimal(1), Decimal(len(evidence)) / Decimal(6))
+        distance_factor = min(
+            Decimal(1),
+            Decimal(longest_distance) / Decimal(target_distance),
+        )
+        quality_factor = (
+            Decimal(1)
+            if selected_evidence_quality == "HIGH"
+            else Decimal("0.7")
+            if selected_evidence_quality == "MEDIUM"
+            else Decimal("0.4")
+            if selected_evidence_quality == "LOW"
+            else Decimal(0)
+        )
+        uncapped_confidence_score = (
+            sample_factor * Decimal("0.4")
+            + distance_factor * Decimal("0.4")
+            + quality_factor * Decimal("0.2")
+        )
+        quality_confidence_cap = (
+            Decimal(1)
+            if selected_evidence_quality == "HIGH"
+            else Decimal("0.79")
+            if selected_evidence_quality == "MEDIUM"
+            else Decimal("0.49")
+            if selected_evidence_quality == "LOW"
+            else Decimal(0)
+        )
+        confidence_score = min(uncapped_confidence_score, quality_confidence_cap)
+        calculated_confidence_level = (
+            "HIGH"
+            if confidence_score >= Decimal("0.8")
+            else "MEDIUM"
+            if confidence_score >= Decimal("0.5")
+            else "LOW"
+        )
+        confidence_level = (
+            "LOW"
+            if selected_evidence_quality in {None, "LOW"}
+            else "MEDIUM"
+            if selected_evidence_quality == "MEDIUM" and calculated_confidence_level == "HIGH"
+            else calculated_confidence_level
+        )
+
+        def dimension(name: str) -> dict[str, object]:
+            records = tuple(
+                record
+                for profile in profiles
+                if (record := _mapping(profile.get(name))) is not None
+            )
+            best_paces = tuple(
+                pace
+                for record in records
+                if (pace := _decimal_value(record.get("best_pace_s_per_100m"))) is not None
+            )
+            return {
+                "analyzed_sessions": len(records),
+                "longest_evidence_distance_m": max(
+                    (_integer_value(record.get("longest_distance_m")) or 0 for record in records),
+                    default=0,
+                ),
+                "best_explicit_pace_s_per_100m": self._number(min(best_paces, default=None)),
+                "quality_levels": sorted({str(record.get("quality", "LOW")) for record in records}),
+            }
+
+        no_goal_specific_evidence = not evidence
+        selected_evidence_is_low_quality = selected_evidence_quality == "LOW"
+        confidence_reasons = [
+            *(["NO_GOAL_SPECIFIC_EVIDENCE"] if no_goal_specific_evidence else []),
+            *(["SELECTED_GOAL_EVIDENCE_LOW_QUALITY"] if selected_evidence_is_low_quality else []),
+            *(["GOAL_SPECIFIC_PACE_MISSING"] if evidence and strongest is None else []),
+        ]
+        return McpResult(
+            request_id=request_id,
+            status=(
+                "OK"
+                if evidence and strongest is not None and not selected_evidence_is_low_quality
+                else "PARTIAL"
+            ),
+            data={
+                "goal": self._goal(goal),
+                "sample_size": len(samples),
+                "goal_evidence_sample_size": len(evidence),
+                "short_distance_indicator_sample_size": len(short_distance_indicators),
+                "goal_specific_minimum_distance_m": goal_specific_minimum,
+                "longest_goal_evidence_distance_m": longest_distance,
+                "goal_evidence_pace_s_per_100m": self._number(evidence_pace),
+                "goal_evidence_pace_basis": pace_basis,
+                "selected_goal_evidence_quality": selected_evidence_quality,
+                "distance_completion_ratio": self._number(distance_ratio),
+                "pace_gap_seconds_per_100m": self._number(pace_gap),
+                "sample_quality": confidence_level,
+                "historical_equivalent_sets": equivalent_set_history,
+                "dimensions": {
+                    "speed": dimension("speed"),
+                    "short_endurance": dimension("short_endurance"),
+                    "aerobic_endurance": dimension("aerobic_endurance"),
+                    "technique": dimension("technique"),
+                    "goal_readiness": {
+                        "longest_evidence_distance_m": longest_distance,
+                        "target_distance_m": target_distance,
+                        "completion_ratio": self._number(distance_ratio),
+                        "evidence_pace_s_per_100m": self._number(evidence_pace),
+                        "evidence_pace_basis": pace_basis,
+                        "target_seconds_per_100m": self._number(target_pace),
+                        "gap_seconds_per_100m": self._number(pace_gap),
+                        "achievement_ratio": self._number(pace_ratio),
+                        "selected_evidence_quality": selected_evidence_quality,
+                        "status": (
+                            "ACHIEVED"
+                            if pace_gap is not None
+                            and pace_gap <= 0
+                            and longest_distance >= target_distance
+                            and not selected_evidence_is_low_quality
+                            else "INSUFFICIENT_GOAL_SPECIFIC_EVIDENCE"
+                            if no_goal_specific_evidence
+                            else "INSUFFICIENT_EVIDENCE_QUALITY"
+                            if selected_evidence_is_low_quality
+                            else "INSUFFICIENT_GOAL_SPECIFIC_PACE_EVIDENCE"
+                            if strongest is None
+                            else "IN_PROGRESS"
+                        ),
+                    },
+                    "consistency": {
+                        "equivalent_set_samples": len(set_cvs),
+                        "mean_equivalent_set_cv": self._number(mean_set_cv),
+                        "score": self._number(consistency_score),
+                        "status": "AVAILABLE" if consistency_score is not None else "LIMITED",
+                    },
+                    "confidence": {
+                        "sample_size": len(evidence),
+                        "score": self._number(confidence_score),
+                        "level": confidence_level,
+                        "reasons": confidence_reasons,
+                    },
+                },
+            },
+            warnings=[
+                *(
+                    []
+                    if samples
+                    else [
+                        McpWarning(
+                            code="DATA_INCOMPLETE",
+                            message="No analyzed swims are available.",
+                        )
+                    ]
+                ),
+                *(
+                    [
+                        McpWarning(
+                            code="GOAL_EVIDENCE_LIMITED",
+                            message=(
+                                f"No comparable {goal_specific_minimum} m or longer work "
+                                "or continuous evidence is available."
+                            ),
+                        )
+                    ]
+                    if samples and no_goal_specific_evidence
+                    else []
+                ),
+            ],
+            human_summary=(
+                f"No goal-specific evidence meets the {goal_specific_minimum} m minimum; "
+                f"{len(short_distance_indicators)} shorter indicator sample(s) remain "
+                "available only in the separate speed/endurance dimensions."
+                if no_goal_specific_evidence
+                else f"Goal progress has {len(evidence)} goal-specific distance sample(s), "
+                "but none has usable pace evidence."
+                if strongest is None
+                else f"Goal progress uses {len(evidence)} goal-specific evidence sample(s); "
+                f"the selected {longest_distance} m sample has "
+                f"{selected_evidence_quality} quality."
+            ),
+        )
+
+    async def get_goal_progress_v1(
+        self, principal: McpPrincipal, request_id: str, *, goal_id: EntityId | None
+    ) -> McpResult:
+        """Calculate goal progress with the frozen pre-v2 activity pace semantics."""
+
+        async with self._uow_factory() as uow:
+            goals = await uow.goals.list(principal.user_id)
+            goal = (
+                await uow.goals.get(principal.user_id, goal_id)
+                if goal_id
+                else next((item for item in goals if item.status is GoalStatus.ACTIVE), None)
+            )
+            if goal is None:
+                raise ResourceNotFoundError("goal")
+            activities = await uow.activities.list_recent(principal.user_id, limit=20)
+            analyses = await uow.activity_data.list_analyses(
+                principal.user_id, [item.id for item in activities]
+            )
+            metrics_by_activity = {item.activity_id: item.metrics for item in analyses}
+            samples = [
+                (activity, metrics_by_activity[activity.id])
+                for activity in activities
+                if activity.id in metrics_by_activity
+            ]
         best_distance = max((item.distance.meters for item, _ in samples), default=0)
         paces = [
             Decimal(str(metrics["average_pace_seconds_per_100m"]))
@@ -494,6 +957,7 @@ class McpReadService:
             else "NONE"
         )
         return McpResult(
+            schema_version="1.0",
             request_id=request_id,
             status="OK" if samples else "PARTIAL",
             data={

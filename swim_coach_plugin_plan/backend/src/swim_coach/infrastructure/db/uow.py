@@ -8,7 +8,7 @@ from decimal import Decimal
 from types import TracebackType
 from typing import Any, Self, cast
 
-from sqlalchemy import and_, delete, or_, select, update
+from sqlalchemy import and_, delete, exists, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -151,6 +151,35 @@ from swim_coach.infrastructure.db.models import (
 
 def _json(value: dict[str, Any]) -> JsonObject:
     return cast(JsonObject, value)
+
+
+def _optional_decimal(value: Decimal | None) -> Decimal | None:
+    return Decimal(value) if value is not None else None
+
+
+_LEGACY_V1_MOVING_WARNING = "LEGACY_V1_MOVING_DURATION_INVALIDATED"
+_LEGACY_V1_CHILD_WARNING = "LEGACY_V1_CANONICAL_FIELDS_UNAVAILABLE"
+
+
+def _is_legacy_v1_parser(parser_version: str) -> bool:
+    return "|swim-coach:1." in parser_version
+
+
+def _with_warning(values: Sequence[str], warning: str) -> tuple[str, ...]:
+    return tuple(dict.fromkeys((*values, warning)))
+
+
+def _legacy_child_provenance(value: dict[str, Any], *, legacy_v1: bool) -> JsonObject:
+    result = dict(value)
+    if legacy_v1:
+        result.setdefault(
+            "canonical_v2",
+            {
+                "source": "inferred",
+                "interpretation": "legacy_v1_fields_unavailable",
+            },
+        )
+    return _json(result)
 
 
 def _user(model: AppUserModel) -> AppUser:
@@ -642,7 +671,32 @@ def _activity(model: ActivityModel) -> Activity:
     )
 
 
+def _raw_provider_payload(model: RawProviderPayloadModel) -> RawProviderPayload:
+    return RawProviderPayload(
+        id=EntityId(model.id),
+        user_id=UserId(model.user_id),
+        provider=model.provider,
+        entity_type=model.entity_type,
+        external_id=model.external_id,
+        content_type=model.content_type,
+        payload=_json(model.json_payload),
+        checksum=model.checksum,
+        provider_updated_at=model.provider_updated_at,
+        received_at=model.received_at,
+    )
+
+
 def _normalization(model: ActivityNormalizationModel) -> ActivityNormalization:
+    legacy_v1 = _is_legacy_v1_parser(model.parser_version)
+    warnings = tuple(model.warnings_json)
+    provenance = dict(model.provenance_json)
+    if legacy_v1:
+        warnings = _with_warning(warnings, _LEGACY_V1_MOVING_WARNING)
+        provenance["moving_seconds"] = {
+            "source": "inferred",
+            "interpretation": "legacy_v1_timer_alias_invalidated",
+            "transformation": "known parser-v1 timer fallback exposed as unavailable",
+        }
     return ActivityNormalization(
         id=EntityId(model.id),
         user_id=UserId(model.user_id),
@@ -655,12 +709,24 @@ def _normalization(model: ActivityNormalizationModel) -> ActivityNormalization:
         distance_m=model.distance_m,
         elapsed_seconds=Decimal(model.elapsed_seconds),
         timer_seconds=Decimal(model.timer_seconds),
-        moving_seconds=Decimal(model.moving_seconds),
+        moving_seconds=(None if legacy_v1 else _optional_decimal(model.moving_seconds)),
         active_length_count=model.active_length_count,
         completeness=Decimal(model.completeness),
         quality=DataQuality(model.quality),
-        warnings=tuple(model.warnings_json),
+        warnings=warnings,
         created_at=model.created_at,
+        swim_seconds=_optional_decimal(model.swim_seconds),
+        rest_seconds=_optional_decimal(model.rest_seconds),
+        stationary_seconds=_optional_decimal(model.stationary_seconds),
+        garmin_reported_speed_m_per_s=_optional_decimal(model.garmin_reported_speed_m_per_s),
+        pace_from_garmin_reported_speed_seconds_per_100m=_optional_decimal(
+            model.pace_from_garmin_reported_speed_seconds_per_100m
+        ),
+        moving_pace_seconds_per_100m=_optional_decimal(model.moving_pace_seconds_per_100m),
+        swim_pace_seconds_per_100m=_optional_decimal(model.swim_pace_seconds_per_100m),
+        timer_pace_seconds_per_100m=_optional_decimal(model.timer_pace_seconds_per_100m),
+        session_pace_seconds_per_100m=_optional_decimal(model.session_pace_seconds_per_100m),
+        provenance=_json(provenance),
     )
 
 
@@ -1190,6 +1256,14 @@ class SqlAlchemyRawProviderPayloadsRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def get(self, user_id: UserId, payload_id: EntityId) -> RawProviderPayload | None:
+        statement = select(RawProviderPayloadModel).where(
+            RawProviderPayloadModel.id == payload_id.value,
+            RawProviderPayloadModel.user_id == user_id.value,
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _raw_provider_payload(model) if model is not None else None
+
     async def add_if_absent(self, payload: RawProviderPayload) -> EntityId:
         statement = (
             insert(RawProviderPayloadModel)
@@ -1259,7 +1333,11 @@ class SqlAlchemyActivitiesRepository:
             .with_for_update()
         )
         model = (await self._session.scalars(statement)).one_or_none()
-        if model is not None and model.summary_checksum == activity.summary_checksum:
+        if (
+            model is not None
+            and model.summary_checksum == activity.summary_checksum
+            and model.normalization_version == activity.normalization_version
+        ):
             return ActivityImportStatus.SKIPPED, EntityId(model.id)
         values = {
             "name": activity.name,
@@ -1349,9 +1427,10 @@ class SqlAlchemyActivityDataRepository:
         )
         return [_file_artifact(model) for model in await self._session.scalars(statement)]
 
-    async def add_artifact(self, artifact: FileArtifact) -> None:
-        self._session.add(
-            FileArtifactModel(
+    async def add_artifact(self, artifact: FileArtifact) -> FileArtifact:
+        statement = (
+            insert(FileArtifactModel)
+            .values(
                 id=artifact.id.value,
                 user_id=artifact.user_id.value,
                 activity_id=artifact.activity_id.value,
@@ -1364,7 +1443,20 @@ class SqlAlchemyActivityDataRepository:
                 source_external_id_hash=artifact.source_external_id_hash,
                 created_at=artifact.created_at,
             )
+            .on_conflict_do_nothing(constraint="uq_file_artifact_activity_checksum_type")
+            .returning(FileArtifactModel.id)
         )
+        if await self._session.scalar(statement) is not None:
+            return artifact
+        winner = await self.get_artifact_by_checksum(
+            artifact.user_id,
+            artifact.activity_id,
+            artifact.checksum,
+            artifact.artifact_type,
+        )
+        if winner is None:
+            raise RuntimeError("file artifact conflict could not be resolved")
+        return winner
 
     async def _load_normalized(
         self, user_id: UserId, normalization_id: EntityId
@@ -1376,6 +1468,7 @@ class SqlAlchemyActivityDataRepository:
         model = (await self._session.scalars(statement)).one_or_none()
         if model is None:
             return None
+        legacy_v1 = _is_legacy_v1_parser(model.parser_version)
         lap_models = await self._session.scalars(
             select(ActivityLapModel)
             .where(ActivityLapModel.normalization_id == normalization_id.value)
@@ -1405,6 +1498,29 @@ class SqlAlchemyActivityDataRepository:
                 avg_hr_bpm=item.avg_hr_bpm,
                 max_hr_bpm=item.max_hr_bpm,
                 stroke_type=item.stroke_type,
+                moving_seconds=_optional_decimal(item.moving_seconds),
+                swim_seconds=_optional_decimal(item.swim_seconds),
+                rest_seconds=_optional_decimal(item.rest_seconds),
+                stationary_seconds=_optional_decimal(item.stationary_seconds),
+                garmin_reported_speed_m_per_s=_optional_decimal(item.garmin_reported_speed_m_per_s),
+                pace_from_garmin_reported_speed_seconds_per_100m=_optional_decimal(
+                    item.pace_from_garmin_reported_speed_seconds_per_100m
+                ),
+                moving_pace_seconds_per_100m=_optional_decimal(item.moving_pace_seconds_per_100m),
+                swim_pace_seconds_per_100m=_optional_decimal(item.swim_pace_seconds_per_100m),
+                timer_pace_seconds_per_100m=_optional_decimal(item.timer_pace_seconds_per_100m),
+                elapsed_pace_seconds_per_100m=_optional_decimal(item.elapsed_pace_seconds_per_100m),
+                detected_stroke=item.detected_stroke,
+                planned_stroke=item.planned_stroke,
+                provenance=_legacy_child_provenance(
+                    item.provenance_json,
+                    legacy_v1=legacy_v1,
+                ),
+                quality_warnings=(
+                    _with_warning(item.quality_warnings_json, _LEGACY_V1_CHILD_WARNING)
+                    if legacy_v1
+                    else tuple(item.quality_warnings_json)
+                ),
             )
             for item in lap_models
         )
@@ -1430,6 +1546,31 @@ class SqlAlchemyActivityDataRepository:
                 stroke_rate=Decimal(item.stroke_rate) if item.stroke_rate is not None else None,
                 swolf=Decimal(item.swolf) if item.swolf is not None else None,
                 source=_json(item.source_json),
+                elapsed_seconds=_optional_decimal(item.elapsed_seconds),
+                timer_seconds=_optional_decimal(item.timer_seconds),
+                moving_seconds=_optional_decimal(item.moving_seconds),
+                swim_seconds=_optional_decimal(item.swim_seconds),
+                stationary_seconds=_optional_decimal(item.stationary_seconds),
+                garmin_reported_speed_m_per_s=_optional_decimal(item.garmin_reported_speed_m_per_s),
+                pace_from_garmin_reported_speed_seconds_per_100m=_optional_decimal(
+                    item.pace_from_garmin_reported_speed_seconds_per_100m
+                ),
+                moving_pace_seconds_per_100m=_optional_decimal(item.moving_pace_seconds_per_100m),
+                swim_pace_seconds_per_100m=_optional_decimal(item.swim_pace_seconds_per_100m),
+                timer_pace_seconds_per_100m=_optional_decimal(item.timer_pace_seconds_per_100m),
+                elapsed_pace_seconds_per_100m=_optional_decimal(item.elapsed_pace_seconds_per_100m),
+                planned_role=item.planned_role,
+                detected_stroke=item.detected_stroke,
+                planned_stroke=item.planned_stroke,
+                provenance=_legacy_child_provenance(
+                    item.provenance_json,
+                    legacy_v1=legacy_v1,
+                ),
+                quality_warnings=(
+                    _with_warning(item.quality_warnings_json, _LEGACY_V1_CHILD_WARNING)
+                    if legacy_v1
+                    else tuple(item.quality_warnings_json)
+                ),
             )
             for item in interval_models
         )
@@ -1446,6 +1587,32 @@ class SqlAlchemyActivityDataRepository:
                 stroke_rate=Decimal(item.stroke_rate) if item.stroke_rate is not None else None,
                 swolf=Decimal(item.swolf) if item.swolf is not None else None,
                 avg_hr_bpm=item.avg_hr_bpm,
+                length_type=item.length_type,
+                elapsed_seconds=_optional_decimal(item.elapsed_seconds),
+                timer_seconds=_optional_decimal(item.timer_seconds),
+                moving_seconds=_optional_decimal(item.moving_seconds),
+                swim_seconds=_optional_decimal(item.swim_seconds),
+                rest_seconds=_optional_decimal(item.rest_seconds),
+                stationary_seconds=_optional_decimal(item.stationary_seconds),
+                garmin_reported_speed_m_per_s=_optional_decimal(item.garmin_reported_speed_m_per_s),
+                pace_from_garmin_reported_speed_seconds_per_100m=_optional_decimal(
+                    item.pace_from_garmin_reported_speed_seconds_per_100m
+                ),
+                moving_pace_seconds_per_100m=_optional_decimal(item.moving_pace_seconds_per_100m),
+                swim_pace_seconds_per_100m=_optional_decimal(item.swim_pace_seconds_per_100m),
+                timer_pace_seconds_per_100m=_optional_decimal(item.timer_pace_seconds_per_100m),
+                elapsed_pace_seconds_per_100m=_optional_decimal(item.elapsed_pace_seconds_per_100m),
+                detected_stroke=item.detected_stroke,
+                planned_stroke=item.planned_stroke,
+                provenance=_legacy_child_provenance(
+                    item.provenance_json,
+                    legacy_v1=legacy_v1,
+                ),
+                quality_warnings=(
+                    _with_warning(item.quality_warnings_json, _LEGACY_V1_CHILD_WARNING)
+                    if legacy_v1
+                    else tuple(item.quality_warnings_json)
+                ),
             )
             for item in length_models
         )
@@ -1470,6 +1637,27 @@ class SqlAlchemyActivityDataRepository:
             if normalization_id is not None
             else None
         )
+
+    async def list_current_normalization_facts(
+        self, user_id: UserId, activity_ids: Sequence[EntityId]
+    ) -> Sequence[ActivityNormalization]:
+        """Load canonical session facts in one query, without lap/interval children."""
+
+        if not activity_ids:
+            return []
+        statement = (
+            select(ActivityNormalizationModel)
+            .join(
+                ActivityModel,
+                ActivityModel.current_normalization_id == ActivityNormalizationModel.id,
+            )
+            .where(
+                ActivityModel.user_id == user_id.value,
+                ActivityModel.id.in_([item.value for item in activity_ids]),
+                ActivityNormalizationModel.user_id == user_id.value,
+            )
+        )
+        return [_normalization(model) for model in await self._session.scalars(statement)]
 
     async def get_normalization_by_input(
         self,
@@ -1509,10 +1697,22 @@ class SqlAlchemyActivityDataRepository:
                 elapsed_seconds=item.elapsed_seconds,
                 timer_seconds=item.timer_seconds,
                 moving_seconds=item.moving_seconds,
+                swim_seconds=item.swim_seconds,
+                rest_seconds=item.rest_seconds,
+                stationary_seconds=item.stationary_seconds,
+                garmin_reported_speed_m_per_s=item.garmin_reported_speed_m_per_s,
+                pace_from_garmin_reported_speed_seconds_per_100m=(
+                    item.pace_from_garmin_reported_speed_seconds_per_100m
+                ),
+                moving_pace_seconds_per_100m=item.moving_pace_seconds_per_100m,
+                swim_pace_seconds_per_100m=item.swim_pace_seconds_per_100m,
+                timer_pace_seconds_per_100m=item.timer_pace_seconds_per_100m,
+                session_pace_seconds_per_100m=item.session_pace_seconds_per_100m,
                 active_length_count=item.active_length_count,
                 completeness=item.completeness,
                 quality=item.quality.value,
                 warnings_json=list(item.warnings),
+                provenance_json=item.provenance,
                 created_at=item.created_at,
             )
             .on_conflict_do_nothing(constraint="uq_activity_normalization_input_version")
@@ -1529,10 +1729,26 @@ class SqlAlchemyActivityDataRepository:
                     start_offset_seconds=lap.start_offset_seconds,
                     elapsed_seconds=lap.elapsed_seconds,
                     timer_seconds=lap.timer_seconds,
+                    moving_seconds=lap.moving_seconds,
+                    swim_seconds=lap.swim_seconds,
+                    rest_seconds=lap.rest_seconds,
+                    stationary_seconds=lap.stationary_seconds,
                     distance_m=lap.distance_m,
                     avg_hr_bpm=lap.avg_hr_bpm,
                     max_hr_bpm=lap.max_hr_bpm,
                     stroke_type=lap.stroke_type,
+                    detected_stroke=lap.detected_stroke,
+                    planned_stroke=lap.planned_stroke,
+                    garmin_reported_speed_m_per_s=lap.garmin_reported_speed_m_per_s,
+                    pace_from_garmin_reported_speed_seconds_per_100m=(
+                        lap.pace_from_garmin_reported_speed_seconds_per_100m
+                    ),
+                    moving_pace_seconds_per_100m=lap.moving_pace_seconds_per_100m,
+                    swim_pace_seconds_per_100m=lap.swim_pace_seconds_per_100m,
+                    timer_pace_seconds_per_100m=lap.timer_pace_seconds_per_100m,
+                    elapsed_pace_seconds_per_100m=lap.elapsed_pace_seconds_per_100m,
+                    provenance_json=lap.provenance,
+                    quality_warnings_json=list(lap.quality_warnings),
                 )
                 for lap in normalized.laps
             ]
@@ -1547,15 +1763,33 @@ class SqlAlchemyActivityDataRepository:
                     start_offset_seconds=interval.start_offset_seconds,
                     duration_seconds=interval.duration_seconds,
                     rest_seconds=interval.rest_seconds,
+                    elapsed_seconds=interval.elapsed_seconds,
+                    timer_seconds=interval.timer_seconds,
+                    moving_seconds=interval.moving_seconds,
+                    swim_seconds=interval.swim_seconds,
+                    stationary_seconds=interval.stationary_seconds,
                     distance_m=interval.distance_m,
                     pace_seconds_per_100m=interval.pace_seconds_per_100m,
+                    garmin_reported_speed_m_per_s=interval.garmin_reported_speed_m_per_s,
+                    pace_from_garmin_reported_speed_seconds_per_100m=(
+                        interval.pace_from_garmin_reported_speed_seconds_per_100m
+                    ),
+                    moving_pace_seconds_per_100m=(interval.moving_pace_seconds_per_100m),
+                    swim_pace_seconds_per_100m=interval.swim_pace_seconds_per_100m,
+                    timer_pace_seconds_per_100m=interval.timer_pace_seconds_per_100m,
+                    elapsed_pace_seconds_per_100m=interval.elapsed_pace_seconds_per_100m,
                     avg_hr_bpm=interval.avg_hr_bpm,
                     max_hr_bpm=interval.max_hr_bpm,
                     stroke_type=interval.stroke_type,
+                    detected_stroke=interval.detected_stroke,
+                    planned_stroke=interval.planned_stroke,
+                    planned_role=interval.planned_role,
                     stroke_count=interval.stroke_count,
                     stroke_rate=interval.stroke_rate,
                     swolf=interval.swolf,
                     source_json=interval.source,
+                    provenance_json=interval.provenance,
+                    quality_warnings_json=list(interval.quality_warnings),
                 )
                 for interval in normalized.intervals
             ]
@@ -1569,11 +1803,30 @@ class SqlAlchemyActivityDataRepository:
                     length_index=length.length_index,
                     distance_m=length.distance_m,
                     duration_seconds=length.duration_seconds,
+                    length_type=length.length_type,
+                    elapsed_seconds=length.elapsed_seconds,
+                    timer_seconds=length.timer_seconds,
+                    moving_seconds=length.moving_seconds,
+                    swim_seconds=length.swim_seconds,
+                    rest_seconds=length.rest_seconds,
+                    stationary_seconds=length.stationary_seconds,
                     stroke_type=length.stroke_type,
+                    detected_stroke=length.detected_stroke,
+                    planned_stroke=length.planned_stroke,
+                    garmin_reported_speed_m_per_s=length.garmin_reported_speed_m_per_s,
+                    pace_from_garmin_reported_speed_seconds_per_100m=(
+                        length.pace_from_garmin_reported_speed_seconds_per_100m
+                    ),
+                    moving_pace_seconds_per_100m=length.moving_pace_seconds_per_100m,
+                    swim_pace_seconds_per_100m=length.swim_pace_seconds_per_100m,
+                    timer_pace_seconds_per_100m=length.timer_pace_seconds_per_100m,
+                    elapsed_pace_seconds_per_100m=length.elapsed_pace_seconds_per_100m,
                     stroke_count=length.stroke_count,
                     stroke_rate=length.stroke_rate,
                     swolf=length.swolf,
                     avg_hr_bpm=length.avg_hr_bpm,
+                    provenance_json=length.provenance,
+                    quality_warnings_json=list(length.quality_warnings),
                 )
                 for length in normalized.lengths
             ]
@@ -1581,15 +1834,39 @@ class SqlAlchemyActivityDataRepository:
         return True
 
     async def promote_normalization(
-        self, user_id: UserId, activity_id: EntityId, normalization_id: EntityId
+        self,
+        user_id: UserId,
+        activity_id: EntityId,
+        normalization_id: EntityId,
+        analysis_id: EntityId,
     ) -> None:
+        owned_normalization = exists(
+            select(ActivityNormalizationModel.id).where(
+                ActivityNormalizationModel.id == normalization_id.value,
+                ActivityNormalizationModel.user_id == user_id.value,
+                ActivityNormalizationModel.activity_id == activity_id.value,
+            )
+        )
+        matching_analysis = exists(
+            select(ActivityAnalysisModel.id).where(
+                ActivityAnalysisModel.id == analysis_id.value,
+                ActivityAnalysisModel.user_id == user_id.value,
+                ActivityAnalysisModel.activity_id == activity_id.value,
+                ActivityAnalysisModel.normalization_id == normalization_id.value,
+            )
+        )
         statement = (
             update(ActivityModel)
             .where(
                 ActivityModel.id == activity_id.value,
                 ActivityModel.user_id == user_id.value,
+                owned_normalization,
+                matching_analysis,
             )
-            .values(current_normalization_id=normalization_id.value)
+            .values(
+                current_normalization_id=normalization_id.value,
+                current_analysis_id=analysis_id.value,
+            )
             .returning(ActivityModel.id)
         )
         if await self._session.scalar(statement) is None:
@@ -1598,17 +1875,48 @@ class SqlAlchemyActivityDataRepository:
     async def get_analysis(self, user_id: UserId, activity_id: EntityId) -> ActivityAnalysis | None:
         statement = (
             select(ActivityAnalysisModel)
+            .join(
+                ActivityModel,
+                and_(
+                    ActivityModel.id == activity_id.value,
+                    ActivityModel.user_id == user_id.value,
+                    ActivityModel.current_normalization_id
+                    == ActivityAnalysisModel.normalization_id,
+                    ActivityModel.current_analysis_id == ActivityAnalysisModel.id,
+                ),
+            )
             .where(
                 ActivityAnalysisModel.user_id == user_id.value,
                 ActivityAnalysisModel.activity_id == activity_id.value,
             )
-            .order_by(ActivityAnalysisModel.created_at.desc())
-            .limit(1)
         )
         model = (await self._session.scalars(statement)).one_or_none()
         if model is None:
             return None
         return _analysis(model)
+
+    async def get_analysis_by_context(
+        self,
+        user_id: UserId,
+        activity_id: EntityId,
+        normalization_id: EntityId,
+        analysis_version: str,
+        planned_workout_id: EntityId | None,
+    ) -> ActivityAnalysis | None:
+        target = (
+            ActivityAnalysisModel.planned_workout_id.is_(None)
+            if planned_workout_id is None
+            else ActivityAnalysisModel.planned_workout_id == planned_workout_id.value
+        )
+        statement = select(ActivityAnalysisModel).where(
+            ActivityAnalysisModel.user_id == user_id.value,
+            ActivityAnalysisModel.activity_id == activity_id.value,
+            ActivityAnalysisModel.normalization_id == normalization_id.value,
+            ActivityAnalysisModel.analysis_version == analysis_version,
+            target,
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _analysis(model) if model is not None else None
 
     async def list_analyses(
         self, user_id: UserId, activity_ids: Sequence[EntityId]
@@ -1617,18 +1925,24 @@ class SqlAlchemyActivityDataRepository:
             return []
         statement = (
             select(ActivityAnalysisModel)
-            .where(
-                ActivityAnalysisModel.user_id == user_id.value,
-                ActivityAnalysisModel.activity_id.in_([item.value for item in activity_ids]),
+            .join(
+                ActivityModel,
+                and_(
+                    ActivityModel.user_id == user_id.value,
+                    ActivityModel.id.in_([item.value for item in activity_ids]),
+                    ActivityModel.current_normalization_id
+                    == ActivityAnalysisModel.normalization_id,
+                    ActivityModel.current_analysis_id == ActivityAnalysisModel.id,
+                ),
             )
-            .distinct(ActivityAnalysisModel.activity_id)
-            .order_by(ActivityAnalysisModel.activity_id, ActivityAnalysisModel.created_at.desc())
+            .where(ActivityAnalysisModel.user_id == user_id.value)
         )
         return [_analysis(model) for model in await self._session.scalars(statement)]
 
-    async def add_analysis(self, analysis: ActivityAnalysis) -> None:
-        self._session.add(
-            ActivityAnalysisModel(
+    async def add_analysis(self, analysis: ActivityAnalysis) -> ActivityAnalysis:
+        statement = (
+            insert(ActivityAnalysisModel)
+            .values(
                 id=analysis.id.value,
                 user_id=analysis.user_id.value,
                 activity_id=analysis.activity_id.value,
@@ -1646,7 +1960,29 @@ class SqlAlchemyActivityDataRepository:
                 summary_json=analysis.summary,
                 created_at=analysis.created_at,
             )
+            .on_conflict_do_nothing(
+                index_elements=(
+                    ActivityAnalysisModel.normalization_id,
+                    ActivityAnalysisModel.analysis_version,
+                    text(
+                        "coalesce(planned_workout_id, '00000000-0000-0000-0000-000000000000'::uuid)"
+                    ),
+                )
+            )
+            .returning(ActivityAnalysisModel.id)
         )
+        if await self._session.scalar(statement) is not None:
+            return analysis
+        winner = await self.get_analysis_by_context(
+            analysis.user_id,
+            analysis.activity_id,
+            analysis.normalization_id,
+            analysis.analysis_version,
+            analysis.planned_workout_id,
+        )
+        if winner is None:
+            raise RuntimeError("activity analysis conflict could not be resolved")
+        return winner
 
     async def get_match(
         self, user_id: UserId, activity_id: EntityId

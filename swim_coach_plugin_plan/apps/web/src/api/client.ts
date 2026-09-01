@@ -11,6 +11,8 @@ import type {
   ProblemDetail,
   SwimActivity,
   SwimActivityDetail,
+  SwimActivityV2,
+  SwimActivityDetailV2,
   CanonicalWorkout,
   Workout,
   WorkoutSaveResult,
@@ -62,6 +64,21 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (await response.json()) as T;
 }
 
+async function requestV2<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers);
+  if (init.body) headers.set("Content-Type", "application/json");
+  if (init.method && !["GET", "HEAD"].includes(init.method)) {
+    const token = csrfToken();
+    if (token) headers.set("X-CSRF-Token", decodeURIComponent(token));
+  }
+  const response = await fetch(`/api/v2${path}`, { ...init, credentials: "include", headers });
+  if (!response.ok) {
+    const problem = (await response.json()) as ProblemDetail;
+    throw new ApiError(response.status, problem);
+  }
+  return (await response.json()) as T;
+}
+
 export const api = {
   authConfig: () => request<AuthConfig>("/auth/config"),
   me: () => request<Me>("/me"),
@@ -110,10 +127,10 @@ export const api = {
   garminConnection: () => request<GarminConnection>("/integrations/garmin"),
   garminDevices: () => request<GarminDevice[]>("/integrations/garmin/devices"),
   garminActivities: () => request<SwimActivity[]>("/integrations/garmin/activities"),
-  activities: () => request<SwimActivity[]>("/activities"),
-  activity: (id: string) => request<SwimActivityDetail>(`/activities/${id}`),
+  activities: () => requestV2<SwimActivityV2[]>("/activities"),
+  activity: (id: string) => requestV2<SwimActivityDetailV2>(`/activities/${id}`),
   processActivity: (id: string) =>
-    request<GarminSyncJob>(`/activities/${id}/process`, {
+    requestV2<GarminSyncJob>(`/activities/${id}/process`, {
       method: "POST",
       headers: { "Idempotency-Key": crypto.randomUUID() },
     }),
@@ -131,7 +148,7 @@ export const api = {
       comment: string | null;
       version: number | null;
     },
-  ) => request<SwimActivityDetail["feedback"]>(`/activities/${id}/feedback`, {
+  ) => requestV2<SwimActivityDetail["feedback"]>(`/activities/${id}/feedback`, {
     method: "PUT",
     headers: { "Idempotency-Key": idempotencyKey },
     body: JSON.stringify(payload),

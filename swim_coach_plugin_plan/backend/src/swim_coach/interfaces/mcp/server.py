@@ -35,6 +35,7 @@ from swim_coach.application.services.mcp_read import (
     McpPrincipal,
     McpReadService,
     McpResult,
+    McpResultV2,
     McpWarning,
 )
 from swim_coach.application.services.mcp_write import (
@@ -115,6 +116,8 @@ _GARMIN_WARNING_MESSAGES = {
     ),
 }
 
+_McpSchemaVersion = Literal["1.0", "2.0"]
+
 
 def _garmin_warning(code: str) -> McpWarning:
     return McpWarning(
@@ -155,6 +158,7 @@ def create_mcp_server(
     """Create a fail-closed read server; private tools exist only with OAuth configured."""
 
     FastMCPSettings.model_rebuild(_types_namespace={"FastMCP": FastMCP})
+    envelope_schema_version: _McpSchemaVersion = "2.0" if v2_enabled else "1.0"
     oauth_enabled = bool(read_service and token_verifier and oauth_issuer and oauth_resource)
     auth: AuthSettings | None = None
     if oauth_enabled:
@@ -238,6 +242,7 @@ def create_mcp_server(
                     message="OAuth authentication is required.",
                     request_id=request_id,
                     oauth_resource=configured_oauth_resource,
+                    schema_version=envelope_schema_version,
                 ),
             )
         principal: McpPrincipal | None = None
@@ -259,7 +264,7 @@ def create_mcp_server(
                 if result.status in {"OK", "NOT_FOUND", "PARTIAL"}
                 else "FAILED",
             )
-            return result
+            return _result_with_schema_version(result, envelope_schema_version)
         except DomainError as error:
             if principal is not None:
                 await read_service.record_invocation(
@@ -280,9 +285,18 @@ def create_mcp_server(
                         request_id=request_id,
                         oauth_resource=configured_oauth_resource,
                         details=error.details,
+                        schema_version=envelope_schema_version,
                     ),
                 )
-            raise ToolError(_error(error.code, error.message, request_id, error.details)) from error
+            raise ToolError(
+                _error(
+                    error.code,
+                    error.message,
+                    request_id,
+                    error.details,
+                    schema_version=envelope_schema_version,
+                )
+            ) from error
 
     async def execute_write(
         tool_name: str,
@@ -297,6 +311,7 @@ def create_mcp_server(
                     "MCP_WRITE_DISABLED",
                     "MCP writes are disabled by the server kill switch.",
                     _safe_request_id(ctx.request_id),
+                    schema_version=envelope_schema_version,
                 )
             )
         request_id = _safe_request_id(ctx.request_id)
@@ -309,6 +324,7 @@ def create_mcp_server(
                     message="OAuth authentication is required.",
                     request_id=request_id,
                     oauth_resource=configured_oauth_resource,
+                    schema_version=envelope_schema_version,
                 ),
             )
         principal: McpPrincipal | None = None
@@ -332,7 +348,7 @@ def create_mcp_server(
                 correlation_id=correlation_id,
                 causation_id=causation_id,
             )
-            return result
+            return _result_with_schema_version(result, envelope_schema_version)
         except DomainError as error:
             if principal is not None:
                 await read_service.record_invocation(
@@ -355,9 +371,18 @@ def create_mcp_server(
                         request_id=request_id,
                         oauth_resource=configured_oauth_resource,
                         details=error.details,
+                        schema_version=envelope_schema_version,
                     ),
                 )
-            raise ToolError(_error(error.code, error.message, request_id, error.details)) from error
+            raise ToolError(
+                _error(
+                    error.code,
+                    error.message,
+                    request_id,
+                    error.details,
+                    schema_version=envelope_schema_version,
+                )
+            ) from error
 
     if v2_enabled:
         if write_service is None or coach_service is None:
@@ -548,6 +573,7 @@ def create_mcp_server(
                     "VALIDATION_FAILED",
                     "limit must be between 1 and 20.",
                     _safe_request_id(ctx.request_id),
+                    schema_version=envelope_schema_version,
                 )
             )
         if before is not None and before.tzinfo is None:
@@ -556,6 +582,7 @@ def create_mcp_server(
                     "VALIDATION_FAILED",
                     "before must include a timezone.",
                     _safe_request_id(ctx.request_id),
+                    schema_version=envelope_schema_version,
                 )
             )
         args = {
@@ -568,7 +595,7 @@ def create_mcp_server(
             ctx,
             frozenset({"activities:read"}),
             args,
-            lambda principal, request_id: read_service.list_recent_swims(
+            lambda principal, request_id: read_service.list_recent_swims_v1(
                 principal,
                 request_id,
                 limit=limit,
@@ -600,6 +627,7 @@ def create_mcp_server(
                     "VALIDATION_FAILED",
                     "max_intervals must be between 1 and 100.",
                     _safe_request_id(ctx.request_id),
+                    schema_version=envelope_schema_version,
                 )
             )
         args = {
@@ -613,7 +641,7 @@ def create_mcp_server(
             ctx,
             frozenset({"activities:read", "analytics:read"}),
             args,
-            lambda principal, request_id: read_service.get_swim_activity(
+            lambda principal, request_id: read_service.get_swim_activity_v1(
                 principal,
                 request_id,
                 activity_id=EntityId(activity_id),
@@ -642,7 +670,7 @@ def create_mcp_server(
             ctx,
             frozenset({"goals:read", "analytics:read"}),
             args,
-            lambda principal, request_id: read_service.get_goal_progress(
+            lambda principal, request_id: read_service.get_goal_progress_v1(
                 principal, request_id, goal_id=EntityId(goal_id) if goal_id else None
             ),
         )
@@ -675,10 +703,13 @@ def create_mcp_server(
             write_service,
             execute,
             pwa_base_url=pwa_base_url,
+            schema_version=envelope_schema_version,
         )
 
     _apply_tool_security_schemes(server)
     _harden_tool_schemas(server)
+    if not v2_enabled:
+        _freeze_v1_tool_output_schemas(server)
     return server
 
 
@@ -1122,6 +1153,7 @@ def _register_ui_tools(
     ],
     *,
     pwa_base_url: str,
+    schema_version: _McpSchemaVersion,
 ) -> None:
     """Register presentation-only P09 tools after the headless data/action surface."""
 
@@ -1148,6 +1180,7 @@ def _register_ui_tools(
                     "VALIDATION_FAILED",
                     "week_start is only valid for the week view.",
                     _safe_request_id(ctx.request_id),
+                    schema_version=schema_version,
                 )
             )
         if view == "week" and date is not None:
@@ -1156,6 +1189,7 @@ def _register_ui_tools(
                     "VALIDATION_FAILED",
                     "date is only valid for the today view.",
                     _safe_request_id(ctx.request_id),
+                    schema_version=schema_version,
                 )
             )
         args = {
@@ -1209,7 +1243,7 @@ def _register_ui_tools(
         args = {"activity_id": str(activity_id), "max_intervals": max_intervals}
 
         async def query(principal: McpPrincipal, request_id: str) -> McpResult:
-            result = await read_service.get_swim_activity(
+            result = await read_service.get_swim_activity_v1(
                 principal,
                 request_id,
                 activity_id=EntityId(activity_id),
@@ -1241,7 +1275,7 @@ def _register_ui_tools(
         args = {"goal_id": str(goal_id) if goal_id else None}
 
         async def query(principal: McpPrincipal, request_id: str) -> McpResult:
-            result = await read_service.get_goal_progress(
+            result = await read_service.get_goal_progress_v1(
                 principal,
                 request_id,
                 goal_id=EntityId(goal_id) if goal_id else None,
@@ -1361,7 +1395,7 @@ def _register_v2_tools(
     )
     async def get_coach_context(
         ctx: Context[Any, Any, Any], include_constraints: bool = True
-    ) -> McpResult:
+    ) -> McpResultV2:
         args = {"include_constraints": include_constraints}
 
         async def query(principal: McpPrincipal, request_id: str) -> McpResult:
@@ -1397,7 +1431,7 @@ def _register_v2_tools(
                 ),
             )
 
-        return await execute("get_coach_context", ctx, scope, args, query)
+        return _as_v2_result(await execute("get_coach_context", ctx, scope, args, query))
 
     @server.tool(
         name="get_workouts",
@@ -1412,26 +1446,28 @@ def _register_v2_tools(
         date: LocalDate | None = None,
         week_start: LocalDate | None = None,
         include_steps: bool = True,
-    ) -> McpResult:
+    ) -> McpResultV2:
         args = {
             "workout_id": str(workout_id) if workout_id else None,
             "date": date.isoformat() if date else None,
             "week_start": week_start.isoformat() if week_start else None,
             "include_steps": include_steps,
         }
-        return await execute(
-            "get_workouts",
-            ctx,
-            scope,
-            args,
-            lambda principal, request_id: read_service.get_workouts(
-                principal,
-                request_id,
-                workout_id=EntityId(workout_id) if workout_id else None,
-                target_date=date,
-                week_start=week_start,
-                include_steps=include_steps,
-            ),
+        return _as_v2_result(
+            await execute(
+                "get_workouts",
+                ctx,
+                scope,
+                args,
+                lambda principal, request_id: read_service.get_workouts(
+                    principal,
+                    request_id,
+                    workout_id=EntityId(workout_id) if workout_id else None,
+                    target_date=date,
+                    week_start=week_start,
+                    include_steps=include_steps,
+                ),
+            )
         )
 
     @server.tool(
@@ -1446,7 +1482,7 @@ def _register_v2_tools(
         activity_id: UUID | None = None,
         limit: Annotated[int, Field(ge=1, le=20)] = 5,
         include_intervals: bool = True,
-    ) -> McpResult:
+    ) -> McpResultV2:
         args = {
             "activity_id": str(activity_id) if activity_id else None,
             "limit": limit,
@@ -1471,7 +1507,7 @@ def _register_v2_tools(
                 include_analysis_summary=True,
             )
 
-        return await execute("get_swims", ctx, scope, args, query)
+        return _as_v2_result(await execute("get_swims", ctx, scope, args, query))
 
     @server.tool(
         name="save_workout",
@@ -1491,7 +1527,7 @@ def _register_v2_tools(
         scheduled_date: LocalDate | None = None,
         scheduled_start_time: time | None = None,
         change_reason: Annotated[str | None, Field(max_length=500)] = None,
-    ) -> McpResult:
+    ) -> McpResultV2:
         args = {
             "workout_id": str(workout_id) if workout_id else None,
             "pool_id": str(pool_id) if pool_id else None,
@@ -1538,7 +1574,7 @@ def _register_v2_tools(
                 human_summary=f"Saved {detail.workout.title} locally.",
             )
 
-        return await execute_write("save_workout", ctx, scope, args, command)
+        return _as_v2_result(await execute_write("save_workout", ctx, scope, args, command))
 
     @server.tool(
         name="publish_workout",
@@ -1556,7 +1592,7 @@ def _register_v2_tools(
         scheduled_date: LocalDate | None = None,
         scheduled_start_time: time | None = None,
         target_device_id: UUID | None = None,
-    ) -> McpResult:
+    ) -> McpResultV2:
         args = {
             "workout_id": str(workout_id),
             "scheduled_date": scheduled_date.isoformat() if scheduled_date else None,
@@ -1596,7 +1632,7 @@ def _register_v2_tools(
                 ),
             )
 
-        return await execute_write("publish_workout", ctx, scope, args, command)
+        return _as_v2_result(await execute_write("publish_workout", ctx, scope, args, command))
 
     @server.tool(
         name="delete_workout",
@@ -1611,7 +1647,7 @@ def _register_v2_tools(
     async def delete_workout(
         workout_id: UUID,
         ctx: Context[Any, Any, Any],
-    ) -> McpResult:
+    ) -> McpResultV2:
         args = {"workout_id": str(workout_id)}
 
         async def command(
@@ -1640,7 +1676,7 @@ def _register_v2_tools(
                 ),
             )
 
-        return await execute_write("delete_workout", ctx, scope, args, command)
+        return _as_v2_result(await execute_write("delete_workout", ctx, scope, args, command))
 
     @server.tool(
         name="generate_week",
@@ -1656,7 +1692,7 @@ def _register_v2_tools(
         max_session_duration_minutes: Annotated[int | None, Field(ge=20, le=120)] = None,
         focus: Literal["BALANCED", "TECHNIQUE", "ENDURANCE", "GOAL_PACE"] = "BALANCED",
         avoid_high_intensity: bool = False,
-    ) -> McpResult:
+    ) -> McpResultV2:
         args = {
             "week_start": week_start.isoformat(),
             "session_count": session_count,
@@ -1697,7 +1733,7 @@ def _register_v2_tools(
                 human_summary=f"Saved {len(result.workout_ids)} workouts for the week.",
             )
 
-        return await execute_write("generate_week", ctx, scope, args, command)
+        return _as_v2_result(await execute_write("generate_week", ctx, scope, args, command))
 
     @server.tool(
         name="sync_garmin",
@@ -1710,7 +1746,7 @@ def _register_v2_tools(
         ctx: Context[Any, Any, Any],
         from_date: LocalDate | None = None,
         force: bool = False,
-    ) -> McpResult:
+    ) -> McpResultV2:
         args = {"from_date": from_date.isoformat() if from_date else None, "force": force}
 
         async def command(
@@ -1726,7 +1762,7 @@ def _register_v2_tools(
                 idempotency_key=f"coach-sync:{bucket}:{from_date}:{force}",
             )
 
-        return await execute_write("sync_garmin", ctx, scope, args, command)
+        return _as_v2_result(await execute_write("sync_garmin", ctx, scope, args, command))
 
     @server.tool(
         name="save_feedback",
@@ -1744,7 +1780,7 @@ def _register_v2_tools(
         pain_location: Annotated[str | None, Field(max_length=120)] = None,
         pain_intensity: Annotated[int | None, Field(ge=1, le=10)] = None,
         notes: Annotated[str | None, Field(max_length=2000)] = None,
-    ) -> McpResult:
+    ) -> McpResultV2:
         args = {
             "activity_id": str(activity_id),
             "rpe": rpe,
@@ -1777,7 +1813,7 @@ def _register_v2_tools(
                 correlation_id=correlation_id,
             )
 
-        return await execute_write("save_feedback", ctx, scope, args, command)
+        return _as_v2_result(await execute_write("save_feedback", ctx, scope, args, command))
 
 
 def _apply_v2_tool_security_schemes(server: SwimCoachFastMCP) -> None:
@@ -1841,6 +1877,24 @@ def _harden_tool_schemas(server: FastMCP) -> None:
         tool.fn_metadata.arg_model.model_rebuild(force=True)
 
 
+def _freeze_v1_tool_output_schemas(server: FastMCP) -> None:
+    """Advertise the legacy server's already-enforced runtime envelope as exactly v1."""
+
+    for tool in server._tool_manager._tools.values():
+        for schema in (tool.output_schema, tool.fn_metadata.output_schema):
+            if schema is None:
+                continue
+            properties = schema.get("properties")
+            if not isinstance(properties, dict):
+                continue
+            properties["schema_version"] = {
+                "const": "1.0",
+                "default": "1.0",
+                "title": "Schema Version",
+                "type": "string",
+            }
+
+
 def _authorization_error_result(
     *,
     code: str,
@@ -1848,6 +1902,7 @@ def _authorization_error_result(
     request_id: str,
     oauth_resource: str,
     details: dict[str, str | int | bool] | None = None,
+    schema_version: _McpSchemaVersion,
 ) -> CallToolResult:
     """Return an MCP OAuth challenge while preserving a model-readable error envelope."""
 
@@ -1855,6 +1910,7 @@ def _authorization_error_result(
     raw_scope = safe_details.get("scope")
     required_scopes = raw_scope.split() if isinstance(raw_scope, str) else []
     structured = McpResult(
+        schema_version=schema_version,
         request_id=request_id,
         status="PARTIAL",
         data={
@@ -1870,7 +1926,13 @@ def _authorization_error_result(
         content=[
             TextContent(
                 type="text",
-                text=_error(code, message, request_id, safe_details),
+                text=_error(
+                    code,
+                    message,
+                    request_id,
+                    safe_details,
+                    schema_version=schema_version,
+                ),
             )
         ],
         structuredContent=structured.model_dump(mode="json"),
@@ -1920,10 +1982,12 @@ def _error(
     message: str,
     request_id: str,
     details: dict[str, str | int | bool] | None = None,
+    *,
+    schema_version: _McpSchemaVersion = "2.0",
 ) -> str:
     return json.dumps(
         {
-            "schema_version": "1.0",
+            "schema_version": schema_version,
             "request_id": request_id,
             "status": "NEEDS_AUTHORIZATION"
             if code in {"AUTH_REQUIRED", "SCOPE_REQUIRED"}
@@ -1939,6 +2003,25 @@ def _error(
         sort_keys=True,
         separators=(",", ":"),
     )
+
+
+def _result_with_schema_version(result: McpResult, schema_version: _McpSchemaVersion) -> McpResult:
+    """Return a server-mode envelope without mutating the service result."""
+
+    if result.schema_version == schema_version:
+        return result
+    return result.model_copy(update={"schema_version": schema_version})
+
+
+def _as_v2_result(result: McpResult) -> McpResultV2:
+    """Narrow a boundary result to the exact schema advertised by v2 tools."""
+
+    # OAuth challenges are returned as CallToolResult so the MCP transport can
+    # attach WWW-Authenticate metadata. Preserve that special transport result;
+    # the structured envelope it carries was already created as schema v2.
+    if isinstance(result, CallToolResult):
+        return cast(McpResultV2, result)
+    return McpResultV2.model_validate(result.model_dump(mode="python"))
 
 
 def _safe_request_id(value: str) -> str:

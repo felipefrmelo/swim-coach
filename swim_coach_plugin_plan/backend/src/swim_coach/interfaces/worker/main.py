@@ -151,7 +151,11 @@ class Worker:
                 UserId.parse(raw_user_id), EntityId.parse(raw_request_id)
             )
         except DomainError as exc:
-            return await self._finish_failure(job, exc.code, retryable=False)
+            return await self._finish_failure(
+                job,
+                exc.code,
+                retryable=exc.code == "PRIVACY_STORAGE_DELETE_FAILED",
+            )
         async with self._uow_factory() as uow:
             finished = await uow.jobs.mark_succeeded(job.id, self._worker_id, datetime.now(UTC))
             await uow.commit()

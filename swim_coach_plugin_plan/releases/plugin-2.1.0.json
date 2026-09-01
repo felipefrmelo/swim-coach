@@ -40,18 +40,21 @@
     "plugins/swim-coach/skills/post-swim-checkin/SKILL.md": "dd2407a9cfe41b77e1bfb9cabd07f4a7280cbb8a93b4aaa1e9ace44a3e761511",
     "plugins/swim-coach/skills/publish-to-garmin/SKILL.md": "1b16cb3c4edd8e723f0cbd9309f63d2cfd061289ef42388bb17620c932142eae",
     "plugins/swim-coach/skills/review-latest-swim/SKILL.md": "623c5c773a20709b5f3cd90ccedea01214c028bc66fc3b16898e56e681c082e6",
-    "contracts/mcp-tools.yaml": "628eac9e4986643759c96afc1116ab05e032e7e13b0dc83b8a9c1cad993fe9bf",
+    "contracts/mcp-tools.yaml": "bfca943f15379ae362b4ed8579218f2617f5287915cf5a8637fa49e9d104f4cc",
+    "contracts/tool-result-envelope.schema.json": "c7b52d450f9bccef8fcbf95743200a6f78a9c0473d7a2935a94d2b4800db40a0",
+    "contracts/tool-result-envelope-v2.schema.json": "056a6cbe89eaedf1663635ec7fd78b8ca718f61faa4f39c6979e118e41fb4d3f",
     "contracts/oauth-scopes.md": "5e066ad38798ba739fe854a88058543ed447fa7506729b02478f9450d87c845a",
     "contracts/capability-release-matrix.yaml": "83792df55d98ddd664b0f65ccdf39135ecd347809c5b21b8c3b0cc4ea484f11e",
-    "contracts/openapi-skeleton.yaml": "1d4b5dd34b50c055840b75648c6dc40faf874c294248536378c45857e8c35362"
+    "contracts/openapi-skeleton.yaml": "75f0807326607f0deb6f6e7d57f9ae4462764d2bf947c4415fa375fca9ad7356"
   },
   "verification": {
     "skill_validation": 8,
     "p14_evals": 48,
-    "focused_unit_contract_tests": 100,
-    "postgresql_delete_and_migration_tests": 4,
-    "full_check": "132-python-and-4-web-passed",
-    "production_smoke": "real-disposable-publish-delete-canary-passed"
+    "focused_unit_property_contract_tests": 217,
+    "postgresql_integration_tests": 32,
+    "full_check": "249-python-and-23-web-passed",
+    "targeted_e2e": "4-passed",
+    "production_smoke": "not-run-for-this-worktree"
   },
   "personal_install": {
     "marketplace": "personal",
@@ -63,10 +66,10 @@
     "url": "https://swim-coach.ozix.com.br",
     "runtime_tool_count": 9,
     "target_tool_count": 9,
-    "schema_revision": "000011",
-    "health": "ready",
-    "garmin_write_mode": "live",
-    "status": "deployed"
+    "schema_revision": "000012",
+    "health": "not-verified",
+    "garmin_write_mode": "not-exercised",
+    "status": "pending"
   },
-  "pending_gates": []
+  "pending_gates": ["production-deploy-and-smoke"]
 }

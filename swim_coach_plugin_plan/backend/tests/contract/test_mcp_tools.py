@@ -27,8 +27,35 @@ class ContractVerifier:
 
 
 @pytest.mark.asyncio
+async def test_v1_list_tools_freezes_the_advertised_envelope_at_1_0() -> None:
+    server = create_mcp_server(
+        read_service=cast(McpReadService, object()),
+        write_service=cast(McpWriteService, object()),
+        coach_service=cast(CoachCommandService, object()),
+        token_verifier=ContractVerifier(),
+        oauth_issuer="https://tenant.example.test",
+        oauth_resource="https://swim.example.test/mcp",
+        v2_enabled=False,
+    )
+
+    listed = await server.list_tools()
+
+    assert listed
+    for tool in listed:
+        assert tool.outputSchema is not None
+        version = tool.outputSchema["properties"]["schema_version"]
+        assert version == {
+            "const": "1.0",
+            "default": "1.0",
+            "title": "Schema Version",
+            "type": "string",
+        }
+
+
+@pytest.mark.asyncio
 async def test_v2_announces_exactly_nine_intent_tools_with_one_scope() -> None:
     contract = yaml.safe_load((ROOT / "contracts/mcp-tools.yaml").read_text())
+    assert contract["result_envelope"] == "./tool-result-envelope-v2.schema.json"
     expected = {item["name"]: item for item in contract["tools"]}
     server = create_mcp_server(
         read_service=cast(McpReadService, object()),
@@ -60,6 +87,9 @@ async def test_v2_announces_exactly_nine_intent_tools_with_one_scope() -> None:
             declared["input"].get("required", [])
         )
         assert set(tool.parameters["properties"]) == set(declared["input"]["properties"])
+        assert tool.output_schema["properties"]["schema_version"]["const"] == "2.0"
+        assert listed[name].outputSchema is not None
+        assert listed[name].outputSchema["properties"]["schema_version"]["const"] == "2.0"
         assert listed[name].securitySchemes == [{"type": "oauth2", "scopes": ["coach"]}]
         assert listed[name].meta is not None
         assert listed[name].meta["securitySchemes"] == [{"type": "oauth2", "scopes": ["coach"]}]

@@ -5,7 +5,7 @@ import { Activity, AlertTriangle, ChevronRight, Gauge, HeartPulse, RefreshCw, Sh
 
 import { api } from "../api/client";
 import { saveFeedbackResilient } from "../offline/feedbackQueue";
-import type { SwimActivityDetail } from "../api/types";
+import type { SwimActivityDetailV2 } from "../api/types";
 import { ErrorState, LoadingState, SavedNotice } from "../components/AsyncState";
 
 export function ActivitiesPage() {
@@ -16,10 +16,10 @@ export function ActivitiesPage() {
     <Page title="Atividades" eyebrow="Diário de natação · P03">
       <p className="page-copy -mt-4">Dados normalizados e análises reproduzíveis. O arquivo FIT permanece privado no servidor.</p>
       {activities.data.length ? <div className="grid gap-3">{activities.data.map((item) => (
-        <Link className="surface-card activity-link" key={item.id} to="/activities/$activityId" params={{ activityId: item.id }}>
+        <Link className="surface-card activity-link" key={item.activity_id} to="/activities/$activityId" params={{ activityId: item.activity_id }}>
           <span className="activity-icon"><Waves className="size-5" /></span>
-          <div className="min-w-0 flex-1"><p className="font-semibold text-slate-900">{item.name}</p><p className="mt-1 text-sm text-slate-500">{formatDate(item.start_time_utc)} · {item.pool_length_m ?? 20} m</p></div>
-          <div className="text-right"><p className="font-mono text-lg font-bold text-cyan-950">{item.distance_m.toLocaleString("pt-BR")} m</p><p className="text-xs text-slate-500">{formatDuration(item.elapsed_seconds)}</p></div>
+          <div className="min-w-0 flex-1"><p className="font-semibold text-slate-900">{item.name}</p><p className="mt-1 text-sm text-slate-500">{formatDate(item.started_at_local, item.timezone)} · {poolLabel(item.pool.length_m)}</p></div>
+          <div className="text-right"><p className="font-mono text-lg font-bold text-cyan-950">{item.distance_m.toLocaleString("pt-BR")} m</p><p className="text-xs text-slate-500">{formatDuration(item.durations.elapsed_s)}</p></div>
           <ChevronRight className="size-5 text-slate-400" />
         </Link>
       ))}</div> : <section className="empty-card"><Waves className="size-7 text-cyan-800" /><div><h2 className="section-title">Seu diário começa no primeiro sync</h2><p className="mt-2 text-sm leading-6 text-slate-600">Conecte a Garmin e importe uma natação para ver séries, ritmo e qualidade dos dados.</p><Link className="primary-button mt-6" to="/garmin">Abrir Garmin</Link></div></section>}
@@ -30,32 +30,36 @@ export function ActivitiesPage() {
 export function ActivityDetailPage() {
   const { activityId } = useParams({ strict: false }) as { activityId: string };
   const queryClient = useQueryClient();
-  const detail = useQuery({ queryKey: ["activity", activityId], queryFn: () => api.activity(activityId), refetchInterval: (query) => query.state.data?.normalized ? false : 5_000 });
+  const detail = useQuery({ queryKey: ["activity", activityId], queryFn: () => api.activity(activityId), refetchInterval: (query) => query.state.data?.normalization ? false : 5_000 });
   const process = useMutation({ mutationFn: () => api.processActivity(activityId), onSuccess: async () => queryClient.invalidateQueries({ queryKey: ["activity", activityId] }) });
   if (detail.isLoading) return <LoadingState label="Calculando a análise…" />;
   if (!detail.data) return <ErrorState message="Não foi possível abrir esta atividade." />;
   const item = detail.data;
   const metrics = item.analysis?.metrics;
+  const efficiency = firstStrokeEfficiency(metrics);
+  const representativeSet = firstFreestyleWorkSet(metrics);
+  const analyzedRest = analysisDuration(metrics, "rest_s");
+  const restUsesPlannedContext = item.analysis?.flags.includes("REST_CLASSIFIED_FROM_PLANNED_WORKOUT") ?? false;
   return (
-    <Page title={item.activity.name} eyebrow={formatDate(item.activity.start_time_utc)}>
+    <Page title={item.name} eyebrow={formatDate(item.started_at_local, item.timezone)}>
       <section className="activity-hero">
-        <div><p className="text-sm text-cyan-100">Distância concluída</p><p className="mt-2 font-mono text-4xl font-bold tracking-tight">{item.activity.distance_m.toLocaleString("pt-BR")}<span className="ml-2 text-base font-medium text-cyan-200">m</span></p></div>
-        <div className="activity-hero-grid"><HeroMetric label="Tempo" value={formatDuration(item.activity.elapsed_seconds)} /><HeroMetric label="Ritmo" value={formatPace(metrics?.average_pace_seconds_per_100m)} /></div>
+        <div><p className="text-sm text-cyan-100">Distância concluída</p><p className="mt-2 font-mono text-4xl font-bold tracking-tight">{item.distance_m.toLocaleString("pt-BR")}<span className="ml-2 text-base font-medium text-cyan-200">m</span></p></div>
+        <div className="activity-hero-grid"><HeroMetric label="Tempo da sessão (elapsed)" value={formatDuration(item.durations.elapsed_s)} /><HeroMetric label="Ritmo nadando (moving)" value={formatPace(item.paces.moving_s_per_100m)} /><HeroMetric label="Ritmo por extensões ativas" value={formatPace(item.paces.swim_s_per_100m)} /><HeroMetric label="Ritmo da sessão (elapsed)" value={formatPace(item.paces.session_s_per_100m)} /></div>
       </section>
 
-      {!item.normalized && <section className="setup-notice"><AlertTriangle className="size-5" /><div className="flex-1"><p className="font-semibold">FIT ainda não normalizado</p><p className="mt-1">O resumo Garmin está seguro. Solicite o processamento para baixar e analisar o arquivo privado.</p><button className="secondary-button mt-4 gap-2" onClick={() => process.mutate()} disabled={process.isPending} type="button"><RefreshCw className={`size-4 ${process.isPending ? "animate-spin" : ""}`} />Processar atividade</button></div></section>}
+      {!item.normalization && <section className="setup-notice"><AlertTriangle className="size-5" /><div className="flex-1"><p className="font-semibold">FIT ainda não normalizado</p><p className="mt-1">O resumo Garmin está seguro. Solicite o processamento para baixar e analisar o arquivo privado.</p><button className="secondary-button mt-4 gap-2" onClick={() => process.mutate()} disabled={process.isPending} type="button"><RefreshCw className={`size-4 ${process.isPending ? "animate-spin" : ""}`} />Processar atividade</button></div></section>}
 
       {item.analysis && <>
         <section className="grid grid-cols-2 gap-3">
-          <Metric icon={Gauge} label="Consistência" value={formatPercent(metrics?.consistency_cv)} detail="CV · menor é melhor" />
-          <Metric icon={Timer} label="Descanso" value={formatDuration(metrics?.total_rest_seconds)} detail="entre os blocos" />
-          <Metric icon={Activity} label="Fade" value={formatSignedPercent(metrics?.fade_percent)} detail="positivo = desacelerou" />
-          <Metric icon={Waves} label="SWOLF" value={formatNumber(metrics?.average_swolf)} detail={`piscina de ${item.activity.pool_length_m ?? 20} m`} />
+          <Metric icon={Gauge} label="Consistência" value={formatPercent(representativeSet?.coefficient_of_variation)} detail="CV do set equivalente · menor é melhor" />
+          <Metric icon={Timer} label={restUsesPlannedContext ? "Descanso contextual" : "Descanso explícito"} value={formatDuration(analyzedRest ?? item.durations.rest_s)} detail={restUsesPlannedContext ? "combina evidência FIT com REST alinhado ao planejamento; demais paradas não são assumidas" : "confirmado por extensões IDLE no FIT normalizado"} />
+          <Metric icon={Activity} label="Fade" value={formatSignedPercent(representativeSet?.fade_percent)} detail="set equivalente · positivo = desacelerou" />
+          <Metric icon={Waves} label="SWOLF contextual" value={formatNumber(efficiency?.average_swolf)} detail={`${strokeLabel(typeof efficiency?.stroke === "string" ? efficiency.stroke : null)} · ${poolLabel(item.pool.length_m)} · compare apenas ritmos semelhantes`} />
         </section>
-        <section className={`quality-card quality-${item.quality}`}><span className="icon-chip"><ShieldCheck className="size-5" /></span><div><div className="flex flex-wrap items-center gap-2"><h2 className="section-title">Qualidade {qualityLabel(item.quality)}</h2><span className="badge">{Math.round(Number(item.completeness) * 100)}%</span></div><p className="mt-2 text-sm leading-6 text-slate-600">{item.warnings.length ? item.warnings.map(warningLabel).join(" · ") : "Sessão, séries e extensões coerentes para esta análise."}</p><p className="mt-2 text-xs text-slate-400">Parser {item.parser_version}</p></div></section>
+        <section className={`quality-card quality-${item.data_quality.level.toLowerCase()}`}><span className="icon-chip"><ShieldCheck className="size-5" /></span><div><div className="flex flex-wrap items-center gap-2"><h2 className="section-title">Qualidade {qualityLabel(item.data_quality.level)}</h2><span className="badge">{Math.round(Number(item.normalization?.completeness ?? 0) * 100)}%</span></div><p className="mt-2 text-sm leading-6 text-slate-600">{item.data_quality.reasons.length ? item.data_quality.reasons.map(warningLabel).join(" · ") : "Sessão, séries e extensões coerentes para esta análise."}</p><p className="mt-2 text-xs text-slate-400">Parser {item.normalization?.parser_version}</p></div></section>
       </>}
 
-      <section><div className="mb-4"><p className="eyebrow">Séries detectadas</p><h2 className="section-title mt-2">Como o treino aconteceu</h2></div>{item.intervals.length ? <div className="grid gap-3">{item.intervals.map((interval) => <article className="interval-row" key={interval.index}><div className="interval-index">{interval.index + 1}</div><div className="flex-1"><p className="font-semibold">{interval.distance_m} m · {strokeLabel(interval.stroke_type)}</p><p className="mt-1 text-sm text-slate-500">{formatDuration(interval.duration_seconds)} ativo · {formatDuration(interval.rest_seconds)} descanso</p></div><p className="font-mono text-sm font-bold text-cyan-950">{formatPace(interval.pace_seconds_per_100m)}</p></article>)}</div> : <section className="empty-card"><AlertTriangle className="size-6 text-amber-600" /><p className="text-sm leading-6 text-slate-600">O arquivo não trouxe séries utilizáveis. A qualidade permanece explícita; nada foi inventado.</p></section>}</section>
+      <section><div className="mb-4"><p className="eyebrow">Séries detectadas</p><h2 className="section-title mt-2">Como o treino aconteceu</h2></div>{item.intervals.length ? <div className="grid gap-3">{item.intervals.map((interval) => <article className="interval-row" key={interval.index}><div className="interval-index">{interval.index + 1}</div><div className="flex-1"><p className="font-semibold">{intervalTitle(interval)}</p><p className="mt-1 text-sm text-slate-500">{intervalDetail(interval)}</p></div><p className="font-mono text-sm font-bold text-cyan-950">{intervalPace(interval)}</p></article>)}</div> : <section className="empty-card"><AlertTriangle className="size-6 text-amber-600" /><p className="text-sm leading-6 text-slate-600">O arquivo não trouxe séries utilizáveis. A qualidade permanece explícita; nada foi inventado.</p></section>}</section>
 
       <FeedbackCard activityId={activityId} detail={item} />
       <section className="privacy-note"><ShieldCheck className="size-5" /><p>FIT bruto e payload Garmin não são retornados por esta API. Métricas esportivas não são diagnóstico médico.</p></section>
@@ -63,7 +67,7 @@ export function ActivityDetailPage() {
   );
 }
 
-function FeedbackCard({ activityId, detail }: { activityId: string; detail: SwimActivityDetail }) {
+function FeedbackCard({ activityId, detail }: { activityId: string; detail: SwimActivityDetailV2 }) {
   const queryClient = useQueryClient();
   const current = detail.feedback;
   const [rpe, setRpe] = useState(current?.rpe ?? 5);
@@ -83,12 +87,21 @@ function ChoiceRow({ label, values, selected, onSelect, suffix }: { label: strin
 function HeroMetric({ label, value }: { label: string; value: string }) { return <div><p className="text-xs text-cyan-200">{label}</p><p className="mt-1 font-mono text-sm font-bold">{value}</p></div>; }
 function Metric({ icon: Icon, label, value, detail }: { icon: typeof Gauge; label: string; value: string; detail: string }) { return <article className="analysis-metric"><Icon className="size-5 text-cyan-700" /><div><p className="font-mono text-xl font-bold tracking-tight">{value}</p><p className="text-xs font-semibold text-slate-600">{label}</p><p className="mt-1 text-[11px] text-slate-400">{detail}</p></div></article>; }
 function Page({ title, eyebrow, children }: { title: string; eyebrow: string; children: React.ReactNode }) { return <div className="page-stack"><section><p className="eyebrow">{eyebrow}</p><h1 className="page-title">{title}</h1></section>{children}</div>; }
-function formatDate(value: string) { return new Intl.DateTimeFormat("pt-BR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)); }
-function formatDuration(value: unknown) { const seconds = Number(value ?? 0); if (!Number.isFinite(seconds)) return "—"; const minutes = Math.floor(seconds / 60); const rest = Math.round(seconds % 60); return minutes ? `${minutes}min ${rest}s` : `${rest}s`; }
-function formatPace(value: unknown) { const seconds = Number(value); if (!Number.isFinite(seconds) || seconds <= 0) return "—"; return `${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, "0")}/100m`; }
+function formatDate(value: string, timezone: string) { return new Intl.DateTimeFormat("pt-BR", { dateStyle: "medium", timeStyle: "short", timeZone: timezone }).format(new Date(value)); }
+function formatDuration(value: unknown) { if (value === null || value === undefined || value === "") return "—"; const seconds = Number(value); if (!Number.isFinite(seconds)) return "—"; const rounded = Math.round(seconds); const minutes = Math.floor(rounded / 60); const rest = rounded % 60; return minutes ? `${minutes}min ${rest}s` : `${rest}s`; }
+function formatPace(value: unknown) { const seconds = Number(value); if (!Number.isFinite(seconds) || seconds <= 0) return "—"; const rounded = Math.round(seconds); return `${Math.floor(rounded / 60)}:${String(rounded % 60).padStart(2, "0")}/100m`; }
 function formatPercent(value: unknown) { const number = Number(value); return Number.isFinite(number) ? `${(number * 100).toFixed(1)}%` : "—"; }
 function formatSignedPercent(value: unknown) { const number = Number(value); return Number.isFinite(number) ? `${number > 0 ? "+" : ""}${number.toFixed(1)}%` : "—"; }
 function formatNumber(value: unknown) { const number = Number(value); return Number.isFinite(number) ? number.toFixed(1) : "—"; }
-function qualityLabel(value: SwimActivityDetail["quality"]) { return ({ complete: "alta", partial: "parcial", poor: "limitada" } as Record<string, string>)[value ?? ""] ?? "pendente"; }
+function poolLabel(value: number | null) { return value === null ? "piscina desconhecida" : `piscina de ${value} m`; }
+function qualityLabel(value: SwimActivityDetailV2["data_quality"]["level"]) { return ({ HIGH: "alta", MEDIUM: "parcial", LOW: "limitada" } as Record<string, string>)[value] ?? "pendente"; }
 function warningLabel(value: string) { return ({ SESSION_LENGTH_DISTANCE_MISMATCH: "distância da sessão divergiu das extensões", LENGTH_MESSAGES_UNAVAILABLE: "extensões ausentes", LAP_MESSAGES_SYNTHESIZED: "série reconstruída do resumo", PACE_SERIES_UNAVAILABLE: "ritmo por série ausente", CONSISTENCY_SAMPLE_INSUFFICIENT: "amostra curta para consistência", FADE_SAMPLE_INSUFFICIENT: "amostra curta para fade", SWOLF_UNAVAILABLE: "SWOLF ausente" } as Record<string, string>)[value] ?? value.toLocaleLowerCase().replaceAll("_", " "); }
 function strokeLabel(value: string | null) { return ({ freestyle: "livre", backstroke: "costas", breaststroke: "peito", butterfly: "borboleta", drill: "educativo", mixed: "misto" } as Record<string, string>)[value ?? ""] ?? "nado"; }
+function intervalIsRest(interval: SwimActivityDetailV2["intervals"][number]) { return interval.interval_type === "REST" || interval.planned_role === "REST"; }
+function intervalIsDrill(interval: SwimActivityDetailV2["intervals"][number]) { return interval.interval_type === "DRILL" || interval.planned_role === "DRILL"; }
+function intervalTitle(interval: SwimActivityDetailV2["intervals"][number]) { if (intervalIsRest(interval)) return interval.interval_type === "REST" ? "Descanso" : "Descanso planejado · tipo detectado incerto"; const kind = intervalIsDrill(interval) ? "educativo" : strokeLabel(interval.detected_stroke); return `${interval.distance_m} m · ${kind}`; }
+function intervalDetail(interval: SwimActivityDetailV2["intervals"][number]) { if (intervalIsRest(interval)) { const label = interval.interval_type === "REST" ? "descanso explícito" : "descanso contextual do planejamento"; const explicitRest = Number(interval.durations.rest_s); const restDuration = Number.isFinite(explicitRest) && explicitRest > 0 ? interval.durations.rest_s : interval.planned_role === "REST" ? interval.durations.timer_s : interval.durations.rest_s; return `${formatDuration(restDuration)} ${label} · ${formatDuration(interval.durations.timer_s)} timer`; } return `${formatDuration(interval.durations.swim_s)} extensões ativas · ${formatDuration(interval.durations.moving_s)} moving · ${formatDuration(interval.durations.timer_s)} timer`; }
+function intervalPace(interval: SwimActivityDetailV2["intervals"][number]) { if (intervalIsRest(interval)) return "—"; if (interval.paces.moving_s_per_100m !== null) return `${formatPace(interval.paces.moving_s_per_100m)} · moving`; if (interval.paces.swim_s_per_100m !== null) return `${formatPace(interval.paces.swim_s_per_100m)} · extensões`; return "—"; }
+function firstStrokeEfficiency(metrics: Record<string, unknown> | undefined) { const groups = metrics?.stroke_efficiency; if (!Array.isArray(groups)) return undefined; const records = groups.filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null); return records.find((item) => item.stroke === "freestyle" && item.planned_role === "WORK") ?? records.find((item) => item.stroke === "freestyle") ?? records[0]; }
+function firstFreestyleWorkSet(metrics: Record<string, unknown> | undefined) { const sets = metrics?.sets; if (!Array.isArray(sets)) return undefined; const records = sets.filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null); return records.find((item) => { const key = item.key; return typeof key === "object" && key !== null && (key as Record<string, unknown>).stroke === "FREESTYLE" && (key as Record<string, unknown>).planned_role === "WORK"; }); }
+function analysisDuration(metrics: Record<string, unknown> | undefined, key: string) { const durations = metrics?.durations; if (typeof durations !== "object" || durations === null) return undefined; const value = (durations as Record<string, unknown>)[key]; return typeof value === "string" || typeof value === "number" ? value : value === null ? null : undefined; }

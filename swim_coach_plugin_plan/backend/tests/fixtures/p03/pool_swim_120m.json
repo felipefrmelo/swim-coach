@@ -9,6 +9,8 @@
       "total_distance": 120,
       "total_elapsed_time": 210,
       "total_timer_time": 180,
+      "total_moving_time": 170,
+      "avg_speed": 0.666666667,
       "avg_heart_rate": 132
     }
   ],
@@ -19,6 +21,8 @@
       "total_distance": 40,
       "total_elapsed_time": 65,
       "total_timer_time": 60,
+      "total_moving_time": 55,
+      "avg_speed": 0.666666667,
       "total_strokes": 34,
       "avg_swolf": 47,
       "swim_stroke": "freestyle"
@@ -29,6 +33,8 @@
       "total_distance": 40,
       "total_elapsed_time": 70,
       "total_timer_time": 62,
+      "total_moving_time": 57,
+      "avg_speed": 0.64516129,
       "total_strokes": 36,
       "avg_swolf": 49,
       "swim_stroke": "freestyle"
@@ -39,6 +45,8 @@
       "total_distance": 40,
       "total_elapsed_time": 75,
       "total_timer_time": 58,
+      "total_moving_time": 58,
+      "avg_speed": 0.689655172,
       "total_strokes": 35,
       "avg_swolf": 48,
       "swim_stroke": "freestyle"

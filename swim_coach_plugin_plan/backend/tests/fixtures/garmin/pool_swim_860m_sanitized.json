@@ -1,0 +1,1190 @@
+{
+  "fixture_kind": "sanitized regression decoded from a user-supplied Garmin Connect FIT export",
+  "evidence_status": "MIXED_DOCUMENTED_AND_INFERRED",
+  "source_fit_available_during_fixture_creation": true,
+  "raw_fit_versioned": false,
+  "evidence": {
+    "fit_messages": {
+      "source": "DECODED_FIT",
+      "interpretation": "DOCUMENTED",
+      "note": "Allowlisted session, lap, length and workout-step fields decoded by garmin-fit-sdk 21.208.0. FIT profile field units and SDK scaling are documented; Garmin detection algorithms are not."
+    },
+    "connect_summary_observation": {
+      "source": "USER_SUPPLIED_GARMIN_CONNECT_OBSERVATION",
+      "interpretation": "INFERRED",
+      "note": "The unofficial Connect endpoint has no versioned public schema. Connect movingDuration is a separate observation and is not represented as FIT session.total_moving_time."
+    },
+    "planned_workout": {
+      "source": "PLANNED_WORKOUT",
+      "interpretation": "PLANNED_CONTEXT",
+      "note": "Sanitized canonical reconstruction of the decoded 880 m workout-step structure. FIT intensity=active maps to canonical WORK; target swim_stroke 0 maps to freestyle and 255 stays choice."
+    }
+  },
+  "privacy": "The private ZIP/FIT is not versioned. Garmin identifiers, filenames, timestamps, checksums, activity/workout names and personal data were removed.",
+  "connect_summary_observation": {
+    "activityType": {
+      "typeKey": "lap_swimming"
+    },
+    "distance": 860,
+    "duration": 2075.559,
+    "elapsedDuration": 2089.629,
+    "movingDuration": 1699.541,
+    "poolLength": 2000,
+    "numberOfActiveLengths": 43,
+    "averagePace": 241.344,
+    "field_semantics": {
+      "poolLength": "INFERRED_HUNDREDTHS_OF_A_METRE_FOR_THIS_CONNECT_SOURCE",
+      "movingDuration": "INFERRED_CONNECT_VALUE_EQUAL_TO_SUM_ACTIVE_LENGTH_TIMER_SECONDS",
+      "averagePace": "INFERRED_CONNECT_VALUE_EQUAL_TO_TIMER_DURATION_DIVIDED_BY_DISTANCE"
+    }
+  },
+  "fit_messages": {
+    "session_mesgs": [
+      {
+        "sport": "swimming",
+        "sub_sport": "lap_swimming",
+        "total_elapsed_time": 2089.629,
+        "total_timer_time": 2075.559,
+        "total_distance": 860,
+        "enhanced_avg_speed": 0.506,
+        "pool_length": 20,
+        "pool_length_unit": "metric",
+        "num_active_lengths": 43
+      }
+    ],
+    "lap_mesgs": [
+      {
+        "message_index": 0,
+        "first_length_index": 0,
+        "num_lengths": 10,
+        "total_elapsed_time": 351.265,
+        "total_timer_time": 351.265,
+        "total_distance": 160,
+        "enhanced_avg_speed": 0.508,
+        "swim_stroke": "mixed",
+        "total_strokes": 78,
+        "avg_cadence": 15
+      },
+      {
+        "message_index": 1,
+        "first_length_index": 10,
+        "num_lengths": 3,
+        "total_elapsed_time": 112.204,
+        "total_timer_time": 112.204,
+        "total_distance": 40,
+        "enhanced_avg_speed": 0.633,
+        "swim_stroke": "freestyle",
+        "total_strokes": 19,
+        "avg_cadence": 18
+      },
+      {
+        "message_index": 2,
+        "first_length_index": 13,
+        "num_lengths": 0,
+        "total_elapsed_time": 20.042,
+        "total_timer_time": 20.042,
+        "total_distance": 0,
+        "enhanced_avg_speed": 0,
+        "total_strokes": 0,
+        "avg_cadence": 0
+      },
+      {
+        "message_index": 3,
+        "first_length_index": 14,
+        "num_lengths": 2,
+        "total_elapsed_time": 67.858,
+        "total_timer_time": 67.858,
+        "total_distance": 40,
+        "enhanced_avg_speed": 0.589,
+        "swim_stroke": "mixed",
+        "total_strokes": 17,
+        "avg_cadence": 15
+      },
+      {
+        "message_index": 4,
+        "first_length_index": 16,
+        "num_lengths": 0,
+        "total_elapsed_time": 20.042,
+        "total_timer_time": 20.042,
+        "total_distance": 0,
+        "enhanced_avg_speed": 0,
+        "total_strokes": 0,
+        "avg_cadence": 0
+      },
+      {
+        "message_index": 5,
+        "first_length_index": 17,
+        "num_lengths": 2,
+        "total_elapsed_time": 84.254,
+        "total_timer_time": 84.254,
+        "total_distance": 40,
+        "enhanced_avg_speed": 0.475,
+        "swim_stroke": "breaststroke",
+        "total_strokes": 16,
+        "avg_cadence": 11
+      },
+      {
+        "message_index": 6,
+        "first_length_index": 19,
+        "num_lengths": 0,
+        "total_elapsed_time": 20.041,
+        "total_timer_time": 20.041,
+        "total_distance": 0,
+        "enhanced_avg_speed": 0,
+        "total_strokes": 0,
+        "avg_cadence": 0
+      },
+      {
+        "message_index": 7,
+        "first_length_index": 20,
+        "num_lengths": 2,
+        "total_elapsed_time": 74.712,
+        "total_timer_time": 74.712,
+        "total_distance": 40,
+        "enhanced_avg_speed": 0.535,
+        "swim_stroke": "mixed",
+        "total_strokes": 17,
+        "avg_cadence": 14
+      },
+      {
+        "message_index": 8,
+        "first_length_index": 22,
+        "num_lengths": 0,
+        "total_elapsed_time": 20.058,
+        "total_timer_time": 20.058,
+        "total_distance": 0,
+        "enhanced_avg_speed": 0,
+        "total_strokes": 0,
+        "avg_cadence": 0
+      },
+      {
+        "message_index": 9,
+        "first_length_index": 23,
+        "num_lengths": 5,
+        "total_elapsed_time": 158.171,
+        "total_timer_time": 158.171,
+        "total_distance": 80,
+        "enhanced_avg_speed": 0.592,
+        "swim_stroke": "mixed",
+        "total_strokes": 37,
+        "avg_cadence": 16
+      },
+      {
+        "message_index": 10,
+        "first_length_index": 28,
+        "num_lengths": 0,
+        "total_elapsed_time": 25.028,
+        "total_timer_time": 25.028,
+        "total_distance": 0,
+        "enhanced_avg_speed": 0,
+        "total_strokes": 0,
+        "avg_cadence": 0
+      },
+      {
+        "message_index": 11,
+        "first_length_index": 29,
+        "num_lengths": 4,
+        "total_elapsed_time": 155.487,
+        "total_timer_time": 155.487,
+        "total_distance": 80,
+        "enhanced_avg_speed": 0.515,
+        "swim_stroke": "mixed",
+        "total_strokes": 39,
+        "avg_cadence": 15
+      },
+      {
+        "message_index": 12,
+        "first_length_index": 33,
+        "num_lengths": 0,
+        "total_elapsed_time": 25.026,
+        "total_timer_time": 25.026,
+        "total_distance": 0,
+        "enhanced_avg_speed": 0,
+        "total_strokes": 0,
+        "avg_cadence": 0
+      },
+      {
+        "message_index": 13,
+        "first_length_index": 34,
+        "num_lengths": 4,
+        "total_elapsed_time": 142.901,
+        "total_timer_time": 142.901,
+        "total_distance": 80,
+        "enhanced_avg_speed": 0.56,
+        "swim_stroke": "mixed",
+        "total_strokes": 39,
+        "avg_cadence": 16
+      },
+      {
+        "message_index": 14,
+        "first_length_index": 38,
+        "num_lengths": 0,
+        "total_elapsed_time": 25.027,
+        "total_timer_time": 25.027,
+        "total_distance": 0,
+        "enhanced_avg_speed": 0,
+        "total_strokes": 0,
+        "avg_cadence": 0
+      },
+      {
+        "message_index": 15,
+        "first_length_index": 39,
+        "num_lengths": 4,
+        "total_elapsed_time": 139.992,
+        "total_timer_time": 139.992,
+        "total_distance": 80,
+        "enhanced_avg_speed": 0.571,
+        "swim_stroke": "mixed",
+        "total_strokes": 39,
+        "avg_cadence": 17
+      },
+      {
+        "message_index": 16,
+        "first_length_index": 43,
+        "num_lengths": 0,
+        "total_elapsed_time": 25.04,
+        "total_timer_time": 25.04,
+        "total_distance": 0,
+        "enhanced_avg_speed": 0,
+        "total_strokes": 0,
+        "avg_cadence": 0
+      },
+      {
+        "message_index": 17,
+        "first_length_index": 44,
+        "num_lengths": 1,
+        "total_elapsed_time": 72.77,
+        "total_timer_time": 72.77,
+        "total_distance": 20,
+        "enhanced_avg_speed": 0.275,
+        "swim_stroke": "breaststroke",
+        "total_strokes": 18,
+        "avg_cadence": 15
+      },
+      {
+        "message_index": 18,
+        "first_length_index": 45,
+        "num_lengths": 0,
+        "total_elapsed_time": 20.027,
+        "total_timer_time": 20.027,
+        "total_distance": 0,
+        "enhanced_avg_speed": 0,
+        "total_strokes": 0,
+        "avg_cadence": 0
+      },
+      {
+        "message_index": 19,
+        "first_length_index": 46,
+        "num_lengths": 2,
+        "total_elapsed_time": 69.12,
+        "total_timer_time": 69.12,
+        "total_distance": 40,
+        "enhanced_avg_speed": 0.579,
+        "swim_stroke": "freestyle",
+        "total_strokes": 18,
+        "avg_cadence": 16
+      },
+      {
+        "message_index": 20,
+        "first_length_index": 48,
+        "num_lengths": 0,
+        "total_elapsed_time": 20.029,
+        "total_timer_time": 20.029,
+        "total_distance": 0,
+        "enhanced_avg_speed": 0,
+        "total_strokes": 0,
+        "avg_cadence": 0
+      },
+      {
+        "message_index": 21,
+        "first_length_index": 49,
+        "num_lengths": 2,
+        "total_elapsed_time": 59.703,
+        "total_timer_time": 59.703,
+        "total_distance": 40,
+        "enhanced_avg_speed": 0.67,
+        "swim_stroke": "freestyle",
+        "total_strokes": 17,
+        "avg_cadence": 17
+      },
+      {
+        "message_index": 22,
+        "first_length_index": 51,
+        "num_lengths": 0,
+        "total_elapsed_time": 20.027,
+        "total_timer_time": 20.027,
+        "total_distance": 0,
+        "enhanced_avg_speed": 0,
+        "total_strokes": 0,
+        "avg_cadence": 0
+      },
+      {
+        "message_index": 23,
+        "first_length_index": 52,
+        "num_lengths": 2,
+        "total_elapsed_time": 58.745,
+        "total_timer_time": 58.745,
+        "total_distance": 40,
+        "enhanced_avg_speed": 0.681,
+        "swim_stroke": "freestyle",
+        "total_strokes": 17,
+        "avg_cadence": 17
+      },
+      {
+        "message_index": 24,
+        "first_length_index": 54,
+        "num_lengths": 0,
+        "total_elapsed_time": 20.03,
+        "total_timer_time": 20.03,
+        "total_distance": 0,
+        "enhanced_avg_speed": 0,
+        "total_strokes": 0,
+        "avg_cadence": 0
+      },
+      {
+        "message_index": 25,
+        "first_length_index": 55,
+        "num_lengths": 4,
+        "total_elapsed_time": 260.733,
+        "total_timer_time": 260.733,
+        "total_distance": 80,
+        "enhanced_avg_speed": 0.307,
+        "swim_stroke": "breaststroke",
+        "total_strokes": 60,
+        "avg_cadence": 14
+      },
+      {
+        "message_index": 26,
+        "first_length_index": 59,
+        "num_lengths": 0,
+        "total_elapsed_time": 4.468,
+        "total_timer_time": 4.468,
+        "total_distance": 0,
+        "enhanced_avg_speed": 0,
+        "total_strokes": 0,
+        "avg_cadence": 0
+      },
+      {
+        "message_index": 27,
+        "first_length_index": 60,
+        "num_lengths": 1,
+        "total_elapsed_time": 2.759,
+        "total_timer_time": 2.759,
+        "total_distance": 0,
+        "enhanced_avg_speed": 0,
+        "total_strokes": 0,
+        "avg_cadence": 0
+      }
+    ],
+    "length_mesgs": [
+      {
+        "message_index": 0,
+        "length_type": "active",
+        "total_elapsed_time": 52.812,
+        "total_timer_time": 52.812,
+        "total_strokes": 8,
+        "avg_speed": 0.379,
+        "swim_stroke": "freestyle",
+        "avg_swimming_cadence": 9
+      },
+      {
+        "message_index": 1,
+        "length_type": "idle",
+        "total_elapsed_time": 8.187,
+        "total_timer_time": 8.187
+      },
+      {
+        "message_index": 2,
+        "length_type": "active",
+        "total_elapsed_time": 30.812,
+        "total_timer_time": 30.812,
+        "total_strokes": 9,
+        "avg_speed": 0.649,
+        "swim_stroke": "freestyle",
+        "avg_swimming_cadence": 18
+      },
+      {
+        "message_index": 3,
+        "length_type": "idle",
+        "total_elapsed_time": 28.187,
+        "total_timer_time": 28.187
+      },
+      {
+        "message_index": 4,
+        "length_type": "active",
+        "total_elapsed_time": 28.687,
+        "total_timer_time": 28.687,
+        "total_strokes": 9,
+        "avg_speed": 0.697,
+        "swim_stroke": "freestyle",
+        "avg_swimming_cadence": 19
+      },
+      {
+        "message_index": 5,
+        "length_type": "active",
+        "total_elapsed_time": 64.125,
+        "total_timer_time": 64.125,
+        "total_strokes": 14,
+        "avg_speed": 0.312,
+        "swim_stroke": "breaststroke",
+        "avg_swimming_cadence": 13
+      },
+      {
+        "message_index": 6,
+        "length_type": "active",
+        "total_elapsed_time": 31.937,
+        "total_timer_time": 31.937,
+        "total_strokes": 9,
+        "avg_speed": 0.626,
+        "swim_stroke": "breaststroke",
+        "avg_swimming_cadence": 17
+      },
+      {
+        "message_index": 7,
+        "length_type": "active",
+        "total_elapsed_time": 33.5,
+        "total_timer_time": 33.5,
+        "total_strokes": 9,
+        "avg_speed": 0.597,
+        "swim_stroke": "freestyle",
+        "avg_swimming_cadence": 16
+      },
+      {
+        "message_index": 8,
+        "length_type": "active",
+        "total_elapsed_time": 32.437,
+        "total_timer_time": 32.437,
+        "total_strokes": 10,
+        "avg_speed": 0.617,
+        "swim_stroke": "freestyle",
+        "avg_swimming_cadence": 18
+      },
+      {
+        "message_index": 9,
+        "length_type": "active",
+        "total_elapsed_time": 40.581,
+        "total_timer_time": 40.581,
+        "total_strokes": 10,
+        "avg_speed": 0.493,
+        "swim_stroke": "freestyle",
+        "avg_swimming_cadence": 15
+      },
+      {
+        "message_index": 10,
+        "length_type": "idle",
+        "total_elapsed_time": 49,
+        "total_timer_time": 49
+      },
+      {
+        "message_index": 11,
+        "length_type": "active",
+        "total_elapsed_time": 26.437,
+        "total_timer_time": 26.437,
+        "total_strokes": 10,
+        "avg_speed": 0.757,
+        "swim_stroke": "freestyle",
+        "avg_swimming_cadence": 23
+      },
+      {
+        "message_index": 12,
+        "length_type": "active",
+        "total_elapsed_time": 36.767,
+        "total_timer_time": 36.767,
+        "total_strokes": 9,
+        "avg_speed": 0.544,
+        "swim_stroke": "freestyle",
+        "avg_swimming_cadence": 15
+      },
+      {
+        "message_index": 13,
+        "length_type": "idle",
+        "total_elapsed_time": 20.042,
+        "total_timer_time": 20.042
+      },
+      {
+        "message_index": 14,
+        "length_type": "active",
+        "total_elapsed_time": 36.437,
+        "total_timer_time": 36.437,
+        "total_strokes": 9,
+        "avg_speed": 0.549,
+        "swim_stroke": "freestyle",
+        "avg_swimming_cadence": 15
+      },
+      {
+        "message_index": 15,
+        "length_type": "active",
+        "total_elapsed_time": 31.421,
+        "total_timer_time": 31.421,
+        "total_strokes": 8,
+        "avg_speed": 0.637,
+        "swim_stroke": "breaststroke",
+        "avg_swimming_cadence": 15
+      },
+      {
+        "message_index": 16,
+        "length_type": "idle",
+        "total_elapsed_time": 20.042,
+        "total_timer_time": 20.042
+      },
+      {
+        "message_index": 17,
+        "length_type": "active",
+        "total_elapsed_time": 34.687,
+        "total_timer_time": 34.687,
+        "total_strokes": 7,
+        "avg_speed": 0.577,
+        "swim_stroke": "breaststroke",
+        "avg_swimming_cadence": 12
+      },
+      {
+        "message_index": 18,
+        "length_type": "active",
+        "total_elapsed_time": 49.567,
+        "total_timer_time": 49.567,
+        "total_strokes": 9,
+        "avg_speed": 0.403,
+        "swim_stroke": "breaststroke",
+        "avg_swimming_cadence": 11
+      },
+      {
+        "message_index": 19,
+        "length_type": "idle",
+        "total_elapsed_time": 20.041,
+        "total_timer_time": 20.041
+      },
+      {
+        "message_index": 20,
+        "length_type": "active",
+        "total_elapsed_time": 44.437,
+        "total_timer_time": 44.437,
+        "total_strokes": 9,
+        "avg_speed": 0.45,
+        "swim_stroke": "freestyle",
+        "avg_swimming_cadence": 12
+      },
+      {
+        "message_index": 21,
+        "length_type": "active",
+        "total_elapsed_time": 30.275,
+        "total_timer_time": 30.275,
+        "total_strokes": 8,
+        "avg_speed": 0.661,
+        "swim_stroke": "breaststroke",
+        "avg_swimming_cadence": 16
+      },
+      {
+        "message_index": 22,
+        "length_type": "idle",
+        "total_elapsed_time": 20.058,
+        "total_timer_time": 20.058
+      },
+      {
+        "message_index": 23,
+        "length_type": "idle",
+        "total_elapsed_time": 23,
+        "total_timer_time": 23
+      },
+      {
+        "message_index": 24,
+        "length_type": "active",
+        "total_elapsed_time": 24.75,
+        "total_timer_time": 24.75,
+        "total_strokes": 8,
+        "avg_speed": 0.808,
+        "swim_stroke": "freestyle",
+        "avg_swimming_cadence": 19
+      },
+      {
+        "message_index": 25,
+        "length_type": "active",
+        "total_elapsed_time": 37.062,
+        "total_timer_time": 37.062,
+        "total_strokes": 9,
+        "avg_speed": 0.54,
+        "swim_stroke": "freestyle",
+        "avg_swimming_cadence": 15
+      },
+      {
+        "message_index": 26,
+        "length_type": "active",
+        "total_elapsed_time": 33.062,
+        "total_timer_time": 33.062,
+        "total_strokes": 10,
+        "avg_speed": 0.605,
+        "swim_stroke": "freestyle",
+        "avg_swimming_cadence": 18
+      },
+      {
+        "message_index": 27,
+        "length_type": "active",
+        "total_elapsed_time": 40.297,
+        "total_timer_time": 40.297,
+        "total_strokes": 10,
+        "avg_speed": 0.496,
+        "swim_stroke": "breaststroke",
+        "avg_swimming_cadence": 15
+      },
+      {
+        "message_index": 28,
+        "length_type": "idle",
+        "total_elapsed_time": 25.028,
+        "total_timer_time": 25.028
+      },
+      {
+        "message_index": 29,
+        "length_type": "active",
+        "total_elapsed_time": 33.937,
+        "total_timer_time": 33.937,
+        "total_strokes": 8,
+        "avg_speed": 0.589,
+        "swim_stroke": "freestyle",
+        "avg_swimming_cadence": 14
+      },
+      {
+        "message_index": 30,
+        "length_type": "active",
+        "total_elapsed_time": 37.625,
+        "total_timer_time": 37.625,
+        "total_strokes": 10,
+        "avg_speed": 0.532,
+        "swim_stroke": "breaststroke",
+        "avg_swimming_cadence": 16
+      },
+      {
+        "message_index": 31,
+        "length_type": "active",
+        "total_elapsed_time": 37.437,
+        "total_timer_time": 37.437,
+        "total_strokes": 12,
+        "avg_speed": 0.534,
+        "swim_stroke": "breaststroke",
+        "avg_swimming_cadence": 19
+      },
+      {
+        "message_index": 32,
+        "length_type": "active",
+        "total_elapsed_time": 46.488,
+        "total_timer_time": 46.488,
+        "total_strokes": 9,
+        "avg_speed": 0.43,
+        "swim_stroke": "breaststroke",
+        "avg_swimming_cadence": 12
+      },
+      {
+        "message_index": 33,
+        "length_type": "idle",
+        "total_elapsed_time": 25.026,
+        "total_timer_time": 25.026
+      },
+      {
+        "message_index": 34,
+        "length_type": "active",
+        "total_elapsed_time": 35.562,
+        "total_timer_time": 35.562,
+        "total_strokes": 10,
+        "avg_speed": 0.562,
+        "swim_stroke": "freestyle",
+        "avg_swimming_cadence": 17
+      },
+      {
+        "message_index": 35,
+        "length_type": "active",
+        "total_elapsed_time": 40,
+        "total_timer_time": 40,
+        "total_strokes": 11,
+        "avg_speed": 0.5,
+        "swim_stroke": "breaststroke",
+        "avg_swimming_cadence": 17
+      },
+      {
+        "message_index": 36,
+        "length_type": "active",
+        "total_elapsed_time": 35.875,
+        "total_timer_time": 35.875,
+        "total_strokes": 9,
+        "avg_speed": 0.557,
+        "swim_stroke": "breaststroke",
+        "avg_swimming_cadence": 15
+      },
+      {
+        "message_index": 37,
+        "length_type": "active",
+        "total_elapsed_time": 31.464,
+        "total_timer_time": 31.464,
+        "total_strokes": 9,
+        "avg_speed": 0.636,
+        "swim_stroke": "freestyle",
+        "avg_swimming_cadence": 17
+      },
+      {
+        "message_index": 38,
+        "length_type": "idle",
+        "total_elapsed_time": 25.027,
+        "total_timer_time": 25.027
+      },
+      {
+        "message_index": 39,
+        "length_type": "active",
+        "total_elapsed_time": 33.875,
+        "total_timer_time": 33.875,
+        "total_strokes": 9,
+        "avg_speed": 0.59,
+        "swim_stroke": "breaststroke",
+        "avg_swimming_cadence": 16
+      },
+      {
+        "message_index": 40,
+        "length_type": "active",
+        "total_elapsed_time": 34.125,
+        "total_timer_time": 34.125,
+        "total_strokes": 10,
+        "avg_speed": 0.586,
+        "swim_stroke": "freestyle",
+        "avg_swimming_cadence": 18
+      },
+      {
+        "message_index": 41,
+        "length_type": "active",
+        "total_elapsed_time": 37.25,
+        "total_timer_time": 37.25,
+        "total_strokes": 12,
+        "avg_speed": 0.537,
+        "swim_stroke": "breaststroke",
+        "avg_swimming_cadence": 19
+      },
+      {
+        "message_index": 42,
+        "length_type": "active",
+        "total_elapsed_time": 34.742,
+        "total_timer_time": 34.742,
+        "total_strokes": 8,
+        "avg_speed": 0.576,
+        "swim_stroke": "freestyle",
+        "avg_swimming_cadence": 14
+      },
+      {
+        "message_index": 43,
+        "length_type": "idle",
+        "total_elapsed_time": 25.04,
+        "total_timer_time": 25.04
+      },
+      {
+        "message_index": 44,
+        "length_type": "active",
+        "total_elapsed_time": 72.77,
+        "total_timer_time": 72.77,
+        "total_strokes": 18,
+        "avg_speed": 0.275,
+        "swim_stroke": "breaststroke",
+        "avg_swimming_cadence": 15
+      },
+      {
+        "message_index": 45,
+        "length_type": "idle",
+        "total_elapsed_time": 20.027,
+        "total_timer_time": 20.027
+      },
+      {
+        "message_index": 46,
+        "length_type": "active",
+        "total_elapsed_time": 37.5,
+        "total_timer_time": 37.5,
+        "total_strokes": 8,
+        "avg_speed": 0.533,
+        "swim_stroke": "freestyle",
+        "avg_swimming_cadence": 13
+      },
+      {
+        "message_index": 47,
+        "length_type": "active",
+        "total_elapsed_time": 31.62,
+        "total_timer_time": 31.62,
+        "total_strokes": 10,
+        "avg_speed": 0.633,
+        "swim_stroke": "freestyle",
+        "avg_swimming_cadence": 19
+      },
+      {
+        "message_index": 48,
+        "length_type": "idle",
+        "total_elapsed_time": 20.029,
+        "total_timer_time": 20.029
+      },
+      {
+        "message_index": 49,
+        "length_type": "active",
+        "total_elapsed_time": 30.375,
+        "total_timer_time": 30.375,
+        "total_strokes": 8,
+        "avg_speed": 0.658,
+        "swim_stroke": "freestyle",
+        "avg_swimming_cadence": 16
+      },
+      {
+        "message_index": 50,
+        "length_type": "active",
+        "total_elapsed_time": 29.328,
+        "total_timer_time": 29.328,
+        "total_strokes": 9,
+        "avg_speed": 0.682,
+        "swim_stroke": "freestyle",
+        "avg_swimming_cadence": 18
+      },
+      {
+        "message_index": 51,
+        "length_type": "idle",
+        "total_elapsed_time": 20.027,
+        "total_timer_time": 20.027
+      },
+      {
+        "message_index": 52,
+        "length_type": "active",
+        "total_elapsed_time": 31.5,
+        "total_timer_time": 31.5,
+        "total_strokes": 8,
+        "avg_speed": 0.635,
+        "swim_stroke": "freestyle",
+        "avg_swimming_cadence": 15
+      },
+      {
+        "message_index": 53,
+        "length_type": "active",
+        "total_elapsed_time": 27.245,
+        "total_timer_time": 27.245,
+        "total_strokes": 9,
+        "avg_speed": 0.734,
+        "swim_stroke": "freestyle",
+        "avg_swimming_cadence": 20
+      },
+      {
+        "message_index": 54,
+        "length_type": "idle",
+        "total_elapsed_time": 20.03,
+        "total_timer_time": 20.03
+      },
+      {
+        "message_index": 55,
+        "length_type": "active",
+        "total_elapsed_time": 45.562,
+        "total_timer_time": 45.562,
+        "total_strokes": 8,
+        "avg_speed": 0.439,
+        "swim_stroke": "breaststroke",
+        "avg_swimming_cadence": 11
+      },
+      {
+        "message_index": 56,
+        "length_type": "active",
+        "total_elapsed_time": 41.5,
+        "total_timer_time": 41.5,
+        "total_strokes": 10,
+        "avg_speed": 0.482,
+        "swim_stroke": "breaststroke",
+        "avg_swimming_cadence": 14
+      },
+      {
+        "message_index": 57,
+        "length_type": "active",
+        "total_elapsed_time": 85.937,
+        "total_timer_time": 85.937,
+        "total_strokes": 21,
+        "avg_speed": 0.233,
+        "swim_stroke": "breaststroke",
+        "avg_swimming_cadence": 15
+      },
+      {
+        "message_index": 58,
+        "length_type": "active",
+        "total_elapsed_time": 87.734,
+        "total_timer_time": 87.734,
+        "total_strokes": 21,
+        "avg_speed": 0.228,
+        "swim_stroke": "breaststroke",
+        "avg_swimming_cadence": 14
+      },
+      {
+        "message_index": 59,
+        "length_type": "idle",
+        "total_elapsed_time": 4.468,
+        "total_timer_time": 4.468
+      },
+      {
+        "message_index": 60,
+        "length_type": "idle",
+        "total_elapsed_time": 2.759,
+        "total_timer_time": 2.759
+      }
+    ],
+    "workout_step_mesgs": [
+      {
+        "message_index": 0,
+        "duration_type": "distance",
+        "duration_value": 16000,
+        "target_type": "swim_stroke",
+        "target_value": 255,
+        "intensity": "warmup"
+      },
+      {
+        "message_index": 1,
+        "duration_type": "distance",
+        "duration_value": 4000,
+        "target_type": "swim_stroke",
+        "target_value": 0,
+        "intensity": "active"
+      },
+      {
+        "message_index": 2,
+        "duration_type": "time",
+        "duration_value": 20000,
+        "target_type": "open",
+        "target_value": 255,
+        "intensity": "rest"
+      },
+      {
+        "message_index": 3,
+        "duration_type": "distance",
+        "duration_value": 4000,
+        "target_type": "swim_stroke",
+        "target_value": 0,
+        "intensity": "active"
+      },
+      {
+        "message_index": 4,
+        "duration_type": "time",
+        "duration_value": 20000,
+        "target_type": "open",
+        "target_value": 255,
+        "intensity": "rest"
+      },
+      {
+        "message_index": 5,
+        "duration_type": "repeat_until_steps_cmplt",
+        "duration_value": 1,
+        "target_value": 2
+      },
+      {
+        "message_index": 6,
+        "duration_type": "distance",
+        "duration_value": 8000,
+        "target_type": "swim_stroke",
+        "target_value": 255,
+        "intensity": "active"
+      },
+      {
+        "message_index": 7,
+        "duration_type": "time",
+        "duration_value": 25000,
+        "target_type": "open",
+        "target_value": 255,
+        "intensity": "rest"
+      },
+      {
+        "message_index": 8,
+        "duration_type": "repeat_until_steps_cmplt",
+        "duration_value": 6,
+        "target_value": 4
+      },
+      {
+        "message_index": 9,
+        "duration_type": "distance",
+        "duration_value": 4000,
+        "target_type": "swim_stroke",
+        "target_value": 255,
+        "intensity": "active"
+      },
+      {
+        "message_index": 10,
+        "duration_type": "time",
+        "duration_value": 20000,
+        "target_type": "open",
+        "target_value": 255,
+        "intensity": "rest"
+      },
+      {
+        "message_index": 11,
+        "duration_type": "repeat_until_steps_cmplt",
+        "duration_value": 9,
+        "target_value": 4
+      },
+      {
+        "message_index": 12,
+        "duration_type": "distance",
+        "duration_value": 8000,
+        "target_type": "swim_stroke",
+        "target_value": 0,
+        "intensity": "cooldown"
+      }
+    ]
+  },
+  "fit_workout_step_units": {
+    "interpretation": "DOCUMENTED_FIT_PROFILE",
+    "distance_duration_value": "hundredths_of_a_metre",
+    "time_duration_value": "milliseconds",
+    "repeat_duration_value": "zero_based_first_step_message_index",
+    "repeat_target_value": "repetition_count"
+  },
+  "derived_cross_checks": {
+    "active_length_count": 43,
+    "idle_length_count": 18,
+    "active_length_timer_sum_s": 1699.541,
+    "idle_length_timer_sum_s": 376.018,
+    "all_length_timer_sum_s": 2075.559,
+    "positive_distance_lap_timer_sum_s": 1807.915,
+    "zero_distance_lap_timer_sum_s": 267.644,
+    "elapsed_minus_timer_s": 14.07,
+    "active_lengths_times_pool_length_m": 860,
+    "connect_moving_equals_active_length_timer_sum": true,
+    "interpretation": "DERIVED_FROM_DECODED_FIT_AND_CONNECT_OBSERVATION"
+  },
+  "planned_workout": {
+    "schema_version": "1.0",
+    "title": "Sanitized workout",
+    "sport": "POOL_SWIMMING",
+    "pool_length_m": 20,
+    "purpose": "MIXED",
+    "nodes": [
+      {
+        "type": "step",
+        "id": "warmup",
+        "step_role": "WARMUP",
+        "end_condition": {
+          "type": "distance",
+          "meters": 160
+        },
+        "stroke": {
+          "type": "choice"
+        }
+      },
+      {
+        "type": "repeat",
+        "id": "work-2x40-pairs",
+        "repetitions": 2,
+        "children": [
+          {
+            "type": "step",
+            "id": "work-a-40",
+            "step_role": "WORK",
+            "end_condition": {
+              "type": "distance",
+              "meters": 40
+            },
+            "stroke": {
+              "type": "freestyle"
+            }
+          },
+          {
+            "type": "step",
+            "id": "work-a-rest-20",
+            "step_role": "REST",
+            "end_condition": {
+              "type": "time",
+              "seconds": 20
+            },
+            "stroke": {
+              "type": "choice"
+            }
+          },
+          {
+            "type": "step",
+            "id": "work-b-40",
+            "step_role": "WORK",
+            "end_condition": {
+              "type": "distance",
+              "meters": 40
+            },
+            "stroke": {
+              "type": "freestyle"
+            }
+          },
+          {
+            "type": "step",
+            "id": "work-b-rest-20",
+            "step_role": "REST",
+            "end_condition": {
+              "type": "time",
+              "seconds": 20
+            },
+            "stroke": {
+              "type": "choice"
+            }
+          }
+        ]
+      },
+      {
+        "type": "repeat",
+        "id": "main-4x80",
+        "repetitions": 4,
+        "children": [
+          {
+            "type": "step",
+            "id": "main-80",
+            "step_role": "WORK",
+            "end_condition": {
+              "type": "distance",
+              "meters": 80
+            },
+            "stroke": {
+              "type": "choice"
+            }
+          },
+          {
+            "type": "step",
+            "id": "main-rest-25",
+            "step_role": "REST",
+            "end_condition": {
+              "type": "time",
+              "seconds": 25
+            },
+            "stroke": {
+              "type": "choice"
+            }
+          }
+        ]
+      },
+      {
+        "type": "repeat",
+        "id": "work-4x40",
+        "repetitions": 4,
+        "children": [
+          {
+            "type": "step",
+            "id": "work-40",
+            "step_role": "WORK",
+            "end_condition": {
+              "type": "distance",
+              "meters": 40
+            },
+            "stroke": {
+              "type": "choice"
+            }
+          },
+          {
+            "type": "step",
+            "id": "work-rest-20",
+            "step_role": "REST",
+            "end_condition": {
+              "type": "time",
+              "seconds": 20
+            },
+            "stroke": {
+              "type": "choice"
+            }
+          }
+        ]
+      },
+      {
+        "type": "step",
+        "id": "cooldown",
+        "step_role": "COOLDOWN",
+        "end_condition": {
+          "type": "distance",
+          "meters": 80
+        },
+        "stroke": {
+          "type": "freestyle"
+        }
+      }
+    ]
+  }
+}

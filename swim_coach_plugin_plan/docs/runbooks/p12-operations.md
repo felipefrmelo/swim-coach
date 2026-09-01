@@ -64,10 +64,20 @@ resolução de login e checksums de artefatos. Só então declare o backup verif
 
 ## API ou banco indisponível
 
-Veja `/health/live` e `/health/ready`. Readiness exige banco, migration `000010` e
+Veja `/health/live` e `/health/ready`. Readiness exige banco, migration `000012` e
 volume de artefatos gravável. Não reinicie em loop se houver `SCHEMA_MISMATCH`;
 execute a migration controlada. Em falha de storage, preserve o volume e corrija
 owner/permissões antes de reabrir exports ou FIT.
+
+Antes de rollback, consulte `activity_normalization` e `activity_analysis`. O downgrade de
+`000012` aceita somente normalizações legadas `swim-coach:1.x`, cujo `moving_seconds` físico é
+preservado para a imagem v1. Ele é deliberadamente bloqueado quando existe qualquer fato
+canônico v2 ou moving nullable: mantenha a aplicação v2 ou restaure um backup anterior à
+migration. A mesma restrição vale para rollback **somente da imagem**: depois do primeiro write
+v2, uma imagem v1 pode tentar materializar `Decimal(NULL)` mesmo com o banco ainda em `000012`.
+Não suba imagem v1 nesse estado. Não apague normalizações para forçar downgrade.
+Reprocessamento local deve usar o artifact FIT já armazenado e o summary raw persistido; nunca
+consulta nem altera a Garmin.
 
 ## Fila parada
 

@@ -700,6 +700,15 @@ class ActivityModel(Base):
             name="fk_activity_current_normalization",
         ),
     )
+    current_analysis_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "activity_analysis.id",
+            ondelete="SET NULL",
+            use_alter=True,
+            name="fk_activity_current_analysis",
+        ),
+    )
 
     __table_args__ = (
         UniqueConstraint(
@@ -767,11 +776,23 @@ class ActivityNormalizationModel(Base):
     distance_m: Mapped[int] = mapped_column(Integer, nullable=False)
     elapsed_seconds: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
     timer_seconds: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
-    moving_seconds: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
+    moving_seconds: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    swim_seconds: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    rest_seconds: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    stationary_seconds: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    garmin_reported_speed_m_per_s: Mapped[Decimal | None] = mapped_column(Numeric(18, 9))
+    pace_from_garmin_reported_speed_seconds_per_100m: Mapped[Decimal | None] = mapped_column(
+        Numeric(14, 3)
+    )
+    moving_pace_seconds_per_100m: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    swim_pace_seconds_per_100m: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    timer_pace_seconds_per_100m: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    session_pace_seconds_per_100m: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
     active_length_count: Mapped[int] = mapped_column(Integer, nullable=False)
     completeness: Mapped[Decimal] = mapped_column(Numeric(5, 4), nullable=False)
     quality: Mapped[str] = mapped_column(String(20), nullable=False)
     warnings_json: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    provenance_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     __table_args__ = (
@@ -780,8 +801,23 @@ class ActivityNormalizationModel(Base):
             name="ck_activity_normalization_totals",
         ),
         CheckConstraint(
-            "elapsed_seconds >= 0 AND timer_seconds >= 0 AND moving_seconds >= 0",
+            "elapsed_seconds >= 0 AND timer_seconds >= 0 "
+            "AND (moving_seconds IS NULL OR moving_seconds >= 0) "
+            "AND (swim_seconds IS NULL OR swim_seconds >= 0) "
+            "AND (rest_seconds IS NULL OR rest_seconds >= 0) "
+            "AND (stationary_seconds IS NULL OR stationary_seconds >= 0)",
             name="ck_activity_normalization_durations",
+        ),
+        CheckConstraint(
+            "(garmin_reported_speed_m_per_s IS NULL OR garmin_reported_speed_m_per_s >= 0) "
+            "AND (pace_from_garmin_reported_speed_seconds_per_100m IS NULL OR "
+            "pace_from_garmin_reported_speed_seconds_per_100m >= 0) "
+            "AND (moving_pace_seconds_per_100m IS NULL OR "
+            "moving_pace_seconds_per_100m >= 0) "
+            "AND (swim_pace_seconds_per_100m IS NULL OR swim_pace_seconds_per_100m >= 0) "
+            "AND (timer_pace_seconds_per_100m IS NULL OR timer_pace_seconds_per_100m >= 0) "
+            "AND (session_pace_seconds_per_100m IS NULL OR session_pace_seconds_per_100m >= 0)",
+            name="ck_activity_normalization_paces",
         ),
         CheckConstraint(
             "completeness BETWEEN 0 AND 1", name="ck_activity_normalization_completeness"
@@ -813,18 +849,42 @@ class ActivityLapModel(Base):
     start_offset_seconds: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
     elapsed_seconds: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
     timer_seconds: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
+    moving_seconds: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    swim_seconds: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    rest_seconds: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    stationary_seconds: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
     distance_m: Mapped[int] = mapped_column(Integer, nullable=False)
     avg_hr_bpm: Mapped[int | None] = mapped_column(Integer)
     max_hr_bpm: Mapped[int | None] = mapped_column(Integer)
     stroke_type: Mapped[str | None] = mapped_column(String(50))
+    detected_stroke: Mapped[str | None] = mapped_column(String(50))
+    planned_stroke: Mapped[str | None] = mapped_column(String(50))
+    garmin_reported_speed_m_per_s: Mapped[Decimal | None] = mapped_column(Numeric(18, 9))
+    pace_from_garmin_reported_speed_seconds_per_100m: Mapped[Decimal | None] = mapped_column(
+        Numeric(14, 3)
+    )
+    moving_pace_seconds_per_100m: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    swim_pace_seconds_per_100m: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    timer_pace_seconds_per_100m: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    elapsed_pace_seconds_per_100m: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    provenance_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    quality_warnings_json: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
 
     __table_args__ = (
         CheckConstraint(
             "lap_index >= 0 AND distance_m >= 0", name="ck_activity_lap_index_distance"
         ),
         CheckConstraint(
-            "start_offset_seconds >= 0 AND elapsed_seconds >= 0 AND timer_seconds >= 0",
+            "start_offset_seconds >= 0 AND elapsed_seconds >= 0 AND timer_seconds >= 0 "
+            "AND (moving_seconds IS NULL OR moving_seconds >= 0) "
+            "AND (swim_seconds IS NULL OR swim_seconds >= 0) "
+            "AND (rest_seconds IS NULL OR rest_seconds >= 0) "
+            "AND (stationary_seconds IS NULL OR stationary_seconds >= 0)",
             name="ck_activity_lap_durations",
+        ),
+        CheckConstraint(
+            "garmin_reported_speed_m_per_s IS NULL OR garmin_reported_speed_m_per_s >= 0",
+            name="ck_activity_lap_garmin_speed",
         ),
         UniqueConstraint(
             "normalization_id", "lap_index", name="uq_activity_lap_normalization_index"
@@ -846,25 +906,60 @@ class ActivityIntervalModel(Base):
     start_offset_seconds: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
     duration_seconds: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
     rest_seconds: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
+    elapsed_seconds: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    timer_seconds: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    moving_seconds: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    swim_seconds: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    stationary_seconds: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
     distance_m: Mapped[int] = mapped_column(Integer, nullable=False)
     pace_seconds_per_100m: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    garmin_reported_speed_m_per_s: Mapped[Decimal | None] = mapped_column(Numeric(18, 9))
+    pace_from_garmin_reported_speed_seconds_per_100m: Mapped[Decimal | None] = mapped_column(
+        Numeric(14, 3)
+    )
+    moving_pace_seconds_per_100m: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    swim_pace_seconds_per_100m: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    timer_pace_seconds_per_100m: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    elapsed_pace_seconds_per_100m: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
     avg_hr_bpm: Mapped[int | None] = mapped_column(Integer)
     max_hr_bpm: Mapped[int | None] = mapped_column(Integer)
     stroke_type: Mapped[str | None] = mapped_column(String(50))
+    detected_stroke: Mapped[str | None] = mapped_column(String(50))
+    planned_stroke: Mapped[str | None] = mapped_column(String(50))
+    planned_role: Mapped[str | None] = mapped_column(String(20))
     stroke_count: Mapped[int | None] = mapped_column(Integer)
     stroke_rate: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
     swolf: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
     source_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    provenance_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    quality_warnings_json: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
 
     __table_args__ = (
-        CheckConstraint("interval_type IN ('work','rest')", name="ck_activity_interval_type"),
+        CheckConstraint(
+            "interval_type IN ('work','swim','rest','drill','unknown')",
+            name="ck_activity_interval_type",
+        ),
+        CheckConstraint(
+            "planned_role IS NULL OR planned_role IN "
+            "('warmup','work','recovery','rest','cooldown','drill','other')",
+            name="ck_activity_interval_planned_role",
+        ),
         CheckConstraint(
             "interval_index >= 0 AND distance_m >= 0",
             name="ck_activity_interval_index_distance",
         ),
         CheckConstraint(
-            "start_offset_seconds >= 0 AND duration_seconds >= 0 AND rest_seconds >= 0",
+            "start_offset_seconds >= 0 AND duration_seconds >= 0 AND rest_seconds >= 0 "
+            "AND (elapsed_seconds IS NULL OR elapsed_seconds >= 0) "
+            "AND (timer_seconds IS NULL OR timer_seconds >= 0) "
+            "AND (moving_seconds IS NULL OR moving_seconds >= 0) "
+            "AND (swim_seconds IS NULL OR swim_seconds >= 0) "
+            "AND (stationary_seconds IS NULL OR stationary_seconds >= 0)",
             name="ck_activity_interval_durations",
+        ),
+        CheckConstraint(
+            "garmin_reported_speed_m_per_s IS NULL OR garmin_reported_speed_m_per_s >= 0",
+            name="ck_activity_interval_garmin_speed",
         ),
         UniqueConstraint(
             "normalization_id", "interval_index", name="uq_activity_interval_normalization_index"
@@ -887,16 +982,48 @@ class ActivityLengthModel(Base):
     length_index: Mapped[int] = mapped_column(Integer, nullable=False)
     distance_m: Mapped[int] = mapped_column(Integer, nullable=False)
     duration_seconds: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
+    length_type: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+    elapsed_seconds: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    timer_seconds: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    moving_seconds: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    swim_seconds: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    rest_seconds: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    stationary_seconds: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
     stroke_type: Mapped[str | None] = mapped_column(String(50))
+    detected_stroke: Mapped[str | None] = mapped_column(String(50))
+    planned_stroke: Mapped[str | None] = mapped_column(String(50))
+    garmin_reported_speed_m_per_s: Mapped[Decimal | None] = mapped_column(Numeric(18, 9))
+    pace_from_garmin_reported_speed_seconds_per_100m: Mapped[Decimal | None] = mapped_column(
+        Numeric(14, 3)
+    )
+    moving_pace_seconds_per_100m: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    swim_pace_seconds_per_100m: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    timer_pace_seconds_per_100m: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    elapsed_pace_seconds_per_100m: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
     stroke_count: Mapped[int | None] = mapped_column(Integer)
     stroke_rate: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
     swolf: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
     avg_hr_bpm: Mapped[int | None] = mapped_column(Integer)
+    provenance_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    quality_warnings_json: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
 
     __table_args__ = (
         CheckConstraint(
-            "length_index >= 0 AND distance_m > 0 AND duration_seconds >= 0",
+            "length_index >= 0 AND distance_m >= 0 AND duration_seconds >= 0 "
+            "AND length_type IN ('active','idle','unknown') "
+            "AND (length_type <> 'active' OR distance_m > 0) "
+            "AND (length_type <> 'idle' OR distance_m = 0) "
+            "AND (elapsed_seconds IS NULL OR elapsed_seconds >= 0) "
+            "AND (timer_seconds IS NULL OR timer_seconds >= 0) "
+            "AND (moving_seconds IS NULL OR moving_seconds >= 0) "
+            "AND (swim_seconds IS NULL OR swim_seconds >= 0) "
+            "AND (rest_seconds IS NULL OR rest_seconds >= 0) "
+            "AND (stationary_seconds IS NULL OR stationary_seconds >= 0)",
             name="ck_activity_length_values",
+        ),
+        CheckConstraint(
+            "garmin_reported_speed_m_per_s IS NULL OR garmin_reported_speed_m_per_s >= 0",
+            name="ck_activity_length_garmin_speed",
         ),
         UniqueConstraint(
             "normalization_id", "length_index", name="uq_activity_length_normalization_index"

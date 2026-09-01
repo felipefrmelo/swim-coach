@@ -15,6 +15,7 @@ from swim_coach.domain.actions import (
 )
 from swim_coach.domain.activities import (
     ActivityAnalysis,
+    ActivityNormalization,
     FileArtifact,
     NormalizedActivity,
     SessionFeedback,
@@ -126,6 +127,7 @@ class SyncRunsRepository(Protocol):
 
 
 class RawProviderPayloadsRepository(Protocol):
+    async def get(self, user_id: UserId, payload_id: EntityId) -> RawProviderPayload | None: ...
     async def add_if_absent(self, payload: RawProviderPayload) -> EntityId: ...
 
 
@@ -145,7 +147,7 @@ class ActivityDataRepository(Protocol):
     async def get_artifact_by_checksum(
         self, user_id: UserId, activity_id: EntityId, checksum: str, artifact_type: str
     ) -> FileArtifact | None: ...
-    async def add_artifact(self, artifact: FileArtifact) -> None: ...
+    async def add_artifact(self, artifact: FileArtifact) -> FileArtifact: ...
     async def list_artifacts(self, user_id: UserId) -> Sequence[FileArtifact]: ...
     async def get_normalization(
         self, user_id: UserId, normalization_id: EntityId
@@ -153,6 +155,9 @@ class ActivityDataRepository(Protocol):
     async def get_current_normalization(
         self, user_id: UserId, activity_id: EntityId
     ) -> NormalizedActivity | None: ...
+    async def list_current_normalization_facts(
+        self, user_id: UserId, activity_ids: Sequence[EntityId]
+    ) -> Sequence[ActivityNormalization]: ...
     async def get_normalization_by_input(
         self,
         user_id: UserId,
@@ -162,15 +167,27 @@ class ActivityDataRepository(Protocol):
     ) -> NormalizedActivity | None: ...
     async def save_normalization(self, normalized: NormalizedActivity) -> bool: ...
     async def promote_normalization(
-        self, user_id: UserId, activity_id: EntityId, normalization_id: EntityId
+        self,
+        user_id: UserId,
+        activity_id: EntityId,
+        normalization_id: EntityId,
+        analysis_id: EntityId,
     ) -> None: ...
     async def get_analysis(
         self, user_id: UserId, activity_id: EntityId
     ) -> ActivityAnalysis | None: ...
+    async def get_analysis_by_context(
+        self,
+        user_id: UserId,
+        activity_id: EntityId,
+        normalization_id: EntityId,
+        analysis_version: str,
+        planned_workout_id: EntityId | None,
+    ) -> ActivityAnalysis | None: ...
     async def list_analyses(
         self, user_id: UserId, activity_ids: Sequence[EntityId]
     ) -> Sequence[ActivityAnalysis]: ...
-    async def add_analysis(self, analysis: ActivityAnalysis) -> None: ...
+    async def add_analysis(self, analysis: ActivityAnalysis) -> ActivityAnalysis: ...
     async def get_match(
         self, user_id: UserId, activity_id: EntityId
     ) -> WorkoutExecutionMatch | None: ...

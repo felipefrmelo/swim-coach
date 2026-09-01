@@ -34,6 +34,8 @@ from swim_coach.infrastructure.security import AesGcmSecretCipher
 
 T = TypeVar("T")
 _POOL_SWIM_TYPES = frozenset({"lap_swimming", "pool_swimming"})
+_ACTIVITY_SEARCH_ENDPOINT = "/activitylist-service/activities/search/activities"
+_SUMMARY_POOL_LENGTH_UNITS_PER_METRE = Decimal("100")
 _SAFE_ACTIVITY_FIELDS = (
     "activityId",
     "activityName",
@@ -45,6 +47,8 @@ _SAFE_ACTIVITY_FIELDS = (
     "elapsedDuration",
     "movingDuration",
     "poolLength",
+    "poolLengthUnit",
+    "unitOfPoolLength",
     "numberOfActiveLengths",
     "calories",
     "averageHR",
@@ -73,6 +77,8 @@ def _integer(value: object) -> int | None:
     number = _decimal(value)
     if number is None:
         return None
+    if number != number.to_integral_value():
+        raise GarminProviderError(GarminErrorCategory.SCHEMA_CHANGED, retryable=False)
     return int(number)
 
 
@@ -93,6 +99,27 @@ def _optional_utc_datetime(value: object) -> datetime | None:
     return None if value is None else _utc_datetime(value)
 
 
+def _optional_local_wall_datetime(value: object) -> tuple[datetime | None, bool]:
+    """Parse Garmin's local clock without inventing an IANA timezone.
+
+    ``startTimeLocal`` normally has no offset.  If Garmin supplies one, retain the
+    displayed wall-clock components and report that fact to the caller; converting
+    it would silently change the local clock and still would not identify a timezone.
+    """
+
+    if value is None:
+        return None, False
+    if not isinstance(value, str) or not value.strip():
+        raise GarminProviderError(GarminErrorCategory.SCHEMA_CHANGED, retryable=False)
+    normalized = value.strip().replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError as exc:
+        raise GarminProviderError(GarminErrorCategory.SCHEMA_CHANGED, retryable=False) from exc
+    had_offset = parsed.tzinfo is not None and parsed.utcoffset() is not None
+    return parsed.replace(tzinfo=None), had_offset
+
+
 def _json_safe(value: object) -> JsonValue:
     if value is None or isinstance(value, str | int | float | bool):
         return value
@@ -103,6 +130,65 @@ def _json_safe(value: object) -> JsonValue:
     return str(value)
 
 
+def _normalize_summary_pool_length(
+    value: object,
+    *,
+    distance_m: int,
+    length_count: int | None,
+) -> tuple[int | None, JsonObject, tuple[str, ...]]:
+    """Normalize Garmin Connect summary ``poolLength`` into whole metres.
+
+    The unofficial activity-list endpoint does not publish a schema.  Its observed
+    pool-swim representation stores hundredths of a metre (for example ``2000`` for
+    a 20 m pool), unlike the official FIT SDK which has already applied the FIT
+    profile scale.  Keeping this conversion inside the source adapter prevents the
+    same raw number from acquiring a second meaning downstream.
+    """
+
+    provenance: JsonObject = {
+        "source": "INFERRED",
+        "raw_source": "GARMIN",
+        "semantic_status": "INFERRED",
+        "source_endpoint": _ACTIVITY_SEARCH_ENDPOINT,
+        "raw_field": "poolLength",
+        "raw_unit": "hundredth_of_metre",
+        "normalized_unit": "metre",
+        "transformation": "poolLength / 100",
+    }
+    raw_pool_length = _decimal(value)
+    if raw_pool_length is None:
+        provenance["value_status"] = "missing"
+        return None, provenance, ()
+
+    provenance["raw_value"] = format(raw_pool_length, "f")
+    warnings = ["GARMIN_SUMMARY_POOL_LENGTH_UNIT_INFERRED"]
+    pool_length_m = raw_pool_length / _SUMMARY_POOL_LENGTH_UNITS_PER_METRE
+    if pool_length_m <= 0:
+        provenance["value_status"] = "invalid"
+        warnings.append("GARMIN_SUMMARY_POOL_LENGTH_INVALID")
+        return None, provenance, tuple(warnings)
+    if pool_length_m != pool_length_m.to_integral_value():
+        provenance["value_status"] = "fractional_metres_not_representable"
+        provenance["normalized_value"] = format(pool_length_m, "f")
+        warnings.append("GARMIN_SUMMARY_POOL_LENGTH_FRACTIONAL_METRES_UNSUPPORTED")
+        return None, provenance, tuple(warnings)
+
+    normalized = int(pool_length_m)
+    provenance["normalized_value"] = normalized
+    provenance["value_status"] = "normalized"
+    if length_count is None or distance_m <= 0:
+        provenance["distance_length_check"] = "not_available"
+    else:
+        expected_distance = length_count * normalized
+        provenance["distance_length_check"] = (
+            "matched" if expected_distance == distance_m else "mismatched"
+        )
+        provenance["expected_distance_m"] = expected_distance
+        if expected_distance != distance_m:
+            warnings.append("GARMIN_SUMMARY_POOL_LENGTH_DISTANCE_MISMATCH")
+    return normalized, provenance, tuple(warnings)
+
+
 def map_activity(raw: Mapping[str, Any]) -> GarminActivitySummaryDTO:
     activity_type = raw.get("activityType")
     if not isinstance(activity_type, Mapping):
@@ -111,15 +197,102 @@ def map_activity(raw: Mapping[str, Any]) -> GarminActivitySummaryDTO:
     external_id = raw.get("activityId")
     if not isinstance(subtype, str) or not isinstance(external_id, str | int):
         raise GarminProviderError(GarminErrorCategory.SCHEMA_CHANGED, retryable=False)
-    elapsed = cast(
-        Decimal, _decimal(raw.get("elapsedDuration", raw.get("duration")), default=Decimal(0))
-    )
-    timer = cast(Decimal, _decimal(raw.get("duration"), default=elapsed))
-    moving = cast(Decimal, _decimal(raw.get("movingDuration"), default=timer))
+    elapsed_field = "elapsedDuration" if raw.get("elapsedDuration") is not None else "duration"
+    elapsed = cast(Decimal, _decimal(raw.get(elapsed_field), default=Decimal(0)))
+    timer_field = "duration" if raw.get("duration") is not None else elapsed_field
+    timer = cast(Decimal, _decimal(raw.get(timer_field), default=elapsed))
+    moving = _decimal(raw.get("movingDuration"))
     distance = _integer(raw.get("distance")) or 0
+    length_count = _integer(raw.get("numberOfActiveLengths"))
+    pool_length_m, pool_provenance, pool_warnings = _normalize_summary_pool_length(
+        raw.get("poolLength"),
+        distance_m=distance,
+        length_count=length_count,
+    )
+    pool_unit_fields = {
+        field: _json_safe(raw[field])
+        for field in ("poolLengthUnit", "unitOfPoolLength")
+        if raw.get(field) is not None
+    }
+    if pool_unit_fields:
+        # The activity-list endpoint does not document either unit field. Preserve
+        # them as evidence, but do not let an observed label silently change the
+        # source-specific conversion established by the distance/length invariant.
+        pool_provenance["raw_unit_fields"] = pool_unit_fields
     start_time = _utc_datetime(raw.get("startTimeGMT"))
+    start_time_local_wall, local_had_offset = _optional_local_wall_datetime(
+        raw.get("startTimeLocal")
+    )
+    warnings = list(pool_warnings)
+    if moving is None:
+        warnings.append("GARMIN_SUMMARY_MOVING_DURATION_MISSING")
+    if elapsed_field != "elapsedDuration":
+        warnings.append("GARMIN_SUMMARY_ELAPSED_DURATION_FALLBACK_TO_TIMER")
+    if timer_field != "duration":
+        warnings.append("GARMIN_SUMMARY_TIMER_DURATION_FALLBACK_TO_ELAPSED")
+    if local_had_offset:
+        warnings.append("GARMIN_SUMMARY_LOCAL_WALL_TIME_CONTAINED_OFFSET")
     safe_raw: JsonObject = {
         field: _json_safe(raw[field]) for field in _SAFE_ACTIVITY_FIELDS if field in raw
+    }
+    provenance: JsonObject = {
+        "start_time_utc": {
+            "source": "GARMIN",
+            "semantic_status": "INFERRED",
+            "source_endpoint": _ACTIVITY_SEARCH_ENDPOINT,
+            "raw_field": "startTimeGMT",
+            "transformation": "parse as GMT and normalize to UTC",
+        },
+        "start_time_local_wall": {
+            "source": "GARMIN",
+            "semantic_status": "INFERRED",
+            "source_endpoint": _ACTIVITY_SEARCH_ENDPOINT,
+            "raw_field": "startTimeLocal",
+            "transformation": "preserve wall-clock components without timezone",
+        },
+        "timezone": {
+            "source": "INFERRED",
+            "semantic_status": "INFERRED",
+            "value_status": "unavailable_from_summary",
+            "note": "application service must apply the athlete IANA timezone",
+        },
+        "distance_m": {
+            "source": "GARMIN",
+            "semantic_status": "INFERRED",
+            "source_endpoint": _ACTIVITY_SEARCH_ENDPOINT,
+            "raw_field": "distance",
+            "normalized_unit": "metre",
+        },
+        "elapsed_seconds": {
+            "source": "GARMIN" if elapsed_field == "elapsedDuration" else "INFERRED",
+            "semantic_status": "INFERRED",
+            "source_endpoint": _ACTIVITY_SEARCH_ENDPOINT,
+            "raw_field": elapsed_field,
+            "normalized_unit": "second",
+        },
+        "timer_seconds": {
+            "source": "GARMIN" if timer_field == "duration" else "INFERRED",
+            "semantic_status": "INFERRED",
+            "source_endpoint": _ACTIVITY_SEARCH_ENDPOINT,
+            "raw_field": timer_field,
+            "normalized_unit": "second",
+        },
+        "moving_seconds": {
+            "source": "GARMIN",
+            "semantic_status": "INFERRED",
+            "source_endpoint": _ACTIVITY_SEARCH_ENDPOINT,
+            "raw_field": "movingDuration",
+            "normalized_unit": "second",
+            "value_status": "present" if moving is not None else "missing",
+        },
+        "pool_length_m": pool_provenance,
+        "avg_pace_seconds_per_100m": {
+            "source": "GARMIN",
+            "semantic_status": "INFERRED",
+            "source_endpoint": _ACTIVITY_SEARCH_ENDPOINT,
+            "raw_field": "averagePace",
+            "note": "unit and calculation basis are not documented by this endpoint",
+        },
     }
     return GarminActivitySummaryDTO(
         external_id=str(external_id),
@@ -127,14 +300,14 @@ def map_activity(raw: Mapping[str, Any]) -> GarminActivitySummaryDTO:
         sport="swimming",
         subtype=subtype,
         start_time_utc=start_time,
-        timezone="UTC",
+        timezone=None,
         distance_m=distance,
         elapsed_seconds=elapsed,
         timer_seconds=timer,
         moving_seconds=moving,
         provider_updated_at=_optional_utc_datetime(raw.get("lastUpdated")),
-        pool_length_m=_integer(raw.get("poolLength")),
-        length_count=_integer(raw.get("numberOfActiveLengths")),
+        pool_length_m=pool_length_m,
+        length_count=length_count,
         calories=_integer(raw.get("calories")),
         avg_hr=_integer(raw.get("averageHR")),
         max_hr=_integer(raw.get("maxHR")),
@@ -142,6 +315,9 @@ def map_activity(raw: Mapping[str, Any]) -> GarminActivitySummaryDTO:
         avg_stroke_rate=_decimal(raw.get("averageSwimCadenceInStrokesPerMinute")),
         avg_strokes_per_length=_decimal(raw.get("avgStrokes")),
         avg_swolf=_decimal(raw.get("avgSwolf")),
+        start_time_local_wall=start_time_local_wall,
+        provenance=provenance,
+        warnings=tuple(warnings),
         raw_safe=safe_raw,
     )
 
