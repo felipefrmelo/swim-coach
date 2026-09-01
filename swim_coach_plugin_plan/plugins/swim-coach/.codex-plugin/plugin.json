@@ -1,6 +1,6 @@
 {
   "name": "swim-coach",
-  "version": "2.1.0+codex.20260827020956",
+  "version": "2.1.0+codex.20260901233246",
   "description": "Use ChatGPT as a personal swim coach with direct workout, Garmin, planning, sync, and feedback commands.",
   "author": {
     "name": "Felipe"

@@ -40,12 +40,27 @@ def _set(
     }
 
 
-def _metrics(*sets: dict[str, Any], rpe: int = 6, session_quality: str = "HIGH") -> dict[str, Any]:
+def _metrics(
+    *sets: dict[str, Any],
+    rpe: int = 6,
+    feeling_score: int | None = None,
+    session_quality: str = "HIGH",
+) -> dict[str, Any]:
     return {
         "pool_length_m": 20,
         "sets": list(sets),
         "data_quality": {"level": session_quality},
         "srpe": {"rpe": rpe, "duration_basis": "timer_duration_s"},
+        "session_evaluation": {
+            "effective": {
+                "rpe": rpe,
+                "feeling_score": feeling_score,
+            },
+            "provenance": {
+                "rpe": {"source": "GARMIN"},
+                "feeling_score": {"source": "GARMIN" if feeling_score is not None else None},
+            },
+        },
         "stroke_efficiency": [
             {
                 "stroke": "freestyle",
@@ -67,8 +82,8 @@ def test_history_compares_only_equivalent_sets_across_distinct_sessions() -> Non
     latest = datetime(2026, 8, 8, 12, tzinfo=UTC)
     trends = historical_equivalent_set_trends(
         [
-            (first, _metrics(_set(pace="190"), _set(pace="192"), rpe=7)),
-            (latest, _metrics(_set(pace="185"), rpe=6)),
+            (first, _metrics(_set(pace="190"), _set(pace="192"), rpe=7, feeling_score=50)),
+            (latest, _metrics(_set(pace="185"), rpe=6, feeling_score=75)),
             # Same geometry but a different semantic basis is a different signature.
             (first, _metrics(_set(pace="200", pace_basis="timer"))),
         ]
@@ -96,7 +111,20 @@ def test_history_compares_only_equivalent_sets_across_distinct_sessions() -> Non
         "interpretation": "FASTER",
     }
     assert trend["stroke_efficiency"]["latest_swolf"] == 49
-    assert trend["rpe"] == {"first": 7, "latest": 6, "delta": -1}
+    assert trend["rpe"] == {
+        "first": 7,
+        "latest": 6,
+        "delta": -1,
+        "first_source": "GARMIN",
+        "latest_source": "GARMIN",
+    }
+    assert trend["feeling"] == {
+        "first_score": 50,
+        "latest_score": 75,
+        "delta": 25,
+        "first_source": "GARMIN",
+        "latest_source": "GARMIN",
+    }
 
 
 def test_history_requires_two_sessions_and_does_not_mix_roles_or_strokes() -> None:

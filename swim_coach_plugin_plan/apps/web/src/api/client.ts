@@ -10,7 +10,6 @@ import type {
   Pool,
   ProblemDetail,
   SwimActivity,
-  SwimActivityDetail,
   SwimActivityV2,
   SwimActivityDetailV2,
   CanonicalWorkout,
@@ -138,7 +137,8 @@ export const api = {
     id: string,
     idempotencyKey: string,
     payload: {
-      rpe: number;
+      rpe?: number;
+      feeling_score?: number;
       technique_rating: number | null;
       fatigue_rating: number | null;
       enjoyment_rating: number | null;
@@ -148,7 +148,7 @@ export const api = {
       comment: string | null;
       version: number | null;
     },
-  ) => requestV2<SwimActivityDetail["feedback"]>(`/activities/${id}/feedback`, {
+  ) => requestV2<SwimActivityDetailV2["feedback"]>(`/activities/${id}/feedback`, {
     method: "PUT",
     headers: { "Idempotency-Key": idempotencyKey },
     body: JSON.stringify(payload),

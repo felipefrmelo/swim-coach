@@ -31,6 +31,7 @@ from swim_coach.domain.activities.entities import (
     NormalizedActivity,
     SessionFeedback,
 )
+from swim_coach.domain.activities.evaluation import resolve_session_evaluation
 from swim_coach.domain.shared.types import JsonObject, JsonValue
 from swim_coach.domain.shared.value_objects import EntityId, UserId
 
@@ -60,12 +61,13 @@ def completion_ratio(completed_distance_m: int, planned_distance_m: int) -> Deci
     return _rounded(Decimal(completed_distance_m) / Decimal(planned_distance_m))
 
 
-def srpe_load(duration_seconds: Decimal, rpe: int) -> Decimal:
+def srpe_load(duration_seconds: Decimal, rpe: Decimal | int) -> Decimal:
     """Calculate sRPE using the caller-selected duration basis."""
 
-    if duration_seconds < 0 or not 1 <= rpe <= 10:
-        raise ValueError("sRPE requires non-negative duration and RPE from 1 to 10")
-    return _rounded(duration_seconds / Decimal(60) * Decimal(rpe), _HUNDREDTH)
+    rpe_decimal = Decimal(rpe)
+    if duration_seconds < 0 or not Decimal("0") <= rpe_decimal <= Decimal("10"):
+        raise ValueError("sRPE requires non-negative duration and RPE from 0 to 10")
+    return _rounded(duration_seconds / Decimal(60) * rpe_decimal, _HUNDREDTH)
 
 
 def coefficient_of_variation(values: tuple[Decimal, ...]) -> Decimal | None:
@@ -602,7 +604,17 @@ def analyze_swim(
         }
     else:
         planned_actual = None
-    load = srpe_load(normalization.timer_seconds, feedback.rpe) if feedback else None
+    evaluation = resolve_session_evaluation(normalization, feedback)
+    load = (
+        srpe_load(normalization.timer_seconds, evaluation.effective_rpe)
+        if evaluation.effective_rpe is not None
+        else None
+    )
+    legacy_load = (
+        srpe_load(normalization.timer_seconds, feedback.rpe)
+        if feedback is not None and feedback.rpe is not None
+        else None
+    )
     best_set = min(sets, key=lambda item: item.mean_pace_s_per_100m, default=None)
     length_swolf = tuple(item.swolf for item in normalized.lengths if item.swolf is not None)
     average_swolf = (
@@ -653,9 +665,40 @@ def analyze_swim(
         "goal_readiness": _json_value(profile.goal_readiness),
         "planned_vs_actual": planned_actual,
         "stroke_efficiency": _stroke_efficiency(length_records, normalization.pool_length_m),
+        "session_evaluation": {
+            "garmin": {
+                "rpe": _decimal_json(evaluation.garmin_rpe),
+                "feeling_score": evaluation.garmin_feeling_score,
+            },
+            "manual_override": {
+                "rpe": evaluation.manual_rpe,
+                "feeling_score": evaluation.manual_feeling_score,
+            },
+            "effective": {
+                "rpe": _decimal_json(evaluation.effective_rpe),
+                "feeling_score": evaluation.effective_feeling_score,
+            },
+            "provenance": {
+                "rpe": {
+                    "source": (
+                        evaluation.rpe_source.value if evaluation.rpe_source is not None else None
+                    )
+                },
+                "feeling_score": {
+                    "source": (
+                        evaluation.feeling_score_source.value
+                        if evaluation.feeling_score_source is not None
+                        else None
+                    )
+                },
+            },
+        },
         "srpe": {
             "load": _decimal_json(load),
-            "rpe": feedback.rpe if feedback else None,
+            "rpe": _decimal_json(evaluation.effective_rpe),
+            "rpe_source": (
+                evaluation.rpe_source.value if evaluation.rpe_source is not None else None
+            ),
             "duration_basis": "timer_duration_s",
             "duration_s": _decimal_json(normalization.timer_seconds),
         },
@@ -680,7 +723,7 @@ def analyze_swim(
         ),
         "average_swolf": _decimal_json(average_swolf),
         "average_strokes_per_length": _decimal_json(average_strokes),
-        "srpe_load": _decimal_json(load),
+        "srpe_load": _decimal_json(legacy_load),
     }
     flags = tuple(
         dict.fromkeys(

@@ -12,9 +12,10 @@ from sqlalchemy import func, select
 from swim_coach.application.services.context import AvailabilityInput
 from swim_coach.application.services.mcp_read import McpPrincipal
 from swim_coach.bootstrap.container import build_services
+from swim_coach.domain.planning import FeedbackSnapshot, PlanningContext
 from swim_coach.domain.shared import CorrelationId
 from swim_coach.domain.shared.errors import ResourceNotFoundError
-from swim_coach.domain.shared.value_objects import EntityId
+from swim_coach.domain.shared.value_objects import EntityId, UserId
 from swim_coach.infrastructure.db import Database
 from swim_coach.infrastructure.db.models import (
     ActionProposalModel,
@@ -43,7 +44,7 @@ class PlanningTokenVerifier:
 
 
 async def test_week_proposal_is_reproducible_owned_and_never_applied_by_approval(
-    database: Database, app_settings: Settings
+    database: Database, app_settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     settings = app_settings.model_copy(
         update={
@@ -91,6 +92,29 @@ async def test_week_proposal_is_reproducible_owned_and_never_applied_by_approval
         principal.scopes,
     )
     assert services.mcp_write is not None
+    assert services.planning is not None
+    original_snapshot = services.planning._snapshot
+
+    async def snapshot_with_low_august_feeling(
+        user_id: UserId, week_start: date
+    ) -> PlanningContext:
+        snapshot = await original_snapshot(user_id, week_start)
+        return snapshot.model_copy(
+            update={
+                "recent_feedback": (
+                    FeedbackSnapshot(
+                        activity_id="00000000-0000-0000-0000-000000001099",
+                        activity_date=date(2026, 8, 15),
+                        rpe=None,
+                        feeling_score=5,
+                        feeling_score_source="GARMIN",
+                        pain_present=False,
+                    ),
+                )
+            }
+        )
+
+    monkeypatch.setattr(services.planning, "_snapshot", snapshot_with_low_august_feeling)
 
     first = await services.mcp_write.propose_week_plan(
         principal,
@@ -114,6 +138,8 @@ async def test_week_proposal_is_reproducible_owned_and_never_applied_by_approval
     assert replay.data["planning_run_id"] == first.data["planning_run_id"]
     assert replay.data["proposal_id"] == first.data["proposal_id"]
     week = first.data["week"]
+    assert "LOW_SESSION_FEELING_RECOVERY_BIAS" not in week["warnings"]
+    assert all(item["rule_id"] != "RULE-FEELING-001" for item in week["decisions"])
     assert len(week["sessions"]) == 3
     assert [item["order"] for item in week["decisions"]] == list(
         range(1, len(week["decisions"]) + 1)
@@ -179,7 +205,17 @@ async def test_week_proposal_is_reproducible_owned_and_never_applied_by_approval
         before_schedules = await session.scalar(
             select(func.count()).select_from(WorkoutScheduleModel)
         )
-        assert await session.scalar(select(func.count()).select_from(TrainingRuleSetModel)) == 1
+        stored_ruleset = (
+            await session.scalars(
+                select(TrainingRuleSetModel).where(
+                    TrainingRuleSetModel.version == "1.0.0",
+                    TrainingRuleSetModel.effective_from == date(2026, 8, 12),
+                )
+            )
+        ).one()
+        assert stored_ruleset.version == "1.0.0"
+        assert stored_ruleset.effective_from == date(2026, 8, 12)
+        assert "low_feeling_threshold" not in stored_ruleset.rules_json
         assert await session.scalar(select(func.count()).select_from(PlanningRunModel)) == 1
         assert await session.scalar(select(func.count()).select_from(ActionProposalModel)) == 1
         proposal_revision = await session.scalar(select(ActionProposalModel.target_revision_id))

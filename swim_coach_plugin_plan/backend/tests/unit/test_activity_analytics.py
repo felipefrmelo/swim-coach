@@ -80,6 +80,8 @@ def test_real_fit_fixture_is_sanitized_and_keeps_sources_separate() -> None:
         "pool_length": 20,
         "pool_length_unit": "metric",
         "num_active_lengths": 43,
+        "workout_rpe": 30,
+        "workout_feel": 75,
     }
     active_lengths = [
         item for item in fit_messages["length_mesgs"] if item["length_type"] == "active"
@@ -121,6 +123,7 @@ def test_normative_activity_formulas() -> None:
     assert pace_seconds_per_100m(Decimal(2700), 2000) == Decimal("135.000")
     assert completion_ratio(2100, 2000) == Decimal("1.050")
     assert srpe_load(Decimal(2700), 6) == Decimal("270.00")
+    assert srpe_load(Decimal(2700), Decimal("0")) == Decimal("0.00")
     assert coefficient_of_variation((Decimal(100), Decimal(110))) == Decimal("0.0476")
     assert fade_percent(
         (Decimal(100), Decimal(100), Decimal(102), Decimal(104), Decimal(110), Decimal(110))
@@ -166,6 +169,8 @@ def test_real_860m_case_uses_explicit_semantics_and_contextual_work_analysis() -
     assert normalized.normalization.pool_length_m == 20
     assert normalized.normalization.distance_m == 860
     assert normalized.normalization.active_length_count == 43
+    assert normalized.normalization.perceived_effort_rpe == Decimal("3.0")
+    assert normalized.normalization.feeling_score == 75
     assert normalized.normalization.moving_seconds is None
     assert normalized.normalization.swim_seconds == Decimal("1699.541")
     assert normalized.normalization.rest_seconds == Decimal("376.018")
@@ -275,6 +280,40 @@ def test_real_860m_case_uses_explicit_semantics_and_contextual_work_analysis() -
     assert all(item["planned_pace_basis"] is None for item in main_alignments)
     assert metrics["srpe"]["duration_basis"] == "timer_duration_s"
     assert metrics["srpe"]["duration_s"] == "2075.559"
+    assert metrics["srpe"]["rpe"] == "6"
+    assert metrics["srpe"]["rpe_source"] == "MANUAL_OVERRIDE"
+    assert metrics["session_evaluation"] == {
+        "garmin": {"rpe": "3.0", "feeling_score": 75},
+        "manual_override": {"rpe": 6, "feeling_score": None},
+        "effective": {
+            "rpe": "6",
+            "feeling_score": 75,
+        },
+        "provenance": {
+            "rpe": {"source": "MANUAL_OVERRIDE"},
+            "feeling_score": {"source": "GARMIN"},
+        },
+    }
+
+
+def test_garmin_evaluation_drives_srpe_when_manual_feedback_is_absent() -> None:
+    normalized, workout, user_id = _regression_case()
+
+    analysis = analyze_swim(
+        normalized,
+        user_id=user_id,
+        analysis_version="test:garmin-evaluation",
+        planned_workout=workout,
+    )
+
+    assert analysis.metrics["srpe"] == {
+        "load": "103.78",
+        "rpe": "3.0",
+        "rpe_source": "GARMIN",
+        "duration_basis": "timer_duration_s",
+        "duration_s": "2075.559",
+    }
+    assert analysis.metrics["srpe_load"] is None
 
 
 def test_analysis_length_overlay_preserves_stationary_continuity_boundaries() -> None:

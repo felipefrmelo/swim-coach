@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 
 from swim_coach.application.ports.repositories import UnitOfWorkFactory
 from swim_coach.domain.actions import ActionProposal
+from swim_coach.domain.activities import resolve_session_evaluation
 from swim_coach.domain.goals import GoalStatus
 from swim_coach.domain.operations import AuditEvent, OutboxEvent
 from swim_coach.domain.planning import (
@@ -36,8 +37,10 @@ from swim_coach.domain.shared.value_objects import CorrelationId, EntityId, User
 class PlanningService:
     ACTION_TYPE = "planning.week.v1"
     RULESET_NAME = "swim-coach-conservative-week"
-    RULESET_VERSION = "1.0.0"
-    RULESET_EFFECTIVE_FROM = date(2026, 8, 12)
+    LEGACY_RULESET_VERSION = "1.0.0"
+    LEGACY_RULESET_EFFECTIVE_FROM = date(2026, 8, 12)
+    RULESET_VERSION = "1.1.0"
+    RULESET_EFFECTIVE_FROM = date(2026, 9, 1)
 
     def __init__(self, uow_factory: UnitOfWorkFactory) -> None:
         self._uow_factory = uow_factory
@@ -85,15 +88,25 @@ class PlanningService:
         now = datetime.now(UTC).replace(microsecond=0)
         async with self._uow_factory() as uow:
             ruleset = await uow.training_rule_sets.get_active(week_start)
-            if ruleset is None:
-                rules = PlanningRules()
+            if ruleset is None or (
+                week_start >= self.RULESET_EFFECTIVE_FROM
+                and ruleset.version != self.RULESET_VERSION
+            ):
+                legacy_week = week_start < self.RULESET_EFFECTIVE_FROM
+                rules = PlanningRules() if legacy_week else PlanningRules(low_feeling_threshold=25)
                 ruleset = TrainingRuleSet(
                     id=EntityId.new(),
                     name=self.RULESET_NAME,
-                    version=self.RULESET_VERSION,
+                    version=(self.LEGACY_RULESET_VERSION if legacy_week else self.RULESET_VERSION),
                     rules=rules,
-                    content_hash=canonical_json_hash(rules.model_dump(mode="json")),
-                    effective_from=self.RULESET_EFFECTIVE_FROM,
+                    content_hash=canonical_json_hash(
+                        rules.model_dump(mode="json", exclude_none=True)
+                    ),
+                    effective_from=(
+                        self.LEGACY_RULESET_EFFECTIVE_FROM
+                        if legacy_week
+                        else self.RULESET_EFFECTIVE_FROM
+                    ),
                     created_at=now,
                 )
                 existing_ruleset = await uow.training_rule_sets.get_by_hash(ruleset.content_hash)
@@ -273,6 +286,10 @@ class PlanningService:
                 item.id: await uow.activity_data.get_feedback(user_id, item.id)
                 for item in activities
             }
+            normalization_facts = await uow.activity_data.list_current_normalization_facts(
+                user_id, [item.id for item in activities]
+            )
+            normalization_by_activity = {item.activity_id: item for item in normalization_facts}
             workouts = await uow.workouts.list(user_id)
             workout_ids = [item.id for item in workouts]
             revisions = await uow.workout_revisions.list_many(user_id, workout_ids)
@@ -326,18 +343,36 @@ class PlanningService:
             for item in activities
             if history_start <= item.start_time_utc.astimezone(timezone).date() < week_start
         ]
-        feedback = tuple(
-            FeedbackSnapshot(
-                activity_id=str(item.id),
-                activity_date=item.start_time_utc.astimezone(timezone).date(),
-                rpe=stored.rpe,
-                technique_rating=stored.technique_rating,
-                pain_present=stored.pain_present,
-                pain_intensity=stored.pain_intensity,
+        feedback_items: list[FeedbackSnapshot] = []
+        for item in relevant_activities[:10]:
+            stored = feedback_by_activity[item.id]
+            evaluation = resolve_session_evaluation(normalization_by_activity.get(item.id), stored)
+            if (
+                evaluation.effective_rpe is None
+                and evaluation.effective_feeling_score is None
+                and stored is None
+            ):
+                continue
+            feedback_items.append(
+                FeedbackSnapshot(
+                    activity_id=str(item.id),
+                    activity_date=item.start_time_utc.astimezone(timezone).date(),
+                    rpe=evaluation.effective_rpe,
+                    rpe_source=(
+                        evaluation.rpe_source.value if evaluation.rpe_source is not None else None
+                    ),
+                    feeling_score=evaluation.effective_feeling_score,
+                    feeling_score_source=(
+                        evaluation.feeling_score_source.value
+                        if evaluation.feeling_score_source is not None
+                        else None
+                    ),
+                    technique_rating=stored.technique_rating if stored is not None else None,
+                    pain_present=stored.pain_present if stored is not None else False,
+                    pain_intensity=stored.pain_intensity if stored is not None else None,
+                )
             )
-            for item in relevant_activities[:10]
-            if (stored := feedback_by_activity[item.id]) is not None
-        )
+        feedback = tuple(feedback_items)
         revision_by_id = {item.id: item for item in revisions}
         workout_by_id = {item.id: item for item in workouts}
         schedule_by_workout = {item.workout_id: item for item in schedules}

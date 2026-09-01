@@ -726,6 +726,8 @@ def _normalization(model: ActivityNormalizationModel) -> ActivityNormalization:
         swim_pace_seconds_per_100m=_optional_decimal(model.swim_pace_seconds_per_100m),
         timer_pace_seconds_per_100m=_optional_decimal(model.timer_pace_seconds_per_100m),
         session_pace_seconds_per_100m=_optional_decimal(model.session_pace_seconds_per_100m),
+        perceived_effort_rpe=_optional_decimal(model.perceived_effort_rpe),
+        feeling_score=model.feeling_score,
         provenance=_json(provenance),
     )
 
@@ -739,6 +741,7 @@ def _feedback(model: SessionFeedbackModel) -> SessionFeedback:
         technique_rating=model.technique_rating,
         fatigue_rating=model.fatigue_rating,
         enjoyment_rating=model.enjoyment_rating,
+        feeling_score=model.feeling_score,
         pain_present=model.pain_present,
         pain_location=model.pain_location,
         pain_intensity=model.pain_intensity,
@@ -1708,6 +1711,8 @@ class SqlAlchemyActivityDataRepository:
                 swim_pace_seconds_per_100m=item.swim_pace_seconds_per_100m,
                 timer_pace_seconds_per_100m=item.timer_pace_seconds_per_100m,
                 session_pace_seconds_per_100m=item.session_pace_seconds_per_100m,
+                perceived_effort_rpe=item.perceived_effort_rpe,
+                feeling_score=item.feeling_score,
                 active_length_count=item.active_length_count,
                 completeness=item.completeness,
                 quality=item.quality.value,
@@ -2089,6 +2094,7 @@ class SqlAlchemyActivityDataRepository:
                     technique_rating=feedback.technique_rating,
                     fatigue_rating=feedback.fatigue_rating,
                     enjoyment_rating=feedback.enjoyment_rating,
+                    feeling_score=feedback.feeling_score,
                     pain_present=feedback.pain_present,
                     pain_location=feedback.pain_location,
                     pain_intensity=feedback.pain_intensity,
@@ -2111,6 +2117,7 @@ class SqlAlchemyActivityDataRepository:
                 technique_rating=feedback.technique_rating,
                 fatigue_rating=feedback.fatigue_rating,
                 enjoyment_rating=feedback.enjoyment_rating,
+                feeling_score=feedback.feeling_score,
                 pain_present=feedback.pain_present,
                 pain_location=feedback.pain_location,
                 pain_intensity=feedback.pain_intensity,
@@ -2119,6 +2126,21 @@ class SqlAlchemyActivityDataRepository:
                 version=feedback.version,
             )
             .returning(SessionFeedbackModel.version)
+        )
+        if await self._session.scalar(statement) is None:
+            raise RevisionConflictError(expected_version)
+
+    async def delete_feedback(
+        self, user_id: UserId, activity_id: EntityId, *, expected_version: int
+    ) -> None:
+        statement = (
+            delete(SessionFeedbackModel)
+            .where(
+                SessionFeedbackModel.user_id == user_id.value,
+                SessionFeedbackModel.activity_id == activity_id.value,
+                SessionFeedbackModel.version == expected_version,
+            )
+            .returning(SessionFeedbackModel.id)
         )
         if await self._session.scalar(statement) is None:
             raise RevisionConflictError(expected_version)
@@ -2744,7 +2766,7 @@ class SqlAlchemyTrainingRuleSetsRepository:
                 id=rule_set.id.value,
                 name=rule_set.name,
                 version=rule_set.version,
-                rules_json=rule_set.rules.model_dump(mode="json"),
+                rules_json=rule_set.rules.model_dump(mode="json", exclude_none=True),
                 schema_version=rule_set.schema_version,
                 effective_from=rule_set.effective_from,
                 effective_until=rule_set.effective_until,
@@ -3493,6 +3515,15 @@ class SqlAlchemyIdempotencyRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def lock(self, scope: str, key: str) -> None:
+        """Serialize one idempotency key for the lifetime of the current transaction."""
+
+        lock_key = f"{len(scope)}:{scope}{key}"
+        await self._session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"),
+            {"lock_key": lock_key},
+        )
+
     async def get(self, scope: str, key: str, now: datetime) -> ApiIdempotencyRecord | None:
         statement = select(ApiIdempotencyRecordModel).where(
             ApiIdempotencyRecordModel.scope == scope,
@@ -3522,6 +3553,14 @@ class SqlAlchemyIdempotencyRepository:
                 response_json=record.response,
                 created_at=record.created_at,
                 expires_at=record.expires_at,
+            )
+        )
+
+    async def delete(self, scope: str, key: str) -> None:
+        await self._session.execute(
+            delete(ApiIdempotencyRecordModel).where(
+                ApiIdempotencyRecordModel.scope == scope,
+                ApiIdempotencyRecordModel.idempotency_key == key,
             )
         )
 

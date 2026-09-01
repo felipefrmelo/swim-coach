@@ -150,6 +150,8 @@ def test_official_sdk_binary_round_trip_is_normalized() -> None:
             "total_distance": 40,
             "pool_length": 20,
             "pool_length_unit": "metric",
+            "workout_rpe": 30,
+            "workout_feel": 75,
         },
     )
     encoder.on_mesg(
@@ -194,6 +196,8 @@ def test_official_sdk_binary_round_trip_is_normalized() -> None:
     assert normalized.normalization.distance_m == 40
     assert normalized.normalization.pool_length_m == 20
     assert normalized.normalization.active_length_count == 2
+    assert normalized.normalization.perceived_effort_rpe == Decimal("3.0")
+    assert normalized.normalization.feeling_score == 75
     assert [item.stroke_count for item in normalized.lengths] == [18, 18]
     first_length = normalized.lengths[0]
     assert first_length.provenance["length_type"]["source"] == "garmin"
@@ -474,7 +478,7 @@ def test_zero_count_rest_lap_owns_idle_length_until_next_fit_boundary() -> None:
     assert normalized.normalization.rest_seconds == Decimal("25.000")
     assert normalized.lengths[2].interval_id == normalized.intervals[1].id
     assert normalized.lengths[3].interval_id == normalized.intervals[2].id
-    assert normalized.normalization.parser_version.endswith("|swim-coach:2.0.4")
+    assert normalized.normalization.parser_version.endswith("|swim-coach:2.1.0")
     assert "UNASSIGNED_LENGTH_MESSAGES" not in normalized.normalization.warnings
     assert "LAP_IDLE_LENGTH_OWNERSHIP_INFERRED" in normalized.normalization.warnings
     assert "ZERO_DISTANCE_INTERVAL_WITHOUT_REST_EVIDENCE" not in (normalized.normalization.warnings)
@@ -623,6 +627,87 @@ def test_missing_moving_time_is_not_silently_replaced_by_timer_time() -> None:
     assert normalized.normalization.quality.value == "partial"
     assert "MOVING_DURATION_UNAVAILABLE" in normalized.normalization.warnings
     assert normalized.normalization.provenance["moving_seconds"]["source"] == "inferred"
+
+
+def test_missing_session_evaluation_remains_optional_without_quality_warning() -> None:
+    normalized = GarminFitActivityParser().normalize_messages(
+        _messages(),
+        user_id=UserId.new(),
+        activity_id=EntityId.new(),
+        artifact_id=EntityId.new(),
+        input_checksum=hashlib.sha256(b"missing-session-evaluation").hexdigest(),
+        fallback_pool_length_m=20,
+    )
+
+    item = normalized.normalization
+    assert item.perceived_effort_rpe is None
+    assert item.feeling_score is None
+    assert not any(
+        "WORKOUT_RPE" in warning or "WORKOUT_FEEL" in warning for warning in item.warnings
+    )
+    assert item.provenance["perceived_effort_rpe"] == {
+        "source": "inferred",
+        "interpretation": "documented",
+        "transformation": "value unavailable or invalid",
+    }
+    assert item.provenance["feeling_score"] == {
+        "source": "inferred",
+        "interpretation": "documented",
+        "transformation": "value unavailable or invalid",
+    }
+
+
+@pytest.mark.parametrize(
+    ("raw_rpe", "raw_feel"),
+    [(-1, 50), (101, 50), ("bad", 50), (30, -1), (30, 101), (30, "bad"), (30.5, 75)],
+)
+def test_invalid_session_evaluation_is_not_promoted(raw_rpe: object, raw_feel: object) -> None:
+    messages = _messages()
+    messages["session_mesgs"][0]["workout_rpe"] = raw_rpe
+    messages["session_mesgs"][0]["workout_feel"] = raw_feel
+
+    normalized = GarminFitActivityParser().normalize_messages(
+        messages,
+        user_id=UserId.new(),
+        activity_id=EntityId.new(),
+        artifact_id=EntityId.new(),
+        input_checksum=hashlib.sha256(f"invalid-{raw_rpe}-{raw_feel}".encode()).hexdigest(),
+        fallback_pool_length_m=20,
+    )
+
+    item = normalized.normalization
+    assert item.quality.value == "partial"
+    if raw_rpe not in {30}:
+        assert item.perceived_effort_rpe is None
+        assert "SESSION_WORKOUT_RPE_INVALID" in item.warnings
+    else:
+        assert item.perceived_effort_rpe == Decimal("3.0")
+    if raw_feel not in {50, 75}:
+        assert item.feeling_score is None
+        assert "SESSION_WORKOUT_FEEL_INVALID" in item.warnings
+    else:
+        assert item.feeling_score == raw_feel
+
+
+def test_zero_session_evaluation_is_a_valid_documented_fit_fact() -> None:
+    messages = _messages()
+    messages["session_mesgs"][0]["workout_rpe"] = 0
+    messages["session_mesgs"][0]["workout_feel"] = 0
+
+    normalized = GarminFitActivityParser().normalize_messages(
+        messages,
+        user_id=UserId.new(),
+        activity_id=EntityId.new(),
+        artifact_id=EntityId.new(),
+        input_checksum=hashlib.sha256(b"zero-session-evaluation").hexdigest(),
+        fallback_pool_length_m=20,
+    )
+
+    item = normalized.normalization
+    assert item.perceived_effort_rpe == Decimal("0.0")
+    assert item.feeling_score == 0
+    assert item.provenance["perceived_effort_rpe"]["source"] == "garmin"
+    assert item.provenance["feeling_score"]["source"] == "garmin"
 
 
 def test_fit_profile_facts_and_non_standard_swolf_have_explicit_provenance() -> None:
@@ -1071,6 +1156,20 @@ def test_sanitized_real_860m_fit_preserves_distinct_clocks_paces_and_idle_rest()
     assert item.session_pace_seconds_per_100m == Decimal("242.980")
     assert item.garmin_reported_speed_m_per_s == Decimal("0.506")
     assert item.pace_from_garmin_reported_speed_seconds_per_100m == Decimal("197.628")
+    assert item.perceived_effort_rpe == Decimal("3.0")
+    assert item.feeling_score == 75
+    assert item.provenance["perceived_effort_rpe"] == {
+        "source": "garmin",
+        "interpretation": "documented",
+        "raw_field": "session.workout_rpe",
+        "transformation": "divide FIT Borg CR10 score by 10",
+    }
+    assert item.provenance["feeling_score"] == {
+        "source": "garmin",
+        "interpretation": "documented",
+        "raw_field": "session.workout_feel",
+        "transformation": "preserve FIT 0-100 workout feeling score",
+    }
     assert item.provenance["moving_seconds"]["transformation"] == "value unavailable"
     assert item.provenance["swim_seconds"]["source"] == "derived"
     assert item.provenance["rest_seconds"]["source"] == "derived"

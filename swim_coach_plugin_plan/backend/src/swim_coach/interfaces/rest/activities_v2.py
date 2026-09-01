@@ -2,25 +2,25 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from swim_coach.application.services.activity_views import (
     activity_detail_v2,
     activity_summary_v2,
 )
+from swim_coach.domain.activities import SessionFeedback
 from swim_coach.domain.shared.value_objects import EntityId
 from swim_coach.interfaces.rest.activities import (
-    FeedbackRequest,
-    FeedbackResponse,
     IdempotencyHeader,
     ManualMatchRequest,
     MatchResponse,
     process_activity,
-    put_feedback,
     put_match,
 )
 from swim_coach.interfaces.rest.dependencies import (
@@ -69,6 +69,40 @@ class DataQualityV2(StrictModel):
     reasons: list[str]
 
 
+class GarminEvaluationV2(StrictModel):
+    rpe: str | None
+    feeling_score: int | None
+
+
+class ManualEvaluationV2(StrictModel):
+    rpe: int | None
+    feeling_score: int | None
+
+
+class EffectiveEvaluationV2(StrictModel):
+    rpe: str | None
+    feeling_score: int | None
+
+
+class EvaluationProvenanceFactV2(StrictModel):
+    source: Literal["GARMIN", "MANUAL_OVERRIDE"] | None
+    raw_field: str | None = None
+    transformation: str | None = None
+    interpretation: str | None = None
+
+
+class EvaluationProvenanceV2(StrictModel):
+    rpe: EvaluationProvenanceFactV2
+    feeling_score: EvaluationProvenanceFactV2
+
+
+class SessionEvaluationV2(StrictModel):
+    garmin: GarminEvaluationV2
+    manual_override: ManualEvaluationV2
+    effective: EffectiveEvaluationV2
+    provenance: EvaluationProvenanceV2
+
+
 class ActivitySummaryV2(StrictModel):
     activity_id: UUID
     name: str
@@ -83,6 +117,7 @@ class ActivitySummaryV2(StrictModel):
     pool: PoolFactsV2
     provenance: dict[str, Any]
     data_quality: DataQualityV2
+    session_evaluation: SessionEvaluationV2
 
 
 class NormalizationV2(StrictModel):
@@ -149,16 +184,47 @@ class MatchV2(StrictModel):
 
 class FeedbackV2(StrictModel):
     id: UUID
-    rpe: int
+    rpe: int | None
     technique_rating: int | None
     fatigue_rating: int | None
     enjoyment_rating: int | None
+    feeling_score: int | None
     pain_present: bool
     pain_location: str | None
     pain_intensity: int | None
     comment: str | None
     version: int
     updated_at: str
+
+    @classmethod
+    def from_domain(cls, feedback: SessionFeedback) -> FeedbackV2:
+        return cls(
+            id=feedback.id.value,
+            rpe=feedback.rpe,
+            technique_rating=feedback.technique_rating,
+            fatigue_rating=feedback.fatigue_rating,
+            enjoyment_rating=feedback.enjoyment_rating,
+            feeling_score=feedback.feeling_score,
+            pain_present=feedback.pain_present,
+            pain_location=feedback.pain_location,
+            pain_intensity=feedback.pain_intensity,
+            comment=feedback.comment,
+            version=feedback.version,
+            updated_at=feedback.updated_at.isoformat(),
+        )
+
+
+class FeedbackRequestV2(StrictModel):
+    rpe: int | None = Field(default=None, ge=1, le=10)
+    technique_rating: int | None = Field(default=None, ge=1, le=5)
+    fatigue_rating: int | None = Field(default=None, ge=1, le=5)
+    enjoyment_rating: int | None = Field(default=None, ge=1, le=5)
+    feeling_score: int | None = Field(default=None, ge=0, le=100)
+    pain_present: bool = False
+    pain_location: str | None = Field(default=None, max_length=120)
+    pain_intensity: int | None = Field(default=None, ge=1, le=10)
+    comment: str | None = Field(default=None, max_length=2_000)
+    version: int | None = Field(default=None, ge=1)
 
 
 class ActivityDetailV2(ActivitySummaryV2):
@@ -181,13 +247,18 @@ async def list_activities_v2(
         normalization_facts = await uow.activity_data.list_current_normalization_facts(
             authenticated.user.id, [item.id for item in activities]
         )
+        feedbacks = await uow.activity_data.list_feedbacks(
+            authenticated.user.id, [item.id for item in activities]
+        )
         normalized = {item.activity_id: item for item in normalization_facts}
+        feedback_by_activity = {item.activity_id: item for item in feedbacks}
     return [
         ActivitySummaryV2.model_validate(
             activity_summary_v2(
                 item,
                 normalized.get(item.id),
                 timezone_name=authenticated.user.timezone,
+                feedback=feedback_by_activity.get(item.id),
             )
         )
         for item in activities
@@ -216,25 +287,40 @@ async def process_activity_v2(
     return await process_activity(activity_id, idempotency_key, authenticated, services)
 
 
-@router.put("/{activity_id}/feedback", response_model=FeedbackResponse)
+@router.put("/{activity_id}/feedback", response_model=FeedbackV2 | None)
 async def put_feedback_v2(
     activity_id: UUID,
-    payload: FeedbackRequest,
+    payload: FeedbackRequestV2,
     idempotency_key: IdempotencyHeader,
     authenticated: CsrfAuthenticated,
     services: Services,
     correlation_id: RequestCorrelationId,
-) -> FeedbackResponse:
-    """Keep athlete feedback on the v2 activity resource without changing its shape."""
+) -> FeedbackV2 | None:
+    """Store field-level overrides; Garmin RPE may satisfy the effective RPE."""
 
-    return await put_feedback(
-        activity_id,
-        payload,
-        idempotency_key,
-        authenticated,
-        services,
-        correlation_id,
+    request_hash = hashlib.sha256(
+        json.dumps(payload.model_dump(mode="json"), sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    feedback = await services.activity_data.record_feedback(
+        authenticated.user.id,
+        EntityId(activity_id),
+        rpe=payload.rpe,
+        technique_rating=payload.technique_rating,
+        fatigue_rating=payload.fatigue_rating,
+        enjoyment_rating=payload.enjoyment_rating,
+        feeling_score=payload.feeling_score,
+        pain_present=payload.pain_present,
+        pain_location=payload.pain_location,
+        pain_intensity=payload.pain_intensity,
+        comment=payload.comment,
+        expected_version=payload.version,
+        actor_id=str(authenticated.user.id),
+        correlation_id=correlation_id,
+        idempotency_key=idempotency_key,
+        request_hash=request_hash,
+        preserve_existing_feeling_score=False,
     )
+    return FeedbackV2.from_domain(feedback) if feedback is not None else None
 
 
 @router.put("/{activity_id}/match", response_model=MatchResponse)

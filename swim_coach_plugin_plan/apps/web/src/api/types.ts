@@ -94,6 +94,46 @@ export interface SwimActivity {
   avg_swolf: string | null;
 }
 
+export interface SessionFeedback {
+  id: string;
+  rpe: number | null;
+  technique_rating: number | null;
+  fatigue_rating: number | null;
+  enjoyment_rating: number | null;
+  pain_present: boolean;
+  pain_location: string | null;
+  pain_intensity: number | null;
+  comment: string | null;
+  version: number;
+  updated_at: string;
+}
+
+export interface SessionEvaluationV2 {
+  garmin: {
+    rpe: string | null;
+    feeling_score: number | null;
+  };
+  manual_override: {
+    rpe: number | null;
+    feeling_score: number | null;
+  };
+  effective: {
+    rpe: string | null;
+    feeling_score: number | null;
+  };
+  provenance: {
+    rpe: SessionEvaluationProvenance;
+    feeling_score: SessionEvaluationProvenance;
+  };
+}
+
+export interface SessionEvaluationProvenance {
+  source: "MANUAL_OVERRIDE" | "GARMIN" | null;
+  raw_field?: string | null;
+  transformation?: string | null;
+  interpretation?: string | null;
+}
+
 export interface SwimActivityDetail {
   activity: SwimActivity;
   normalized: boolean;
@@ -120,19 +160,7 @@ export interface SwimActivityDetail {
     flags: string[];
   } | null;
   match: { planned_workout_id: string; method: string; confidence: string } | null;
-  feedback: {
-    id: string;
-    rpe: number;
-    technique_rating: number | null;
-    fatigue_rating: number | null;
-    enjoyment_rating: number | null;
-    pain_present: boolean;
-    pain_location: string | null;
-    pain_intensity: number | null;
-    comment: string | null;
-    version: number;
-    updated_at: string;
-  } | null;
+  feedback: (SessionFeedback & { rpe: number }) | null;
   raw_fit_exposed: false;
 }
 
@@ -165,6 +193,7 @@ export interface SwimActivityV2 {
   pool: { length_m: number | null; active_length_count: number | null };
   provenance: Record<string, unknown>;
   data_quality: { level: "HIGH" | "MEDIUM" | "LOW"; reasons: string[] };
+  session_evaluation: SessionEvaluationV2;
 }
 
 export interface SwimActivityDetailV2 extends SwimActivityV2 {
@@ -214,7 +243,7 @@ export interface SwimActivityDetailV2 extends SwimActivityV2 {
     summary: Record<string, unknown>;
   } | null;
   match: { planned_workout_id: string; confidence: string; method: string } | null;
-  feedback: SwimActivityDetail["feedback"];
+  feedback: (SessionFeedback & { feeling_score: number | null }) | null;
   raw_fit_exposed: false;
 }
 

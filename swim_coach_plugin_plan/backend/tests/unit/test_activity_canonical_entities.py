@@ -1,8 +1,12 @@
+from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
+import pytest
+
 from swim_coach.domain.activities import ActivityInterval, ActivityLength
+from swim_coach.domain.shared.errors import DomainValidationError
 from swim_coach.domain.shared.value_objects import EntityId
 from swim_coach.infrastructure.db.uow import (
     _legacy_child_provenance,
@@ -74,6 +78,8 @@ def test_uow_invalidates_known_parser_v1_moving_alias_on_read() -> None:
         swim_pace_seconds_per_100m=None,
         timer_pace_seconds_per_100m=None,
         session_pace_seconds_per_100m=None,
+        perceived_effort_rpe=Decimal("3.0"),
+        feeling_score=75,
         provenance_json={},
     )
 
@@ -81,10 +87,19 @@ def test_uow_invalidates_known_parser_v1_moving_alias_on_read() -> None:
 
     assert normalization.moving_seconds is None
     assert normalization.garmin_reported_speed_m_per_s == Decimal("0.591715976")
+    assert normalization.perceived_effort_rpe == Decimal("3.0")
+    assert normalization.feeling_score == 75
     assert "LEGACY_V1_MOVING_DURATION_INVALIDATED" in normalization.warnings
     assert normalization.provenance["moving_seconds"]["interpretation"] == (
         "legacy_v1_timer_alias_invalidated"
     )
+
+    with pytest.raises(DomainValidationError, match="RPE must be between 0 and 10"):
+        replace(normalization, perceived_effort_rpe=Decimal("10.1"))
+    with pytest.raises(DomainValidationError, match=r"0\.1 increments"):
+        replace(normalization, perceived_effort_rpe=Decimal("3.05"))
+    with pytest.raises(DomainValidationError, match="feeling score"):
+        replace(normalization, feeling_score=101)
 
 
 def test_legacy_child_provenance_marks_v2_fields_unavailable() -> None:

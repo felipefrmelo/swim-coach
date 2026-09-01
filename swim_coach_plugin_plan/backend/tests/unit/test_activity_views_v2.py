@@ -32,6 +32,7 @@ from swim_coach.domain.activities import (
     ActivityNormalization,
     DataQuality,
     NormalizedActivity,
+    SessionFeedback,
 )
 from swim_coach.domain.garmin import Activity
 from swim_coach.domain.shared import (
@@ -464,6 +465,62 @@ def test_v2_rejects_legacy_current_normalization_instead_of_reusing_false_moving
     assert detail["analysis"] is None
 
 
+def test_v2_session_evaluation_keeps_garmin_facts_and_field_level_overrides() -> None:
+    activity, normalized = _synthetic_activity_fixture()
+    normalization = replace(
+        normalized.normalization,
+        perceived_effort_rpe=Decimal("3.0"),
+        feeling_score=75,
+        provenance={
+            **normalized.normalization.provenance,
+            "perceived_effort_rpe": {
+                "source": "garmin",
+                "raw_field": "session.workout_rpe",
+                "transformation": "raw / 10",
+                "interpretation": "documented",
+            },
+            "feeling_score": {
+                "source": "garmin",
+                "raw_field": "session.workout_feel",
+                "interpretation": "documented",
+            },
+        },
+    )
+    canonical = NormalizedActivity(
+        normalization, normalized.laps, normalized.intervals, normalized.lengths
+    )
+    feedback = SessionFeedback(
+        id=EntityId.new(),
+        user_id=activity.user_id,
+        activity_id=activity.id,
+        rpe=None,
+        feeling_score=60,
+        technique_rating=4,
+    )
+
+    result = activity_detail_v2(
+        ActivityDetail(activity, canonical, None, None, feedback),
+        timezone_name="America/Sao_Paulo",
+    )
+
+    assert result["session_evaluation"] == {
+        "garmin": {"rpe": "3.0", "feeling_score": 75},
+        "manual_override": {"rpe": None, "feeling_score": 60},
+        "effective": {"rpe": "3.0", "feeling_score": 60},
+        "provenance": {
+            "rpe": {
+                "source": "GARMIN",
+                "raw_field": "session.workout_rpe",
+                "transformation": "raw / 10",
+                "interpretation": "documented",
+            },
+            "feeling_score": {"source": "MANUAL_OVERRIDE"},
+        },
+    }
+    assert result["feedback"]["rpe"] is None
+    assert result["feedback"]["feeling_score"] == 60
+
+
 def test_rest_v2_routes_publish_typed_openapi_contracts() -> None:
     schema = create_app().openapi()
 
@@ -586,6 +643,7 @@ class _McpUnitOfWork:
         self.activity_data = SimpleNamespace(
             list_current_normalization_facts=self._list_current_normalization_facts,
             list_analyses=self._list_analyses,
+            list_feedbacks=self._list_feedbacks,
         )
         self._activity = activity
         self._normalized = normalized
@@ -615,6 +673,9 @@ class _McpUnitOfWork:
     async def _list_analyses(self, *_: object, **__: object) -> list[ActivityAnalysis]:
         return list(self._analyses)
 
+    async def _list_feedbacks(self, *_: object, **__: object) -> list[object]:
+        return []
+
 
 class _McpUnitOfWorkFactory:
     def __init__(self, uow: _McpUnitOfWork) -> None:
@@ -622,6 +683,40 @@ class _McpUnitOfWorkFactory:
 
     def __call__(self) -> _McpUnitOfWork:
         return self._uow
+
+
+@pytest.mark.asyncio
+async def test_mcp_v1_hides_v2_feedback_without_a_manual_integer_rpe() -> None:
+    activity, normalized = _synthetic_activity_fixture()
+    feedback = SessionFeedback(
+        id=EntityId.new(),
+        user_id=activity.user_id,
+        activity_id=activity.id,
+        rpe=None,
+        technique_rating=4,
+    )
+    detail = ActivityDetail(activity, normalized, None, None, feedback)
+    service = McpReadService(
+        uow_factory=cast(
+            UnitOfWorkFactory, _McpUnitOfWorkFactory(_McpUnitOfWork(activity, normalized))
+        ),
+        identity=cast(IdentityService, object()),
+        context=cast(ContextService, object()),
+        workouts=cast(WorkoutService, object()),
+        activity_data=cast(ActivityDataService, _ActivityDataServiceStub(detail)),
+    )
+    principal = McpPrincipal(activity.user_id, "fixture", frozenset({"coach"}))
+
+    result = await service.get_swim_activity_v1(
+        principal,
+        "request-v1-feedback",
+        activity_id=activity.id,
+        include_intervals=False,
+        include_lengths=False,
+        max_intervals=5,
+    )
+
+    assert result.data["feedback"] is None
 
 
 @pytest.mark.asyncio

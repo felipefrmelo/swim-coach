@@ -788,6 +788,8 @@ class ActivityNormalizationModel(Base):
     swim_pace_seconds_per_100m: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
     timer_pace_seconds_per_100m: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
     session_pace_seconds_per_100m: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    perceived_effort_rpe: Mapped[Decimal | None] = mapped_column(Numeric(4, 1))
+    feeling_score: Mapped[int | None] = mapped_column(Integer)
     active_length_count: Mapped[int] = mapped_column(Integer, nullable=False)
     completeness: Mapped[Decimal] = mapped_column(Numeric(5, 4), nullable=False)
     quality: Mapped[str] = mapped_column(String(20), nullable=False)
@@ -821,6 +823,14 @@ class ActivityNormalizationModel(Base):
         ),
         CheckConstraint(
             "completeness BETWEEN 0 AND 1", name="ck_activity_normalization_completeness"
+        ),
+        CheckConstraint(
+            "perceived_effort_rpe IS NULL OR perceived_effort_rpe BETWEEN 0 AND 10",
+            name="ck_activity_normalization_rpe",
+        ),
+        CheckConstraint(
+            "feeling_score IS NULL OR feeling_score BETWEEN 0 AND 100",
+            name="ck_activity_normalization_feeling",
         ),
         CheckConstraint(
             "quality IN ('complete','partial','poor')",
@@ -1116,10 +1126,11 @@ class SessionFeedbackModel(Base):
     activity_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("activity.id", ondelete="CASCADE"), nullable=False
     )
-    rpe: Mapped[int] = mapped_column(Integer, nullable=False)
+    rpe: Mapped[int | None] = mapped_column(Integer)
     technique_rating: Mapped[int | None] = mapped_column(Integer)
     fatigue_rating: Mapped[int | None] = mapped_column(Integer)
     enjoyment_rating: Mapped[int | None] = mapped_column(Integer)
+    feeling_score: Mapped[int | None] = mapped_column(Integer)
     pain_present: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     pain_location: Mapped[str | None] = mapped_column(String(120))
     pain_intensity: Mapped[int | None] = mapped_column(Integer)
@@ -1129,7 +1140,7 @@ class SessionFeedbackModel(Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     __table_args__ = (
-        CheckConstraint("rpe BETWEEN 1 AND 10", name="ck_session_feedback_rpe"),
+        CheckConstraint("rpe IS NULL OR rpe BETWEEN 1 AND 10", name="ck_session_feedback_rpe"),
         CheckConstraint(
             "technique_rating IS NULL OR technique_rating BETWEEN 1 AND 5",
             name="ck_session_feedback_technique",
@@ -1141,6 +1152,10 @@ class SessionFeedbackModel(Base):
         CheckConstraint(
             "enjoyment_rating IS NULL OR enjoyment_rating BETWEEN 1 AND 5",
             name="ck_session_feedback_enjoyment",
+        ),
+        CheckConstraint(
+            "feeling_score IS NULL OR feeling_score BETWEEN 0 AND 100",
+            name="ck_session_feedback_feeling_score",
         ),
         CheckConstraint(
             "(pain_present AND pain_location IS NOT NULL AND pain_intensity BETWEEN 1 AND 10) "

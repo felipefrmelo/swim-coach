@@ -54,7 +54,7 @@ class _AnalysisContext:
 
 
 class ActivityDataService:
-    ANALYSIS_VERSION = "swim-analysis:2.0.2"
+    ANALYSIS_VERSION = "swim-analysis:2.1.0"
     MAX_FIT_BYTES = 50 * 1024 * 1024
 
     @staticmethod
@@ -134,11 +134,14 @@ class ActivityDataService:
                 f"{active_goal.version if active_goal else 0}"
             ).encode()
         ).hexdigest()[:12]
+        feedback_context = "0"
+        if feedback is not None:
+            feedback_hash = hashlib.sha256(
+                f"{feedback.rpe}|{feedback.feeling_score}".encode()
+            ).hexdigest()[:8]
+            feedback_context = f"{feedback.version}:{feedback_hash}"
         return _AnalysisContext(
-            analysis_version=(
-                f"{self.ANALYSIS_VERSION}|fb:{feedback.version if feedback else 0}"
-                f"|ctx:{context_hash}"
-            ),
+            analysis_version=(f"{self.ANALYSIS_VERSION}|fb:{feedback_context}|ctx:{context_hash}"),
             planned_workout_id=planned_workout_id,
             planned_distance_m=planned_distance_m,
             planned_workout=planned_workout,
@@ -313,6 +316,8 @@ class ActivityDataService:
                 "interval_count": len(selected.intervals),
                 "length_count": len(selected.lengths),
                 "parser_version": normalization.parser_version,
+                "garmin_rpe_present": normalization.perceived_effort_rpe is not None,
+                "garmin_feeling_present": normalization.feeling_score is not None,
                 "normalization_warnings": list(normalization.warnings),
             },
         )
@@ -550,10 +555,11 @@ class ActivityDataService:
         user_id: UserId,
         activity_id: EntityId,
         *,
-        rpe: int,
+        rpe: int | None,
         technique_rating: int | None,
         fatigue_rating: int | None,
         enjoyment_rating: int | None,
+        feeling_score: int | None = None,
         pain_present: bool,
         pain_location: str | None,
         pain_intensity: int | None,
@@ -563,7 +569,9 @@ class ActivityDataService:
         correlation_id: CorrelationId,
         idempotency_key: str | None = None,
         request_hash: str | None = None,
-    ) -> SessionFeedback:
+        reuse_idempotency_key_when_state_changed: bool = False,
+        preserve_existing_feeling_score: bool = False,
+    ) -> SessionFeedback | None:
         async with self._uow_factory() as uow:
             activity = await uow.activities.get(user_id, activity_id)
             if activity is None:
@@ -574,8 +582,10 @@ class ActivityDataService:
                     raise DomainError(
                         "VALIDATION_FAILED", "A request hash is required for idempotency."
                     )
+                await uow.idempotency.lock(idempotency_scope, idempotency_key)
+                idempotency_now = datetime.now(UTC)
                 replay = await uow.idempotency.get(
-                    idempotency_scope, idempotency_key, datetime.now(UTC)
+                    idempotency_scope, idempotency_key, idempotency_now
                 )
                 if replay is not None:
                     if replay.request_hash != request_hash:
@@ -584,17 +594,85 @@ class ActivityDataService:
                             "This idempotency key was already used for different feedback.",
                         )
                     existing_feedback = await uow.activity_data.get_feedback(user_id, activity_id)
-                    if existing_feedback is None:
+                    replay_cleared = replay.response.get("cleared") is True
+                    replay_resource_id = replay.response.get("resource_id")
+                    replay_version = replay.response.get("version")
+                    replay_matches_state = (
+                        existing_feedback is None
+                        if replay_cleared
+                        else existing_feedback is not None
+                        and replay_resource_id == str(existing_feedback.id)
+                        and (replay_version is None or replay_version == existing_feedback.version)
+                    )
+                    if not replay_matches_state:
+                        if reuse_idempotency_key_when_state_changed:
+                            await uow.idempotency.delete(idempotency_scope, idempotency_key)
+                        else:
+                            raise DomainError(
+                                "IDEMPOTENCY_CONFLICT",
+                                "The stored feedback replay no longer matches current state.",
+                            )
+                    elif replay_cleared:
+                        return None
+                    elif existing_feedback is not None:
+                        return existing_feedback
+                    else:  # pragma: no cover - replay_matches_state makes this unreachable
                         raise DomainError(
                             "INTERNAL_ERROR", "Idempotent feedback record is inconsistent."
                         )
-                    return existing_feedback
+                else:
+                    # The advisory lock makes it safe to remove an expired row before
+                    # the eventual insert without racing another first request.
+                    await uow.idempotency.delete(idempotency_scope, idempotency_key)
             feedback = await uow.activity_data.get_feedback(user_id, activity_id)
+            normalized = await uow.activity_data.get_current_normalization(user_id, activity_id)
+            stored_feeling_score = (
+                feedback.feeling_score
+                if preserve_existing_feeling_score and feedback is not None
+                else feeling_score
+            )
+            clear_manual_feedback = (
+                rpe is None
+                and technique_rating is None
+                and fatigue_rating is None
+                and enjoyment_rating is None
+                and stored_feeling_score is None
+                and not pain_present
+                and pain_location is None
+                and pain_intensity is None
+                and not (comment and comment.strip())
+            )
+            if clear_manual_feedback and feedback is None:
+                raise DomainError(
+                    "VALIDATION_FAILED",
+                    "At least one manual feedback field is required.",
+                )
+            if (
+                not clear_manual_feedback
+                and rpe is None
+                and (normalized is None or normalized.normalization.perceived_effort_rpe is None)
+            ):
+                raise DomainError(
+                    "VALIDATION_FAILED",
+                    "RPE is required when the normalized Garmin activity has no perceived effort.",
+                )
             previous_version = feedback.version if feedback else None
-            if feedback is None:
+            stored_feedback: SessionFeedback | None
+            if clear_manual_feedback:
+                if feedback is None:
+                    raise DomainError("INTERNAL_ERROR", "Feedback clear state became inconsistent.")
+                if expected_version is not None and expected_version != feedback.version:
+                    raise DomainError("REVISION_CONFLICT", "Feedback version changed.")
+                await uow.activity_data.delete_feedback(
+                    user_id,
+                    activity_id,
+                    expected_version=feedback.version,
+                )
+                stored_feedback = None
+            elif feedback is None:
                 if expected_version is not None:
                     raise DomainError("REVISION_CONFLICT", "Feedback does not exist yet.")
-                feedback = SessionFeedback(
+                stored_feedback = SessionFeedback(
                     id=EntityId.new(),
                     user_id=user_id,
                     activity_id=activity_id,
@@ -602,6 +680,7 @@ class ActivityDataService:
                     technique_rating=technique_rating,
                     fatigue_rating=fatigue_rating,
                     enjoyment_rating=enjoyment_rating,
+                    feeling_score=stored_feeling_score,
                     pain_present=pain_present,
                     pain_location=pain_location,
                     pain_intensity=pain_intensity,
@@ -615,18 +694,22 @@ class ActivityDataService:
                     technique_rating=technique_rating,
                     fatigue_rating=fatigue_rating,
                     enjoyment_rating=enjoyment_rating,
+                    feeling_score=stored_feeling_score,
                     pain_present=pain_present,
                     pain_location=pain_location,
                     pain_intensity=pain_intensity,
                     comment=comment,
                 )
-            await uow.activity_data.upsert_feedback(feedback, expected_version=previous_version)
-            normalized = await uow.activity_data.get_current_normalization(user_id, activity_id)
+                stored_feedback = feedback
+            if stored_feedback is not None:
+                await uow.activity_data.upsert_feedback(
+                    stored_feedback, expected_version=previous_version
+                )
             if normalized is not None:
                 match = await uow.activity_data.get_match(user_id, activity_id)
-                context = await self._analysis_context(uow, user_id, match, feedback)
+                context = await self._analysis_context(uow, user_id, match, stored_feedback)
                 analysis = await uow.activity_data.add_analysis(
-                    self._analyze(normalized, user_id, context, feedback)
+                    self._analyze(normalized, user_id, context, stored_feedback)
                 )
                 await uow.activity_data.promote_normalization(
                     user_id,
@@ -640,14 +723,31 @@ class ActivityDataService:
                     user_id=user_id,
                     actor_type="user",
                     actor_id=actor_id,
-                    action="feedback.session_recorded",
+                    action=(
+                        "feedback.session_cleared"
+                        if stored_feedback is None
+                        else "feedback.session_recorded"
+                    ),
                     entity_type="activity",
                     entity_id=activity_id,
                     correlation_id=correlation_id,
                     after={
-                        "rpe": feedback.rpe,
-                        "pain_present": feedback.pain_present,
-                        "comment_stored": bool(feedback.comment),
+                        "rpe_override": (
+                            stored_feedback.rpe is not None
+                            if stored_feedback is not None
+                            else False
+                        ),
+                        "feeling_score_override": (
+                            stored_feedback.feeling_score is not None
+                            if stored_feedback is not None
+                            else False
+                        ),
+                        "pain_present": (
+                            stored_feedback.pain_present if stored_feedback is not None else False
+                        ),
+                        "comment_stored": bool(
+                            stored_feedback.comment if stored_feedback is not None else None
+                        ),
                     },
                 )
             )
@@ -659,10 +759,18 @@ class ActivityDataService:
                         idempotency_key=idempotency_key,
                         request_hash=request_hash,
                         response_status=200,
-                        response={"resource_id": str(feedback.id)},
+                        response={
+                            "resource_id": (
+                                str(stored_feedback.id) if stored_feedback is not None else None
+                            ),
+                            "cleared": stored_feedback is None,
+                            "version": (
+                                stored_feedback.version if stored_feedback is not None else None
+                            ),
+                        },
                         created_at=now,
                         expires_at=now + timedelta(hours=24),
                     )
                 )
             await uow.commit()
-        return feedback
+        return stored_feedback

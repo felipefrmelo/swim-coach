@@ -1,11 +1,11 @@
 {
   "schema_version": "1.0",
   "plugin": "swim-coach",
-  "version": "2.1.0+codex.20260827020956",
+  "version": "2.1.0+codex.20260901233246",
   "base_version": "2.1.0",
   "mode": "direct-delete-everywhere",
   "status": "release_candidate",
-  "created_at": "2026-08-26T23:09:56-03:00",
+  "created_at": "2026-09-01T20:32:46-03:00",
   "registered_app": "plugin_asdk_app_6a7b7fbeceec819196c168888a9494b6",
   "oauth_scopes": ["coach"],
   "tools": [
@@ -30,35 +30,35 @@
     "delete-workout"
   ],
   "hashes": {
-    "plugins/swim-coach/.codex-plugin/plugin.json": "969479c557eee048331eeaae4fca2417fd0e79c15adaefba21c74b90fe08d97a",
+    "plugins/swim-coach/.codex-plugin/plugin.json": "59ee5ffa4d8bf34f609ddb28d0625bfc7c1346aeb3c545c49ca379cd881f5414",
     "plugins/swim-coach/.app.json": "c9a2762870f08690de4f94978addbedb2e05ec35215823d4773093c49909a7b9",
     "plugins/swim-coach/skills/adapt-workout/SKILL.md": "a0d85e0c08925c32bd1904328d6009395093ffdcd1ca7707336fd3e7865d842e",
     "plugins/swim-coach/skills/delete-workout/SKILL.md": "001e09138e83b0ad946315b52f056c18208c6c568d7c2a20de750f6adef01b95",
     "plugins/swim-coach/skills/diagnose-sync/SKILL.md": "4b71aa8237d6cbc0dc2e4905a7de67537db50f974029a306f146ab1e527d22e4",
     "plugins/swim-coach/skills/goal-progress/SKILL.md": "661ab8bd35ad31309a525943e574d18d2c40e54a8c688b6489f3abd31edab36e",
     "plugins/swim-coach/skills/plan-swim-week/SKILL.md": "d482aa13c726f067a0bc8257e60069769ac32a4de3828fe19e1b2f1e3bd34d98",
-    "plugins/swim-coach/skills/post-swim-checkin/SKILL.md": "dd2407a9cfe41b77e1bfb9cabd07f4a7280cbb8a93b4aaa1e9ace44a3e761511",
+    "plugins/swim-coach/skills/post-swim-checkin/SKILL.md": "b86337b732fbe0ab9f416ce482d24643b81b518367cbd5b22ae9239a3a01d406",
     "plugins/swim-coach/skills/publish-to-garmin/SKILL.md": "1b16cb3c4edd8e723f0cbd9309f63d2cfd061289ef42388bb17620c932142eae",
-    "plugins/swim-coach/skills/review-latest-swim/SKILL.md": "623c5c773a20709b5f3cd90ccedea01214c028bc66fc3b16898e56e681c082e6",
-    "contracts/mcp-tools.yaml": "bfca943f15379ae362b4ed8579218f2617f5287915cf5a8637fa49e9d104f4cc",
+    "plugins/swim-coach/skills/review-latest-swim/SKILL.md": "3441c27e39edf3b7bbcbddc3c145765203127aecac493570aae6cb6d25036563",
+    "contracts/mcp-tools.yaml": "7f5c1a29f7af190b18f58bb83b9f72d7c0a81244ebf7b7ce5a4bc3aafa695c5c",
     "contracts/tool-result-envelope.schema.json": "c7b52d450f9bccef8fcbf95743200a6f78a9c0473d7a2935a94d2b4800db40a0",
     "contracts/tool-result-envelope-v2.schema.json": "056a6cbe89eaedf1663635ec7fd78b8ca718f61faa4f39c6979e118e41fb4d3f",
     "contracts/oauth-scopes.md": "5e066ad38798ba739fe854a88058543ed447fa7506729b02478f9450d87c845a",
     "contracts/capability-release-matrix.yaml": "83792df55d98ddd664b0f65ccdf39135ecd347809c5b21b8c3b0cc4ea484f11e",
-    "contracts/openapi-skeleton.yaml": "75f0807326607f0deb6f6e7d57f9ae4462764d2bf947c4415fa375fca9ad7356"
+    "contracts/openapi-skeleton.yaml": "21aa587da3b9a042317b1e5ef25a7a424c261d42dfc0aaeeff758926fe96b25f"
   },
   "verification": {
     "skill_validation": 8,
     "p14_evals": 48,
-    "focused_unit_property_contract_tests": 217,
+    "focused_unit_property_contract_tests": 238,
     "postgresql_integration_tests": 32,
-    "full_check": "249-python-and-23-web-passed",
-    "targeted_e2e": "4-passed",
+    "full_check": "270-python-and-28-web-passed",
+    "targeted_e2e": "not-run-for-this-worktree",
     "production_smoke": "not-run-for-this-worktree"
   },
   "personal_install": {
     "marketplace": "personal",
-    "version": "2.1.0+codex.20260827020956",
+    "version": "2.1.0+codex.20260901233246",
     "validation": "passed",
     "enabled": true
   },
@@ -66,7 +66,7 @@
     "url": "https://swim-coach.ozix.com.br",
     "runtime_tool_count": 9,
     "target_tool_count": 9,
-    "schema_revision": "000012",
+    "schema_revision": "000013",
     "health": "not-verified",
     "garmin_write_mode": "not-exercised",
     "status": "pending"

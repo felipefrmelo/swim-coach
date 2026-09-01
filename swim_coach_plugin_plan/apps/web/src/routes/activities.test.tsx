@@ -1,9 +1,11 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { api } from "../api/client";
 import type { Me, SwimActivityDetailV2, SwimActivityV2 } from "../api/types";
 import { App } from "../app/App";
+import { FeedbackCard } from "./activities";
 import { router } from "./router";
 
 const activityId = "00000000-0000-0000-0000-000000000860";
@@ -52,13 +54,22 @@ const activity = {
   pool: { length_m: 20, active_length_count: 43 },
   provenance: { pool_length_m: { source: "GARMIN" } },
   data_quality: { level: "MEDIUM", reasons: ["PACE_FROM_GARMIN_REPORTED_SPEED_DIFFERS_FROM_TIMER_PACE"] },
+  session_evaluation: {
+    garmin: { rpe: "3.0", feeling_score: 75 },
+    manual_override: { rpe: null, feeling_score: null },
+    effective: { rpe: "3.0", feeling_score: 75 },
+    provenance: {
+      rpe: { source: "GARMIN", raw_field: "session.workout_rpe", transformation: "divide FIT Borg CR10 score by 10", interpretation: "documented" },
+      feeling_score: { source: "GARMIN", raw_field: "session.workout_feel", transformation: "preserve FIT 0-100 workout feeling score", interpretation: "documented" },
+    },
+  },
 } satisfies SwimActivityV2;
 
 const detail = {
   ...activity,
   schema_version: "2.0",
   normalization: {
-    parser_version: "garmin-fit-sdk:21.208.0|swim-coach:2.0.4",
+    parser_version: "garmin-fit-sdk:21.208.0|swim-coach:2.1.0",
     profile_version: "garmin-fit-profile:21.208.0",
     completeness: "0.98",
     warnings: ["PACE_FROM_GARMIN_REPORTED_SPEED_DIFFERS_FROM_TIMER_PACE"],
@@ -180,6 +191,7 @@ describe("activity v2 client and pages", () => {
     await api.processActivity(activityId);
     await api.saveFeedback(activityId, "feedback-key", {
       rpe: 6,
+      feeling_score: 80,
       technique_rating: null,
       fatigue_rating: null,
       enjoyment_rating: null,
@@ -192,6 +204,7 @@ describe("activity v2 client and pages", () => {
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe(`/api/v2/activities/${activityId}/process`);
     expect(fetchMock.mock.calls[1]?.[0]).toBe(`/api/v2/activities/${activityId}/feedback`);
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual(expect.objectContaining({ rpe: 6, feeling_score: 80 }));
     for (const [, init] of fetchMock.mock.calls) {
       expect(new Headers(init?.headers).get("X-CSRF-Token")).toBe("test-token");
     }
@@ -281,6 +294,260 @@ describe("activity v2 client and pages", () => {
     ).toBeVisible();
   });
 
+  it("uses Garmin evaluation without creating an RPE override when saving technique", async () => {
+    vi.spyOn(api, "authConfig").mockResolvedValue({
+      oidc_enabled: false,
+      dev_auth_enabled: true,
+    });
+    vi.spyOn(api, "me").mockResolvedValue(me);
+    vi.spyOn(api, "activity").mockResolvedValue(detail);
+    const save = vi.spyOn(api, "saveFeedback").mockResolvedValue({
+      id: "00000000-0000-0000-0000-000000000861",
+      rpe: null,
+      feeling_score: null,
+      technique_rating: 4,
+      fatigue_rating: null,
+      enjoyment_rating: null,
+      pain_present: false,
+      pain_location: null,
+      pain_intensity: null,
+      comment: null,
+      version: 1,
+      updated_at: "2000-07-01T12:40:00+00:00",
+    });
+
+    render(<App />);
+    await router.navigate({
+      to: "/activities/$activityId",
+      params: { activityId },
+    });
+
+    expect(await screen.findByText("Importado do Garmin: RPE 3/10 · sensação 75/100")).toBeVisible();
+    expect(screen.getByText("RPE 3/10 (Garmin) · sensação 75/100 (Garmin)")).toBeVisible();
+    expect(screen.queryByText("Esforço percebido manual")).not.toBeInTheDocument();
+    expect(screen.getByText(/já foram importados do Garmin/)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Salvar feedback" })).toBeDisabled();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "4" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Salvar feedback" }));
+
+    await waitFor(() => expect(save).toHaveBeenCalledOnce());
+    const payload = save.mock.calls[0]?.[2];
+    expect(payload).toEqual(expect.objectContaining({ technique_rating: 4 }));
+    expect(payload).not.toHaveProperty("rpe");
+    expect(payload).not.toHaveProperty("feeling_score");
+  });
+
+  it("resets stale defaults when polling adds Garmin evaluation and preserves later dirty edits", () => {
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    const withoutNormalization: SwimActivityDetailV2 = {
+      ...detail,
+      normalization: null,
+      session_evaluation: {
+        garmin: { rpe: null, feeling_score: null },
+        manual_override: { rpe: null, feeling_score: null },
+        effective: { rpe: null, feeling_score: null },
+        provenance: {
+          rpe: { source: null },
+          feeling_score: { source: null },
+        },
+      },
+    };
+    const card = (nextDetail: SwimActivityDetailV2) => <QueryClientProvider client={queryClient}><FeedbackCard activityId={activityId} detail={nextDetail} /></QueryClientProvider>;
+    const view = render(card(withoutNormalization));
+
+    expect(screen.getByText("Esforço percebido manual")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Informar sensação" }));
+    expect((screen.getByRole("slider", { name: "Sensação manual" }) as HTMLInputElement).value).toBe("50");
+
+    view.rerender(card(detail));
+
+    expect(screen.getByText("Importado do Garmin: RPE 3/10 · sensação 75/100")).toBeVisible();
+    expect(screen.queryByText("Esforço percebido manual")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ajustar RPE" })).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(screen.getByRole("button", { name: "Ajustar sensação" }));
+    const feeling = screen.getByRole("slider", { name: "Sensação manual" }) as HTMLInputElement;
+    expect(feeling.value).toBe("75");
+
+    fireEvent.change(feeling, { target: { value: "82" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ajustar RPE" }));
+    fireEvent.click(screen.getByRole("button", { name: "6" }));
+    view.rerender(card({
+      ...detail,
+      normalization: detail.normalization ? { ...detail.normalization } : null,
+      session_evaluation: {
+        garmin: { ...detail.session_evaluation.garmin },
+        manual_override: { ...detail.session_evaluation.manual_override },
+        effective: { ...detail.session_evaluation.effective },
+        provenance: {
+          rpe: { ...detail.session_evaluation.provenance.rpe },
+          feeling_score: { ...detail.session_evaluation.provenance.feeling_score },
+        },
+      },
+    }));
+
+    expect((screen.getByRole("slider", { name: "Sensação manual" }) as HTMLInputElement).value).toBe("82");
+    expect(screen.getByRole("button", { name: "6" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("sends Garmin RPE and feeling only after explicit manual override", async () => {
+    vi.spyOn(api, "authConfig").mockResolvedValue({
+      oidc_enabled: false,
+      dev_auth_enabled: true,
+    });
+    vi.spyOn(api, "me").mockResolvedValue(me);
+    vi.spyOn(api, "activity").mockResolvedValue(detail);
+    const save = vi.spyOn(api, "saveFeedback").mockResolvedValue({
+      id: "00000000-0000-0000-0000-000000000862",
+      rpe: 6,
+      feeling_score: 82,
+      technique_rating: null,
+      fatigue_rating: null,
+      enjoyment_rating: null,
+      pain_present: false,
+      pain_location: null,
+      pain_intensity: null,
+      comment: null,
+      version: 1,
+      updated_at: "2000-07-01T12:40:00+00:00",
+    });
+
+    render(<App />);
+    await router.navigate({
+      to: "/activities/$activityId",
+      params: { activityId },
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Ajustar RPE" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ajustar sensação" }));
+    fireEvent.click(screen.getByRole("button", { name: "6" }));
+    fireEvent.change(screen.getByRole("slider", { name: "Sensação manual" }), { target: { value: "82" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar feedback" }));
+
+    await waitFor(() => expect(save).toHaveBeenCalledOnce());
+    expect(save.mock.calls[0]?.[2]).toEqual(expect.objectContaining({ rpe: 6, feeling_score: 82 }));
+  });
+
+  it("clears manual evaluation overrides by omitting them from the replacement", async () => {
+    vi.spyOn(api, "authConfig").mockResolvedValue({
+      oidc_enabled: false,
+      dev_auth_enabled: true,
+    });
+    vi.spyOn(api, "me").mockResolvedValue(me);
+    vi.spyOn(api, "activity").mockResolvedValue({
+      ...detail,
+      session_evaluation: {
+        ...detail.session_evaluation,
+        manual_override: { rpe: 6, feeling_score: 82 },
+        effective: { rpe: "6", feeling_score: 82 },
+        provenance: {
+          rpe: { source: "MANUAL_OVERRIDE" },
+          feeling_score: { source: "MANUAL_OVERRIDE" },
+        },
+      },
+      feedback: {
+        id: "00000000-0000-0000-0000-000000000863",
+        rpe: 6,
+        feeling_score: 82,
+        technique_rating: null,
+        fatigue_rating: null,
+        enjoyment_rating: null,
+        pain_present: false,
+        pain_location: null,
+        pain_intensity: null,
+        comment: null,
+        version: 1,
+        updated_at: "2000-07-01T12:40:00+00:00",
+      },
+    });
+    const save = vi.spyOn(api, "saveFeedback").mockResolvedValue(null);
+
+    render(<App />);
+    await router.navigate({
+      to: "/activities/$activityId",
+      params: { activityId },
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Usar RPE do Garmin" }));
+    fireEvent.click(screen.getByRole("button", { name: "Usar sensação do Garmin" }));
+    fireEvent.click(screen.getByRole("button", { name: "Atualizar feedback" }));
+
+    await waitFor(() => expect(save).toHaveBeenCalledOnce());
+    const payload = save.mock.calls[0]?.[2];
+    expect(payload).not.toHaveProperty("rpe");
+    expect(payload).not.toHaveProperty("feeling_score");
+  });
+
+  it("removes the complete manual feedback when the FIT has no Garmin RPE", async () => {
+    vi.spyOn(api, "authConfig").mockResolvedValue({
+      oidc_enabled: false,
+      dev_auth_enabled: true,
+    });
+    vi.spyOn(api, "me").mockResolvedValue(me);
+    vi.spyOn(api, "activity").mockResolvedValue({
+      ...detail,
+      session_evaluation: {
+        garmin: { rpe: null, feeling_score: null },
+        manual_override: { rpe: 6, feeling_score: null },
+        effective: { rpe: "6", feeling_score: null },
+        provenance: {
+          rpe: { source: "MANUAL_OVERRIDE" },
+          feeling_score: { source: null },
+        },
+      },
+      feedback: {
+        id: "00000000-0000-0000-0000-000000000864",
+        rpe: 6,
+        feeling_score: null,
+        technique_rating: 4,
+        fatigue_rating: null,
+        enjoyment_rating: null,
+        pain_present: false,
+        pain_location: null,
+        pain_intensity: null,
+        comment: "Sessão moderada",
+        version: 3,
+        updated_at: "2000-07-01T12:40:00+00:00",
+      },
+    });
+    const remove = vi.spyOn(api, "saveFeedback").mockResolvedValue(null);
+
+    render(<App />);
+    await router.navigate({
+      to: "/activities/$activityId",
+      params: { activityId },
+    });
+
+    expect(await screen.findByText("RPE 6/10 (ajuste manual)")).toBeVisible();
+    expect(screen.getByText(/FIT não trouxe esforço/)).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Remover feedback manual" }));
+
+    const confirmation = screen.getByRole("alertdialog", { name: "Remover todo o feedback manual?" });
+    expect(confirmation).toBeVisible();
+    expect(screen.getByText(/ficará sem avaliação de esforço ou sensação/)).toBeVisible();
+    expect(remove).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Remover feedback manual" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar remoção" }));
+
+    await waitFor(() => expect(remove).toHaveBeenCalledOnce());
+    const payload = remove.mock.calls[0]?.[2];
+    expect(payload).toEqual({
+      technique_rating: null,
+      fatigue_rating: null,
+      enjoyment_rating: null,
+      pain_present: false,
+      pain_location: null,
+      pain_intensity: null,
+      comment: null,
+      version: 3,
+    });
+    expect(payload).not.toHaveProperty("rpe");
+    expect(payload).not.toHaveProperty("feeling_score");
+  });
+
   it("prefers freestyle WORK efficiency over drill SWOLF", async () => {
     vi.spyOn(api, "authConfig").mockResolvedValue({
       oidc_enabled: false,
@@ -365,7 +632,7 @@ describe("activity v2 client and pages", () => {
         stationary_s: null,
       },
       analysis: {
-        version: "swim-analysis:2.0.2",
+        version: "swim-analysis:2.1.0",
         quality: "partial",
         flags: [],
         summary: {},
@@ -397,7 +664,7 @@ describe("activity v2 client and pages", () => {
     vi.spyOn(api, "activity").mockResolvedValue({
       ...detail,
       analysis: {
-        version: "swim-analysis:2.0.2",
+        version: "swim-analysis:2.1.0",
         quality: "partial",
         flags: ["REST_CLASSIFIED_FROM_PLANNED_WORKOUT"],
         summary: {},

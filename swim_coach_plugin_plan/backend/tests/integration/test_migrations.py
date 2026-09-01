@@ -97,6 +97,22 @@ async def test_migration_up_down_up_and_constraints(
                     )
                 }
             )
+            feedback_columns = await connection.run_sync(
+                lambda sync_connection: {
+                    column["name"]: column
+                    for column in inspect(sync_connection).get_columns("session_feedback")
+                }
+            )
+            normalization_constraints = await connection.run_sync(
+                lambda sync_connection: inspect(sync_connection).get_check_constraints(
+                    "activity_normalization"
+                )
+            )
+            feedback_constraints = await connection.run_sync(
+                lambda sync_connection: inspect(sync_connection).get_check_constraints(
+                    "session_feedback"
+                )
+            )
             revision = (
                 await connection.exec_driver_sql("SELECT version_num FROM alembic_version")
             ).scalar_one()
@@ -109,13 +125,24 @@ async def test_migration_up_down_up_and_constraints(
     finally:
         await database.dispose()
 
-        assert revision == "000012"
+        assert revision == "000013"
     assert immutable_trigger == 1
     assert {item["name"] for item in constraints} >= {
         "ck_pool_length_positive",
         "ck_pool_version",
     }
     assert all("garmin_reported_speed_m_per_s" in columns for columns in canonical_columns.values())
+    assert {"perceived_effort_rpe", "feeling_score"} <= canonical_columns["activity_normalization"]
+    assert feedback_columns["rpe"]["nullable"] is True
+    assert "feeling_score" in feedback_columns
+    assert {item["name"] for item in normalization_constraints} >= {
+        "ck_activity_normalization_rpe",
+        "ck_activity_normalization_feeling",
+    }
+    assert {item["name"] for item in feedback_constraints} >= {
+        "ck_session_feedback_rpe",
+        "ck_session_feedback_feeling_score",
+    }
 
 
 async def test_canonical_v2_upgrade_repairs_only_corroborated_legacy_summary(
@@ -182,7 +209,7 @@ async def test_canonical_v2_upgrade_repairs_only_corroborated_legacy_summary(
                 },
             )
 
-        await asyncio.to_thread(command.upgrade, config, "000012")
+        await asyncio.to_thread(command.upgrade, config, "head")
 
         async with database.session_factory() as session:
             activity = await session.get(ActivityModel, activity_id)
@@ -194,7 +221,7 @@ async def test_canonical_v2_upgrade_repairs_only_corroborated_legacy_summary(
             assert raw is not None
             assert raw.json_payload["poolLength"] == 2_000
     finally:
-        await asyncio.to_thread(command.upgrade, config, "000012")
+        await asyncio.to_thread(command.upgrade, config, "head")
         async with database.engine.begin() as connection:
             await connection.exec_driver_sql("TRUNCATE TABLE app_user CASCADE")
         await database.dispose()
@@ -211,6 +238,7 @@ async def test_canonical_v2_downgrade_refuses_to_destroy_persisted_facts(
     activity_id = uuid4()
     artifact_id = uuid4()
     normalization_id = uuid4()
+    feedback_id = uuid4()
     try:
         async with database.session_factory.begin() as session:
             session.add(
@@ -307,16 +335,68 @@ async def test_canonical_v2_downgrade_refuses_to_destroy_persisted_facts(
 
         config = Config(str(ROOT / "backend/alembic.ini"))
         config.attributes["database_url"] = database_url
+        async with database.engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "UPDATE activity_normalization "
+                    "SET perceived_effort_rpe=3.0, feeling_score=75 WHERE id=:id"
+                ),
+                {"id": normalization_id},
+            )
+        with pytest.raises(DBAPIError, match="000013 downgrade is unsafe"):
+            await asyncio.to_thread(command.downgrade, config, "000012")
+        assert await database.revision() == "000013"
+        async with database.engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "UPDATE activity_normalization "
+                    "SET perceived_effort_rpe=NULL, feeling_score=NULL WHERE id=:id"
+                ),
+                {"id": normalization_id},
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO session_feedback "
+                    "(id,user_id,activity_id,rpe,feeling_score,pain_present,created_at,"
+                    "updated_at,version) VALUES "
+                    "(:id,:user_id,:activity_id,NULL,75,false,:now,:now,1)"
+                ),
+                {
+                    "id": feedback_id,
+                    "user_id": user_id,
+                    "activity_id": activity_id,
+                    "now": now,
+                },
+            )
+        with pytest.raises(DBAPIError, match="000013 downgrade is unsafe"):
+            await asyncio.to_thread(command.downgrade, config, "000012")
+        assert await database.revision() == "000013"
+        async with database.engine.begin() as connection:
+            await connection.execute(
+                text("DELETE FROM session_feedback WHERE id=:id"), {"id": feedback_id}
+            )
         with pytest.raises(DBAPIError, match="downgrade is unsafe"):
             await asyncio.to_thread(command.downgrade, config, "000011")
 
-        assert await database.revision() == "000012"
-        async with database.session_factory() as session:
-            stored = await session.get(ActivityNormalizationModel, normalization_id)
-            assert stored is not None
+        # Alembic rolls the multi-revision downgrade back atomically when the
+        # canonical-v2 guard rejects the following step.
+        assert await database.revision() == "000013"
+        async with database.engine.connect() as connection:
+            stored = (
+                await connection.execute(
+                    text(
+                        "SELECT moving_seconds, warnings_json "
+                        "FROM activity_normalization WHERE id=:id"
+                    ),
+                    {"id": normalization_id},
+                )
+            ).one()
             assert stored.moving_seconds is None
             assert stored.warnings_json == ["MOVING_DURATION_UNAVAILABLE"]
     finally:
+        config = Config(str(ROOT / "backend/alembic.ini"))
+        config.attributes["database_url"] = database_url
+        await asyncio.to_thread(command.upgrade, config, "head")
         async with database.session_factory.begin() as session:
             await session.execute(
                 delete(ActivityNormalizationModel).where(
@@ -437,7 +517,7 @@ async def test_canonical_v2_preserves_and_downgrades_legacy_moving_fact(
                 {"normalization_id": normalization_id, "id": activity_id},
             )
 
-        await asyncio.to_thread(command.upgrade, config, "000012")
+        await asyncio.to_thread(command.upgrade, config, "head")
         async with database.engine.connect() as connection:
             moving_after_upgrade = await connection.scalar(
                 text("SELECT moving_seconds FROM activity_normalization WHERE id=:id"),
@@ -453,7 +533,7 @@ async def test_canonical_v2_preserves_and_downgrades_legacy_moving_fact(
             )
         assert moving_after_downgrade == Decimal("30.000")
     finally:
-        await asyncio.to_thread(command.upgrade, config, "000012")
+        await asyncio.to_thread(command.upgrade, config, "head")
         async with database.engine.begin() as connection:
             await connection.exec_driver_sql("TRUNCATE TABLE app_user CASCADE")
         await database.dispose()

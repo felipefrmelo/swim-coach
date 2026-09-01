@@ -385,6 +385,51 @@ components:
       properties:
         level: {type: string, enum: [HIGH, MEDIUM, LOW]}
         reasons: {type: array, items: {type: string}}
+    SessionEvaluationProvenanceV2:
+      type: object
+      additionalProperties: false
+      required: [source]
+      properties:
+        source: {type: [string, "null"], enum: [GARMIN, MANUAL_OVERRIDE, null]}
+        raw_field: {type: [string, "null"]}
+        transformation: {type: [string, "null"]}
+        interpretation: {type: [string, "null"]}
+    GarminSessionEvaluationV2:
+      type: object
+      additionalProperties: false
+      required: [rpe, feeling_score]
+      properties:
+        rpe: {type: [string, "null"], description: Borg CR10 value normalized from FIT session.workout_rpe}
+        feeling_score: {type: [integer, "null"], minimum: 0, maximum: 100}
+    ManualSessionEvaluationV2:
+      type: object
+      additionalProperties: false
+      required: [rpe, feeling_score]
+      properties:
+        rpe: {type: [integer, "null"], minimum: 1, maximum: 10}
+        feeling_score: {type: [integer, "null"], minimum: 0, maximum: 100}
+    EffectiveSessionEvaluationV2:
+      type: object
+      additionalProperties: false
+      required: [rpe, feeling_score]
+      properties:
+        rpe: {type: [string, "null"], description: Field-level manual override followed by Garmin FIT Borg CR10}
+        feeling_score: {type: [integer, "null"], minimum: 0, maximum: 100}
+    SessionEvaluationV2:
+      type: object
+      additionalProperties: false
+      required: [garmin, manual_override, effective, provenance]
+      properties:
+        garmin: {$ref: "#/components/schemas/GarminSessionEvaluationV2"}
+        manual_override: {$ref: "#/components/schemas/ManualSessionEvaluationV2"}
+        effective: {$ref: "#/components/schemas/EffectiveSessionEvaluationV2"}
+        provenance:
+          type: object
+          additionalProperties: false
+          required: [rpe, feeling_score]
+          properties:
+            rpe: {$ref: "#/components/schemas/SessionEvaluationProvenanceV2"}
+            feeling_score: {$ref: "#/components/schemas/SessionEvaluationProvenanceV2"}
     NormalizationV2:
       type: object
       additionalProperties: false
@@ -459,6 +504,7 @@ components:
         goal_readiness: {type: object}
         planned_vs_actual: {type: [object, "null"]}
         stroke_efficiency: {type: array, items: {type: object}}
+        session_evaluation: {$ref: "#/components/schemas/SessionEvaluationV2"}
         srpe: {type: object}
         data_quality: {type: object}
         active_length_count: {type: integer, minimum: 0}
@@ -495,10 +541,11 @@ components:
     FeedbackV2:
       type: object
       additionalProperties: false
-      required: [id, rpe, technique_rating, fatigue_rating, enjoyment_rating, pain_present, pain_location, pain_intensity, comment, version, updated_at]
+      required: [id, rpe, feeling_score, technique_rating, fatigue_rating, enjoyment_rating, pain_present, pain_location, pain_intensity, comment, version, updated_at]
       properties:
         id: {type: string, format: uuid}
-        rpe: {type: integer, minimum: 1, maximum: 10}
+        rpe: {type: [integer, "null"], minimum: 1, maximum: 10}
+        feeling_score: {type: [integer, "null"], minimum: 0, maximum: 100}
         technique_rating: {type: [integer, "null"], minimum: 1, maximum: 5}
         fatigue_rating: {type: [integer, "null"], minimum: 1, maximum: 5}
         enjoyment_rating: {type: [integer, "null"], minimum: 1, maximum: 5}
@@ -511,7 +558,7 @@ components:
     ActivitySummaryV2:
       type: object
       additionalProperties: false
-      required: [activity_id, name, subtype, started_at_utc, started_at_local, timezone, distance_m, durations, speeds, paces, pool, provenance, data_quality]
+      required: [activity_id, name, subtype, started_at_utc, started_at_local, timezone, distance_m, durations, speeds, paces, pool, provenance, data_quality, session_evaluation]
       properties:
         activity_id: {type: string, format: uuid}
         name: {type: string}
@@ -526,10 +573,11 @@ components:
         pool: {$ref: "#/components/schemas/PoolFactsV2"}
         provenance: {type: object}
         data_quality: {$ref: "#/components/schemas/DataQualityV2"}
+        session_evaluation: {$ref: "#/components/schemas/SessionEvaluationV2"}
     ActivityDetailV2:
       type: object
       additionalProperties: false
-      required: [activity_id, name, subtype, started_at_utc, started_at_local, timezone, distance_m, durations, speeds, paces, pool, provenance, data_quality, schema_version, normalization, intervals, lengths, analysis, match, feedback, raw_fit_exposed]
+      required: [activity_id, name, subtype, started_at_utc, started_at_local, timezone, distance_m, durations, speeds, paces, pool, provenance, data_quality, session_evaluation, schema_version, normalization, intervals, lengths, analysis, match, feedback, raw_fit_exposed]
       properties:
         activity_id: {type: string, format: uuid}
         name: {type: string}
@@ -544,6 +592,7 @@ components:
         pool: {$ref: "#/components/schemas/PoolFactsV2"}
         provenance: {type: object}
         data_quality: {$ref: "#/components/schemas/DataQualityV2"}
+        session_evaluation: {$ref: "#/components/schemas/SessionEvaluationV2"}
         schema_version: {type: string, const: "2.0"}
         normalization:
           oneOf:
@@ -574,9 +623,10 @@ components:
     FeedbackRequest:
       type: object
       additionalProperties: false
-      required: [rpe]
+      description: Full replacement of manual feedback; omitted RPE/feeling fields clear prior overrides, and an empty replacement deletes an existing manual record.
       properties:
-        rpe: {type: integer, minimum: 1, maximum: 10}
+        rpe: {type: [integer, "null"], minimum: 1, maximum: 10}
+        feeling_score: {type: [integer, "null"], minimum: 0, maximum: 100}
         technique_rating: {type: [integer, "null"], minimum: 1, maximum: 5}
         fatigue_rating: {type: [integer, "null"], minimum: 1, maximum: 5}
         enjoyment_rating: {type: [integer, "null"], minimum: 1, maximum: 5}
@@ -586,7 +636,9 @@ components:
         comment: {type: [string, "null"], maxLength: 2000}
         version: {type: [integer, "null"], minimum: 1}
     FeedbackResponse:
-      $ref: "#/components/schemas/FeedbackV2"
+      oneOf:
+        - {$ref: "#/components/schemas/FeedbackV2"}
+        - {type: "null"}
     ManualMatchRequest:
       type: object
       additionalProperties: false

@@ -1,7 +1,8 @@
 import { api } from "../api/client";
 
 export interface FeedbackPayload {
-  rpe: number;
+  rpe?: number;
+  feeling_score?: number;
   technique_rating: number | null;
   fatigue_rating: number | null;
   enjoyment_rating: number | null;

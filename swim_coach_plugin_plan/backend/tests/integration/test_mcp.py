@@ -410,6 +410,8 @@ async def test_authenticated_mcp_read_tools_scopes_ownership_contract_and_zero_b
     finally:
         event.remove(database.engine.sync_engine, "before_cursor_execute", count_query)
     p95_ms = sorted(timings_ms)[int(len(timings_ms) * 0.95) - 1]
-    assert recent_query_count == 3
+    # Activity, canonical normalization, manual feedback overrides and analysis
+    # are fetched in four bounded queries; the count does not grow with the page.
+    assert recent_query_count == 4
     assert week_query_count <= 5
     assert p95_ms < 500

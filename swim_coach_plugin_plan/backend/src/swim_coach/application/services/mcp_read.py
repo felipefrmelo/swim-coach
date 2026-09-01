@@ -371,6 +371,10 @@ class McpReadService:
                 principal.user_id, [item.id for item in activities]
             )
             normalized_by_activity = {item.activity_id: item for item in normalization_facts}
+            feedbacks = await uow.activity_data.list_feedbacks(
+                principal.user_id, [item.id for item in activities]
+            )
+            feedback_by_activity = {item.activity_id: item for item in feedbacks}
             analyses = (
                 await uow.activity_data.list_analyses(
                     principal.user_id, [item.id for item in activities]
@@ -386,6 +390,7 @@ class McpReadService:
                     activity,
                     normalization,
                     timezone_name=principal.timezone or activity.timezone,
+                    feedback=feedback_by_activity.get(activity.id),
                 )
                 analysis = analyses_by_activity.get(activity.id)
                 metrics = (
@@ -624,7 +629,7 @@ class McpReadService:
                         "fatigue_rating": detail.feedback.fatigue_rating,
                         "pain_present": detail.feedback.pain_present,
                     }
-                    if detail.feedback
+                    if detail.feedback is not None and detail.feedback.rpe is not None
                     else None
                 ),
             },
