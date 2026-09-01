@@ -23,7 +23,7 @@ async def test_liveness() -> None:
 async def test_readiness() -> None:
     app = create_app()
     app.state.services.database.ping = AsyncMock(return_value=True)
-    app.state.services.database.revision = AsyncMock(return_value="000011")
+    app.state.services.database.revision = AsyncMock(return_value="000012")
     app.state.services.artifact_storage.readiness = AsyncMock(return_value=True)
     transport = httpx.ASGITransport(app=app)
     async with app.router.lifespan_context(app):
@@ -36,7 +36,7 @@ async def test_readiness() -> None:
         "checks": {
             "application": "ready",
             "database": "ready",
-            "schema": "000011",
+            "schema": "000012",
             "artifact_storage": "ready",
         },
     }

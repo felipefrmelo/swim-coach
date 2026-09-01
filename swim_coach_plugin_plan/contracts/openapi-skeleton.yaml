@@ -3,49 +3,49 @@ info:
   title: Swim Coach API
   version: 2.1.0
 servers:
-  - url: /api/v1
+  - url: /api
 security:
   - cookieSession: []
 paths:
-  /auth/config:
+  /v1/auth/config:
     get:
       operationId: getAuthConfig
       security: []
       responses:
         "200": {description: Enabled PWA login methods}
-  /auth/login:
+  /v1/auth/login:
     get:
       operationId: startOidcLogin
       security: []
       responses:
         "303": {description: Redirect to the configured OIDC authorization endpoint}
-  /auth/callback:
+  /v1/auth/callback:
     get:
       operationId: completeOidcLogin
       security: []
       responses:
         "303": {description: Validated identity mapped to an opaque BFF session}
         "403": {$ref: "#/components/responses/Problem"}
-  /auth/logout:
+  /v1/auth/logout:
     post:
       operationId: logout
       parameters: [{$ref: "#/components/parameters/CsrfToken"}]
       responses:
         "204": {description: Session revoked and cookies cleared}
-  /me:
+  /v1/me:
     get:
       operationId: getMe
       responses:
         "200": {description: Current user profile}
         "401": {$ref: "#/components/responses/Problem"}
-  /me/profile:
+  /v1/me/profile:
     patch:
       operationId: updateProfile
       parameters: [{$ref: "#/components/parameters/CsrfToken"}]
       responses:
         "200": {description: Profile updated with optimistic version control}
         "409": {$ref: "#/components/responses/Problem"}
-  /pools:
+  /v1/pools:
     get:
       operationId: listPools
       responses: {"200": {description: User-owned pools}}
@@ -57,7 +57,7 @@ paths:
       responses:
         "201": {description: User-owned pool created}
         "409": {$ref: "#/components/responses/Problem"}
-  /pools/{pool_id}:
+  /v1/pools/{pool_id}:
     patch:
       operationId: updatePool
       parameters:
@@ -66,7 +66,7 @@ paths:
       responses:
         "200": {description: User-owned pool updated}
         "404": {$ref: "#/components/responses/Problem"}
-  /availability:
+  /v1/availability:
     get:
       operationId: listAvailability
       responses: {"200": {description: User availability rules}}
@@ -74,7 +74,7 @@ paths:
       operationId: replaceAvailability
       parameters: [{$ref: "#/components/parameters/CsrfToken"}]
       responses: {"200": {description: Availability replaced atomically}}
-  /goals:
+  /v1/goals:
     get:
       operationId: listGoals
       responses: {"200": {description: User-owned goals}}
@@ -84,7 +84,7 @@ paths:
         - {$ref: "#/components/parameters/CsrfToken"}
         - {$ref: "#/components/parameters/IdempotencyKey"}
       responses: {"201": {description: Goal created with derived pace}}
-  /goals/{goal_id}:
+  /v1/goals/{goal_id}:
     patch:
       operationId: updateGoal
       parameters:
@@ -93,7 +93,7 @@ paths:
       responses:
         "200": {description: Goal updated and pace recalculated}
         "404": {$ref: "#/components/responses/Problem"}
-  /activities:
+  /v1/activities:
     get:
       operationId: listActivities
       parameters:
@@ -101,7 +101,7 @@ paths:
         - {in: query, name: limit, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
       responses:
         "200": {description: Activity page}
-  /activities/{activity_id}:
+  /v1/activities/{activity_id}:
     get:
       operationId: getActivity
       parameters:
@@ -109,7 +109,7 @@ paths:
       responses:
         "200": {description: Activity detail}
         "404": {$ref: "#/components/responses/Problem"}
-  /activities/{activity_id}/feedback:
+  /v1/activities/{activity_id}/feedback:
     put:
       operationId: putActivityFeedback
       parameters:
@@ -118,12 +118,12 @@ paths:
       responses:
         "200": {description: Feedback stored}
         "409": {description: Idempotency or feedback version conflict}
-  /operations:
+  /v1/operations:
     get:
       operationId: getOperations
       responses:
         "200": {description: User-owned recent jobs and redacted queue metrics}
-  /operations/jobs/{job_id}/retry:
+  /v1/operations/jobs/{job_id}/retry:
     post:
       operationId: retryFailedJob
       parameters:
@@ -132,12 +132,12 @@ paths:
       responses:
         "200": {description: A terminal safe job was scheduled for retry}
         "404": {$ref: "#/components/responses/Problem"}
-  /operations/notifications:
+  /v1/operations/notifications:
     get:
       operationId: listNotifications
       responses:
         "200": {description: User-owned deduplicated notification inbox}
-  /operations/notifications/{notification_id}/read:
+  /v1/operations/notifications/{notification_id}/read:
     post:
       operationId: markNotificationRead
       parameters:
@@ -145,7 +145,7 @@ paths:
       responses:
         "200": {description: Notification marked as read}
         "404": {$ref: "#/components/responses/Problem"}
-  /privacy/exports:
+  /v1/privacy/exports:
     post:
       operationId: createDataExport
       parameters:
@@ -154,7 +154,7 @@ paths:
       responses:
         "201": {description: User-owned structured JSON and verified FIT export created}
         "409": {$ref: "#/components/responses/Problem"}
-  /privacy/exports/{export_id}/download:
+  /v1/privacy/exports/{export_id}/download:
     get:
       operationId: downloadDataExport
       parameters:
@@ -163,7 +163,7 @@ paths:
         "200": {description: Integrity-checked private ZIP download with no-store policy}
         "404": {$ref: "#/components/responses/Problem"}
         "410": {$ref: "#/components/responses/Problem"}
-  /privacy/deletion-requests:
+  /v1/privacy/deletion-requests:
     post:
       operationId: requestAccountDeletion
       parameters:
@@ -171,7 +171,7 @@ paths:
         - {$ref: "#/components/parameters/IdempotencyKey"}
       responses:
         "201": {description: Staged user-owned deletion request with cooling-off period}
-  /privacy/deletion-requests/{request_id}/confirm:
+  /v1/privacy/deletion-requests/{request_id}/confirm:
     post:
       operationId: confirmAccountDeletion
       parameters:
@@ -180,16 +180,16 @@ paths:
       responses:
         "200": {description: Sessions and Garmin access revoked; due deletion queued}
         "409": {$ref: "#/components/responses/Problem"}
-  /workouts:
+  /v1/workouts:
     get: {operationId: listWorkouts, responses: {"200": {description: Workout page}}}
-  /workouts/save:
+  /v1/workouts/save:
     post:
       operationId: saveWorkout
       parameters: [{$ref: "#/components/parameters/CsrfToken"}]
       responses:
         "200": {description: Workout created or revised, scheduled locally, and optionally queued for Garmin upsert in one command}
         "422": {$ref: "#/components/responses/Problem"}
-  /workouts/{workout_id}:
+  /v1/workouts/{workout_id}:
     get:
       operationId: getWorkout
       parameters: [{in: path, name: workout_id, required: true, schema: {type: string, format: uuid}}]
@@ -203,18 +203,18 @@ paths:
         "202": {description: Removed locally and Garmin cleanup queued idempotently}
         "409": {$ref: "#/components/responses/Problem"}
         "404": {$ref: "#/components/responses/Problem"}
-  /workouts/validate:
+  /v1/workouts/validate:
     post:
       operationId: validateWorkout
       responses: {"200": {description: Canonical totals, errors and warnings without persistence}}
-  /workout-templates:
+  /v1/workout-templates:
     get:
       operationId: listWorkoutTemplates
       responses: {"200": {description: System and user-owned canonical templates}}
     post:
       operationId: createWorkoutTemplate
       responses: {"201": {description: User-owned valid canonical template created}}
-  /integrations/garmin:
+  /v1/integrations/garmin:
     get:
       operationId: getGarminConnection
       responses: {"200": {description: Sanitized connection status; never returns a token}}
@@ -222,35 +222,112 @@ paths:
       operationId: disconnectGarmin
       parameters: [{$ref: "#/components/parameters/CsrfToken"}]
       responses: {"200": {description: Local encrypted token revoked}}
-  /integrations/garmin/devices:
+  /v1/integrations/garmin/devices:
     get:
       operationId: listGarminDevices
       responses: {"200": {description: User-owned Garmin devices without raw identifiers}}
-  /integrations/garmin/activities:
+  /v1/integrations/garmin/activities:
     get:
       operationId: listGarminActivities
       responses: {"200": {description: User-owned pool swimming activity summaries}}
-  /integrations/garmin/sync-runs:
+  /v1/integrations/garmin/sync-runs:
     get:
       operationId: listGarminSyncRuns
       responses: {"200": {description: Sanitized incremental sync history}}
-  /integrations/garmin/sync:
+  /v1/integrations/garmin/sync:
     post:
       operationId: syncGarminActivities
       parameters:
         - {$ref: "#/components/parameters/CsrfToken"}
         - {$ref: "#/components/parameters/IdempotencyKey"}
       responses: {"202": {description: Sync job queued}}
-  /jobs/{job_id}:
+  /v1/jobs/{job_id}:
     get:
       operationId: getJob
       parameters: [{in: path, name: job_id, required: true, schema: {type: string, format: uuid}}]
       responses: {"200": {description: Job status}}
+  /v2/activities:
+    get:
+      operationId: listActivitiesV2
+      description: Lists canonical pool-swim summaries without raw Garmin or ambiguous v1 aliases.
+      responses:
+        "200":
+          description: Canonical activity summaries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: "#/components/schemas/ActivitySummaryV2"}
+  /v2/activities/{activity_id}:
+    get:
+      operationId: getActivityV2
+      parameters:
+        - {$ref: "#/components/parameters/ActivityId"}
+      responses:
+        "200":
+          description: Canonical activity detail, contextual analysis and planned-versus-actual
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ActivityDetailV2"}
+        "404": {$ref: "#/components/responses/Problem"}
+  /v2/activities/{activity_id}/process:
+    post:
+      operationId: processActivityV2
+      parameters:
+        - {$ref: "#/components/parameters/ActivityId"}
+        - {$ref: "#/components/parameters/CsrfToken"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "202":
+          description: Local FIT normalization and analysis queued
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/SyncJobResponse"}
+  /v2/activities/{activity_id}/feedback:
+    put:
+      operationId: putActivityFeedbackV2
+      parameters:
+        - {$ref: "#/components/parameters/ActivityId"}
+        - {$ref: "#/components/parameters/CsrfToken"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/FeedbackRequest"}
+      responses:
+        "200":
+          description: Feedback stored and analysis versioned
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/FeedbackResponse"}
+  /v2/activities/{activity_id}/match:
+    put:
+      operationId: putActivityMatchV2
+      parameters:
+        - {$ref: "#/components/parameters/ActivityId"}
+        - {$ref: "#/components/parameters/CsrfToken"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ManualMatchRequest"}
+      responses:
+        "200":
+          description: Planned-workout match stored and contextual analysis versioned
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/MatchResponse"}
 components:
   securitySchemes:
     cookieSession: {type: apiKey, in: cookie, name: swim_coach_session}
     bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
   parameters:
+    ActivityId:
+      in: path
+      name: activity_id
+      required: true
+      schema: {type: string, format: uuid}
     CsrfToken:
       in: header
       name: X-CSRF-Token
@@ -266,6 +343,258 @@ components:
       name: If-Match
       required: true
       schema: {type: string, pattern: '^"?[1-9][0-9]*"?$'}
+  schemas:
+    DurationFactsV2:
+      type: object
+      additionalProperties: false
+      required: [elapsed_s, timer_s, moving_s, swim_s, rest_s, stationary_s]
+      properties:
+        elapsed_s: {type: [string, "null"]}
+        timer_s: {type: [string, "null"]}
+        moving_s: {type: [string, "null"]}
+        swim_s: {type: [string, "null"]}
+        rest_s: {type: [string, "null"]}
+        stationary_s: {type: [string, "null"]}
+    PaceFactsV2:
+      type: object
+      additionalProperties: false
+      required: [pace_from_garmin_reported_speed_s_per_100m, moving_s_per_100m, swim_s_per_100m, timer_s_per_100m, session_s_per_100m]
+      properties:
+        pace_from_garmin_reported_speed_s_per_100m: {type: [string, "null"]}
+        moving_s_per_100m: {type: [string, "null"]}
+        swim_s_per_100m: {type: [string, "null"]}
+        timer_s_per_100m: {type: [string, "null"]}
+        session_s_per_100m: {type: [string, "null"]}
+    SpeedFactsV2:
+      type: object
+      additionalProperties: false
+      required: [garmin_reported_m_per_s]
+      properties:
+        garmin_reported_m_per_s: {type: [string, "null"]}
+    PoolFactsV2:
+      type: object
+      additionalProperties: false
+      required: [length_m, active_length_count]
+      properties:
+        length_m: {type: [integer, "null"], minimum: 1}
+        active_length_count: {type: [integer, "null"], minimum: 0}
+    DataQualityV2:
+      type: object
+      additionalProperties: false
+      required: [level, reasons]
+      properties:
+        level: {type: string, enum: [HIGH, MEDIUM, LOW]}
+        reasons: {type: array, items: {type: string}}
+    NormalizationV2:
+      type: object
+      additionalProperties: false
+      required: [parser_version, profile_version, completeness, warnings]
+      properties:
+        parser_version: {type: string}
+        profile_version: {type: string}
+        completeness: {type: string}
+        warnings: {type: array, items: {type: string}}
+    IntervalPacesV2:
+      type: object
+      additionalProperties: false
+      required: [pace_from_garmin_reported_speed_s_per_100m, moving_s_per_100m, swim_s_per_100m, timer_s_per_100m, elapsed_s_per_100m]
+      properties:
+        pace_from_garmin_reported_speed_s_per_100m: {type: [string, "null"]}
+        moving_s_per_100m: {type: [string, "null"]}
+        swim_s_per_100m: {type: [string, "null"]}
+        timer_s_per_100m: {type: [string, "null"]}
+        elapsed_s_per_100m: {type: [string, "null"]}
+    IntervalV2:
+      type: object
+      additionalProperties: false
+      required: [index, interval_type, planned_role, distance_m, durations, speeds, paces, detected_stroke, planned_stroke, stroke_count, stroke_rate, swolf, provenance, quality_warnings]
+      properties:
+        index: {type: integer, minimum: 0}
+        interval_type: {type: string, enum: [SWIM, REST, DRILL, UNKNOWN]}
+        planned_role: {type: [string, "null"], enum: [WARMUP, WORK, RECOVERY, REST, COOLDOWN, DRILL, OTHER, null]}
+        distance_m: {type: integer, minimum: 0}
+        durations: {$ref: "#/components/schemas/DurationFactsV2"}
+        speeds: {$ref: "#/components/schemas/SpeedFactsV2"}
+        paces: {$ref: "#/components/schemas/IntervalPacesV2"}
+        detected_stroke: {type: [string, "null"]}
+        planned_stroke: {type: [string, "null"]}
+        stroke_count: {type: [integer, "null"], minimum: 0}
+        stroke_rate: {type: [string, "null"]}
+        swolf: {type: [string, "null"]}
+        provenance: {type: object}
+        quality_warnings: {type: array, items: {type: string}}
+    LengthV2:
+      type: object
+      additionalProperties: false
+      required: [index, length_type, distance_m, durations, speeds, paces, detected_stroke, planned_stroke, stroke_count, stroke_rate, swolf, provenance, quality_warnings]
+      properties:
+        index: {type: integer, minimum: 0}
+        length_type: {type: string, enum: [ACTIVE, IDLE, UNKNOWN]}
+        distance_m: {type: integer, minimum: 0}
+        durations: {$ref: "#/components/schemas/DurationFactsV2"}
+        speeds: {$ref: "#/components/schemas/SpeedFactsV2"}
+        paces: {$ref: "#/components/schemas/IntervalPacesV2"}
+        detected_stroke: {type: [string, "null"]}
+        planned_stroke: {type: [string, "null"]}
+        stroke_count: {type: [integer, "null"], minimum: 0}
+        stroke_rate: {type: [string, "null"]}
+        swolf: {type: [string, "null"]}
+        provenance: {type: object}
+        quality_warnings: {type: array, items: {type: string}}
+    AnalysisMetricsV2:
+      type: object
+      additionalProperties: false
+      properties:
+        distance_m: {type: integer, minimum: 0}
+        durations: {$ref: "#/components/schemas/DurationFactsV2"}
+        paces: {$ref: "#/components/schemas/PaceFactsV2"}
+        contextual_paces: {type: object}
+        set_pace_basis: {type: [string, "null"]}
+        profile_pace_basis: {type: [string, "null"]}
+        sets: {type: array, items: {type: object}}
+        outliers: {type: array, items: {type: object}}
+        continuity: {type: object}
+        longest_distance_below_goal_pace: {type: [object, "null"]}
+        speed_endurance: {type: object}
+        goal_readiness: {type: object}
+        planned_vs_actual: {type: [object, "null"]}
+        stroke_efficiency: {type: array, items: {type: object}}
+        srpe: {type: object}
+        data_quality: {type: object}
+        active_length_count: {type: integer, minimum: 0}
+        completeness: {type: string}
+    AnalysisSummaryV2:
+      type: object
+      additionalProperties: false
+      properties:
+        headline: {type: string}
+        pace_semantics: {type: string}
+        set_pace_basis: {type: [string, "null"]}
+        profile_pace_basis: {type: [string, "null"]}
+        quality: {type: string}
+        medical_interpretation: {type: boolean}
+        css_estimated: {type: boolean}
+    AnalysisV2:
+      type: object
+      additionalProperties: false
+      required: [version, quality, metrics, flags, summary]
+      properties:
+        version: {type: string}
+        quality: {type: string, enum: [complete, partial, poor]}
+        metrics: {$ref: "#/components/schemas/AnalysisMetricsV2"}
+        flags: {type: array, items: {type: string}}
+        summary: {$ref: "#/components/schemas/AnalysisSummaryV2"}
+    MatchV2:
+      type: object
+      additionalProperties: false
+      required: [planned_workout_id, confidence, method]
+      properties:
+        planned_workout_id: {type: string, format: uuid}
+        confidence: {type: string}
+        method: {type: string}
+    FeedbackV2:
+      type: object
+      additionalProperties: false
+      required: [id, rpe, technique_rating, fatigue_rating, enjoyment_rating, pain_present, pain_location, pain_intensity, comment, version, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        rpe: {type: integer, minimum: 1, maximum: 10}
+        technique_rating: {type: [integer, "null"], minimum: 1, maximum: 5}
+        fatigue_rating: {type: [integer, "null"], minimum: 1, maximum: 5}
+        enjoyment_rating: {type: [integer, "null"], minimum: 1, maximum: 5}
+        pain_present: {type: boolean}
+        pain_location: {type: [string, "null"]}
+        pain_intensity: {type: [integer, "null"], minimum: 1, maximum: 10}
+        comment: {type: [string, "null"]}
+        version: {type: integer, minimum: 1}
+        updated_at: {type: string, format: date-time}
+    ActivitySummaryV2:
+      type: object
+      additionalProperties: false
+      required: [activity_id, name, subtype, started_at_utc, started_at_local, timezone, distance_m, durations, speeds, paces, pool, provenance, data_quality]
+      properties:
+        activity_id: {type: string, format: uuid}
+        name: {type: string}
+        subtype: {type: string}
+        started_at_utc: {type: string, format: date-time}
+        started_at_local: {type: string, format: date-time}
+        timezone: {type: string}
+        distance_m: {type: integer, minimum: 0}
+        durations: {$ref: "#/components/schemas/DurationFactsV2"}
+        speeds: {$ref: "#/components/schemas/SpeedFactsV2"}
+        paces: {$ref: "#/components/schemas/PaceFactsV2"}
+        pool: {$ref: "#/components/schemas/PoolFactsV2"}
+        provenance: {type: object}
+        data_quality: {$ref: "#/components/schemas/DataQualityV2"}
+    ActivityDetailV2:
+      type: object
+      additionalProperties: false
+      required: [activity_id, name, subtype, started_at_utc, started_at_local, timezone, distance_m, durations, speeds, paces, pool, provenance, data_quality, schema_version, normalization, intervals, lengths, analysis, match, feedback, raw_fit_exposed]
+      properties:
+        activity_id: {type: string, format: uuid}
+        name: {type: string}
+        subtype: {type: string}
+        started_at_utc: {type: string, format: date-time}
+        started_at_local: {type: string, format: date-time}
+        timezone: {type: string}
+        distance_m: {type: integer, minimum: 0}
+        durations: {$ref: "#/components/schemas/DurationFactsV2"}
+        speeds: {$ref: "#/components/schemas/SpeedFactsV2"}
+        paces: {$ref: "#/components/schemas/PaceFactsV2"}
+        pool: {$ref: "#/components/schemas/PoolFactsV2"}
+        provenance: {type: object}
+        data_quality: {$ref: "#/components/schemas/DataQualityV2"}
+        schema_version: {type: string, const: "2.0"}
+        normalization:
+          oneOf:
+            - {$ref: "#/components/schemas/NormalizationV2"}
+            - {type: "null"}
+        intervals: {type: array, items: {$ref: "#/components/schemas/IntervalV2"}}
+        lengths: {type: array, items: {$ref: "#/components/schemas/LengthV2"}}
+        analysis:
+          oneOf:
+            - {$ref: "#/components/schemas/AnalysisV2"}
+            - {type: "null"}
+        match:
+          oneOf:
+            - {$ref: "#/components/schemas/MatchV2"}
+            - {type: "null"}
+        feedback:
+          oneOf:
+            - {$ref: "#/components/schemas/FeedbackV2"}
+            - {type: "null"}
+        raw_fit_exposed: {type: boolean, const: false}
+    SyncJobResponse:
+      type: object
+      additionalProperties: false
+      required: [id, status]
+      properties:
+        id: {type: string, format: uuid}
+        status: {type: string, enum: [QUEUED, LEASED, RUNNING, SUCCEEDED, RETRY_SCHEDULED, FAILED_TERMINAL, NEEDS_RECONCILIATION]}
+    FeedbackRequest:
+      type: object
+      additionalProperties: false
+      required: [rpe]
+      properties:
+        rpe: {type: integer, minimum: 1, maximum: 10}
+        technique_rating: {type: [integer, "null"], minimum: 1, maximum: 5}
+        fatigue_rating: {type: [integer, "null"], minimum: 1, maximum: 5}
+        enjoyment_rating: {type: [integer, "null"], minimum: 1, maximum: 5}
+        pain_present: {type: boolean, default: false}
+        pain_location: {type: [string, "null"], maxLength: 120}
+        pain_intensity: {type: [integer, "null"], minimum: 1, maximum: 10}
+        comment: {type: [string, "null"], maxLength: 2000}
+        version: {type: [integer, "null"], minimum: 1}
+    FeedbackResponse:
+      $ref: "#/components/schemas/FeedbackV2"
+    ManualMatchRequest:
+      type: object
+      additionalProperties: false
+      required: [planned_workout_id]
+      properties:
+        planned_workout_id: {type: string, format: uuid}
+    MatchResponse:
+      $ref: "#/components/schemas/MatchV2"
   responses:
     Problem:
       description: Problem Details

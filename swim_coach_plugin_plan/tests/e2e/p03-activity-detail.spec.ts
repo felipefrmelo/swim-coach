@@ -1,36 +1,89 @@
 import { expect, test } from "@playwright/test";
 
 const activity = {
-  id: "00000000-0000-0000-0000-000000000303",
+  activity_id: "00000000-0000-0000-0000-000000000303",
   name: "Natação em piscina",
   subtype: "lap_swimming",
-  start_time_utc: "2026-08-12T10:00:00Z",
+  started_at_utc: "2026-08-12T12:00:00Z",
+  started_at_local: "2026-08-12T09:00:00-03:00",
+  timezone: "America/Sao_Paulo",
   distance_m: 120,
-  elapsed_seconds: "190",
-  pool_length_m: 20,
-  length_count: 6,
-  avg_hr: 138,
-  avg_swolf: "46",
+  durations: {
+    elapsed_s: "190",
+    timer_s: "180",
+    moving_s: "170",
+    swim_s: "168",
+    rest_s: "10",
+    stationary_s: "2",
+  },
+  speeds: { garmin_reported_m_per_s: "0.704225" },
+  paces: {
+    pace_from_garmin_reported_speed_s_per_100m: "142",
+    moving_s_per_100m: "141.667",
+    swim_s_per_100m: "140",
+    timer_s_per_100m: "150",
+    session_s_per_100m: "158.333",
+  },
+  pool: { length_m: 20, active_length_count: 6 },
+  provenance: { pool_length_m: { source: "GARMIN" } },
+  data_quality: { level: "HIGH", reasons: [] },
 };
 
 const detail = {
-  activity,
-  normalized: true,
-  parser_version: "garmin-fit-sdk:21.208.0|swim-coach:1.0.0",
-  profile_version: "21.208.0",
-  quality: "complete",
-  completeness: "1.000",
-  warnings: [],
+  ...activity,
+  schema_version: "2.0",
+  normalization: {
+    parser_version: "garmin-fit:2.0.0",
+    profile_version: "garmin-fit-profile:21.208.0",
+    completeness: "1.000",
+    warnings: [],
+  },
   intervals: [
-    { index: 0, interval_type: "work", distance_m: 60, duration_seconds: "87", rest_seconds: "5", pace_seconds_per_100m: "145", stroke_type: "freestyle", swolf: "46" },
-    { index: 1, interval_type: "work", distance_m: 60, duration_seconds: "93", rest_seconds: "5", pace_seconds_per_100m: "155", stroke_type: "freestyle", swolf: "48" },
+    {
+      index: 0,
+      interval_type: "SWIM",
+      planned_role: "WORK",
+      distance_m: 60,
+      durations: { elapsed_s: "92", timer_s: "87", moving_s: "84", swim_s: "84", rest_s: "0", stationary_s: "3" },
+      speeds: { garmin_reported_m_per_s: "0.724638" },
+      paces: { pace_from_garmin_reported_speed_s_per_100m: "138", moving_s_per_100m: "140", swim_s_per_100m: "140", timer_s_per_100m: "145", elapsed_s_per_100m: "153.333" },
+      detected_stroke: "freestyle",
+      planned_stroke: "freestyle",
+      stroke_count: 30,
+      stroke_rate: "32",
+      swolf: "46",
+      provenance: {},
+      quality_warnings: [],
+    },
+    {
+      index: 1,
+      interval_type: "SWIM",
+      planned_role: "WORK",
+      distance_m: 60,
+      durations: { elapsed_s: "98", timer_s: "93", moving_s: "86", swim_s: "84", rest_s: "0", stationary_s: "7" },
+      speeds: { garmin_reported_m_per_s: "0.704225" },
+      paces: { pace_from_garmin_reported_speed_s_per_100m: "142", moving_s_per_100m: "143.333", swim_s_per_100m: "140", timer_s_per_100m: "155", elapsed_s_per_100m: "163.333" },
+      detected_stroke: "freestyle",
+      planned_stroke: "freestyle",
+      stroke_count: 31,
+      stroke_rate: "31",
+      swolf: "48",
+      provenance: {},
+      quality_warnings: [],
+    },
   ],
+  lengths: [],
   analysis: {
-    version: "swim-analysis:1.0.0|feedback:0",
-    parser_version: "garmin-fit-sdk:21.208.0|swim-coach:1.0.0",
+    version: "swim-analysis:2.0.0|fb:0",
     quality: "complete",
-    metrics: { average_pace_seconds_per_100m: "150", consistency_cv: "0.047", total_rest_seconds: "10", fade_percent: "6.90", average_swolf: "47" },
+    metrics: {
+      consistency_cv: "0.012",
+      total_rest_seconds: "10",
+      fade_percent: "2.38",
+      stroke_efficiency: [{ stroke: "freestyle", average_swolf: "47" }],
+    },
     flags: [],
+    summary: {},
   },
   match: null,
   feedback: null,
@@ -38,10 +91,7 @@ const detail = {
 };
 
 test("athlete reviews normalized intervals and records non-diagnostic feedback", async ({ page }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "Entrar no ambiente local" }).click();
-
-  await page.route("**/api/v1/activities**", async (route) => {
+  await page.route("**/api/v*/activities**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
     if (request.method() === "PUT" && path.endsWith("/feedback")) {
@@ -62,16 +112,21 @@ test("athlete reviews normalized intervals and records non-diagnostic feedback",
       });
       return;
     }
-    await route.fulfill({ json: path.endsWith(activity.id) ? detail : [activity] });
+    await route.fulfill({ json: path.endsWith(activity.activity_id) ? detail : [activity] });
   });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Entrar no ambiente local" }).click();
 
   await page.getByRole("link", { name: "Atividades" }).click();
   await expect(page.getByRole("heading", { name: "Atividades" })).toBeVisible();
   await page.getByRole("link", { name: /Natação em piscina/ }).click();
 
   await expect(page.getByRole("heading", { name: "Natação em piscina" })).toBeVisible();
+  await expect(page.getByText("Ritmo nadando (moving)")).toBeVisible();
+  await expect(page.getByText("Ritmo da sessão (elapsed)")).toBeVisible();
   await expect(page.getByText("Qualidade alta")).toBeVisible();
-  await expect(page.getByText("60 m · Livre")).toHaveCount(2);
+  await expect(page.getByText("60 m · livre")).toHaveCount(2);
   await expect(page.getByText(/FIT bruto e payload Garmin não são retornados/)).toBeVisible();
   await expect(page.getByText(/não são diagnóstico médico/)).toBeVisible();
 

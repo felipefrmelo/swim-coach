@@ -29,6 +29,61 @@ class DataQuality(StrEnum):
     POOR = "poor"
 
 
+class ProvenanceSource(StrEnum):
+    GARMIN = "garmin"
+    DERIVED = "derived"
+    PLANNED_WORKOUT = "planned_workout"
+    INFERRED = "inferred"
+
+
+class IntervalType(StrEnum):
+    SWIM = "swim"
+    REST = "rest"
+    DRILL = "drill"
+    UNKNOWN = "unknown"
+
+
+class PlannedRole(StrEnum):
+    WARMUP = "warmup"
+    WORK = "work"
+    RECOVERY = "recovery"
+    REST = "rest"
+    COOLDOWN = "cooldown"
+    DRILL = "drill"
+    OTHER = "other"
+
+
+class LengthType(StrEnum):
+    ACTIVE = "active"
+    IDLE = "idle"
+    UNKNOWN = "unknown"
+
+
+def _enum_value(value: StrEnum | str, label: str, allowed: frozenset[str]) -> str:
+    normalized = str(value).strip().lower()
+    if normalized not in allowed:
+        raise DomainValidationError(f"{label} is invalid")
+    return normalized
+
+
+def _synchronized_alias(
+    instance: object,
+    *,
+    canonical_name: str,
+    legacy_name: str,
+) -> None:
+    canonical = getattr(instance, canonical_name)
+    legacy = getattr(instance, legacy_name)
+    if canonical is None and legacy is not None:
+        object.__setattr__(instance, canonical_name, legacy)
+    elif legacy is None and canonical is not None:
+        object.__setattr__(instance, legacy_name, canonical)
+    elif canonical is not None and legacy is not None and canonical != legacy:
+        raise DomainValidationError(
+            f"{canonical_name} and its legacy alias {legacy_name} must agree"
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class FileArtifact:
     id: EntityId
@@ -75,13 +130,68 @@ class ActivityLap:
     avg_hr_bpm: int | None = None
     max_hr_bpm: int | None = None
     stroke_type: str | None = None
+    moving_seconds: Decimal | None = None
+    swim_seconds: Decimal | None = None
+    rest_seconds: Decimal | None = None
+    stationary_seconds: Decimal | None = None
+    garmin_reported_speed_m_per_s: Decimal | None = None
+    pace_from_garmin_reported_speed_seconds_per_100m: Decimal | None = None
+    moving_pace_seconds_per_100m: Decimal | None = None
+    swim_pace_seconds_per_100m: Decimal | None = None
+    timer_pace_seconds_per_100m: Decimal | None = None
+    elapsed_pace_seconds_per_100m: Decimal | None = None
+    detected_stroke: str | None = None
+    planned_stroke: str | None = None
+    provenance: JsonObject = field(default_factory=dict)
+    quality_warnings: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.lap_index < 0 or self.distance_m < 0:
             raise DomainValidationError("lap index and distance cannot be negative")
         _non_negative(self.start_offset_seconds, "lap start offset")
-        _non_negative(self.elapsed_seconds, "lap elapsed duration")
-        _non_negative(self.timer_seconds, "lap timer duration")
+        for value, label in (
+            (self.elapsed_seconds, "lap elapsed duration"),
+            (self.timer_seconds, "lap timer duration"),
+            (self.moving_seconds, "lap moving duration"),
+            (self.swim_seconds, "lap swim duration"),
+            (self.rest_seconds, "lap rest duration"),
+            (self.stationary_seconds, "lap stationary duration"),
+            (self.garmin_reported_speed_m_per_s, "lap Garmin speed"),
+            (
+                self.pace_from_garmin_reported_speed_seconds_per_100m,
+                "lap pace from Garmin-reported speed",
+            ),
+            (self.moving_pace_seconds_per_100m, "lap moving pace"),
+            (self.swim_pace_seconds_per_100m, "lap swim pace"),
+            (self.timer_pace_seconds_per_100m, "lap timer pace"),
+            (self.elapsed_pace_seconds_per_100m, "lap elapsed pace"),
+        ):
+            _non_negative(value, label)
+        _synchronized_alias(self, canonical_name="detected_stroke", legacy_name="stroke_type")
+
+    @property
+    def elapsed_duration_s(self) -> Decimal:
+        return self.elapsed_seconds
+
+    @property
+    def timer_duration_s(self) -> Decimal:
+        return self.timer_seconds
+
+    @property
+    def moving_duration_s(self) -> Decimal | None:
+        return self.moving_seconds
+
+    @property
+    def swim_duration_s(self) -> Decimal | None:
+        return self.swim_seconds
+
+    @property
+    def rest_duration_s(self) -> Decimal | None:
+        return self.rest_seconds
+
+    @property
+    def stationary_duration_s(self) -> Decimal | None:
+        return self.stationary_seconds
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,23 +212,102 @@ class ActivityInterval:
     stroke_rate: Decimal | None = None
     swolf: Decimal | None = None
     source: JsonObject = field(default_factory=dict)
+    elapsed_seconds: Decimal | None = None
+    timer_seconds: Decimal | None = None
+    moving_seconds: Decimal | None = None
+    swim_seconds: Decimal | None = None
+    stationary_seconds: Decimal | None = None
+    garmin_reported_speed_m_per_s: Decimal | None = None
+    pace_from_garmin_reported_speed_seconds_per_100m: Decimal | None = None
+    moving_pace_seconds_per_100m: Decimal | None = None
+    swim_pace_seconds_per_100m: Decimal | None = None
+    timer_pace_seconds_per_100m: Decimal | None = None
+    elapsed_pace_seconds_per_100m: Decimal | None = None
+    planned_role: str | None = None
+    detected_stroke: str | None = None
+    planned_stroke: str | None = None
+    provenance: JsonObject = field(default_factory=dict)
+    quality_warnings: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.interval_index < 0 or self.distance_m < 0:
             raise DomainValidationError("interval index and distance cannot be negative")
-        if self.interval_type not in {"work", "rest"}:
-            raise DomainValidationError("interval type must be work or rest")
+        object.__setattr__(
+            self,
+            "interval_type",
+            _enum_value(
+                self.interval_type,
+                "interval type",
+                frozenset({"work", *(item.value for item in IntervalType)}),
+            ),
+        )
+        if self.planned_role is not None:
+            object.__setattr__(
+                self,
+                "planned_role",
+                _enum_value(
+                    self.planned_role,
+                    "planned role",
+                    frozenset(item.value for item in PlannedRole),
+                ),
+            )
+        if self.timer_seconds is not None and self.timer_seconds != self.duration_seconds:
+            raise DomainValidationError("interval timer and legacy duration must agree")
+        _synchronized_alias(
+            self,
+            canonical_name="timer_pace_seconds_per_100m",
+            legacy_name="pace_seconds_per_100m",
+        )
+        _synchronized_alias(self, canonical_name="detected_stroke", legacy_name="stroke_type")
         for value, label in (
             (self.start_offset_seconds, "interval start offset"),
             (self.duration_seconds, "interval duration"),
             (self.rest_seconds, "interval rest"),
             (self.pace_seconds_per_100m, "interval pace"),
+            (self.elapsed_seconds, "interval elapsed duration"),
+            (self.timer_seconds, "interval timer duration"),
+            (self.moving_seconds, "interval moving duration"),
+            (self.swim_seconds, "interval swim duration"),
+            (self.stationary_seconds, "interval stationary duration"),
+            (self.garmin_reported_speed_m_per_s, "interval Garmin speed"),
+            (
+                self.pace_from_garmin_reported_speed_seconds_per_100m,
+                "interval pace from Garmin-reported speed",
+            ),
+            (self.moving_pace_seconds_per_100m, "interval moving pace"),
+            (self.swim_pace_seconds_per_100m, "interval swim pace"),
+            (self.timer_pace_seconds_per_100m, "interval timer pace"),
+            (self.elapsed_pace_seconds_per_100m, "interval elapsed pace"),
             (self.stroke_rate, "interval stroke rate"),
             (self.swolf, "interval SWOLF"),
         ):
             _non_negative(value, label)
         if self.stroke_count is not None and self.stroke_count < 0:
             raise DomainValidationError("interval stroke count cannot be negative")
+
+    @property
+    def elapsed_duration_s(self) -> Decimal | None:
+        return self.elapsed_seconds
+
+    @property
+    def timer_duration_s(self) -> Decimal | None:
+        return self.timer_seconds
+
+    @property
+    def moving_duration_s(self) -> Decimal | None:
+        return self.moving_seconds
+
+    @property
+    def swim_duration_s(self) -> Decimal | None:
+        return self.swim_seconds
+
+    @property
+    def rest_duration_s(self) -> Decimal:
+        return self.rest_seconds
+
+    @property
+    def stationary_duration_s(self) -> Decimal | None:
+        return self.stationary_seconds
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,20 +323,90 @@ class ActivityLength:
     stroke_rate: Decimal | None = None
     swolf: Decimal | None = None
     avg_hr_bpm: int | None = None
+    length_type: str = LengthType.ACTIVE.value
+    elapsed_seconds: Decimal | None = None
+    timer_seconds: Decimal | None = None
+    moving_seconds: Decimal | None = None
+    swim_seconds: Decimal | None = None
+    rest_seconds: Decimal | None = None
+    stationary_seconds: Decimal | None = None
+    garmin_reported_speed_m_per_s: Decimal | None = None
+    pace_from_garmin_reported_speed_seconds_per_100m: Decimal | None = None
+    moving_pace_seconds_per_100m: Decimal | None = None
+    swim_pace_seconds_per_100m: Decimal | None = None
+    timer_pace_seconds_per_100m: Decimal | None = None
+    elapsed_pace_seconds_per_100m: Decimal | None = None
+    detected_stroke: str | None = None
+    planned_stroke: str | None = None
+    provenance: JsonObject = field(default_factory=dict)
+    quality_warnings: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        if self.length_index < 0 or self.distance_m <= 0:
-            raise DomainValidationError(
-                "active length index must be non-negative and distance positive"
-            )
+        if self.length_index < 0 or self.distance_m < 0:
+            raise DomainValidationError("length index and distance cannot be negative")
+        object.__setattr__(
+            self,
+            "length_type",
+            _enum_value(
+                self.length_type,
+                "length type",
+                frozenset(item.value for item in LengthType),
+            ),
+        )
+        if self.length_type == LengthType.ACTIVE and self.distance_m <= 0:
+            raise DomainValidationError("active length distance must be positive")
+        if self.length_type == LengthType.IDLE and self.distance_m != 0:
+            raise DomainValidationError("idle length distance must be zero")
+        if self.timer_seconds is not None and self.timer_seconds != self.duration_seconds:
+            raise DomainValidationError("length timer and legacy duration must agree")
+        _synchronized_alias(self, canonical_name="detected_stroke", legacy_name="stroke_type")
         for value, label in (
             (self.duration_seconds, "length duration"),
+            (self.elapsed_seconds, "length elapsed duration"),
+            (self.timer_seconds, "length timer duration"),
+            (self.moving_seconds, "length moving duration"),
+            (self.swim_seconds, "length swim duration"),
+            (self.rest_seconds, "length rest duration"),
+            (self.stationary_seconds, "length stationary duration"),
+            (self.garmin_reported_speed_m_per_s, "length Garmin speed"),
+            (
+                self.pace_from_garmin_reported_speed_seconds_per_100m,
+                "length pace from Garmin-reported speed",
+            ),
+            (self.moving_pace_seconds_per_100m, "length moving pace"),
+            (self.swim_pace_seconds_per_100m, "length swim pace"),
+            (self.timer_pace_seconds_per_100m, "length timer pace"),
+            (self.elapsed_pace_seconds_per_100m, "length elapsed pace"),
             (self.stroke_rate, "length stroke rate"),
             (self.swolf, "length SWOLF"),
         ):
             _non_negative(value, label)
         if self.stroke_count is not None and self.stroke_count < 0:
             raise DomainValidationError("length stroke count cannot be negative")
+
+    @property
+    def elapsed_duration_s(self) -> Decimal | None:
+        return self.elapsed_seconds
+
+    @property
+    def timer_duration_s(self) -> Decimal | None:
+        return self.timer_seconds
+
+    @property
+    def moving_duration_s(self) -> Decimal | None:
+        return self.moving_seconds
+
+    @property
+    def swim_duration_s(self) -> Decimal | None:
+        return self.swim_seconds
+
+    @property
+    def rest_duration_s(self) -> Decimal | None:
+        return self.rest_seconds
+
+    @property
+    def stationary_duration_s(self) -> Decimal | None:
+        return self.stationary_seconds
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,12 +422,22 @@ class ActivityNormalization:
     distance_m: int
     elapsed_seconds: Decimal
     timer_seconds: Decimal
-    moving_seconds: Decimal
+    moving_seconds: Decimal | None
     active_length_count: int
     completeness: Decimal
     quality: DataQuality
     warnings: tuple[str, ...] = ()
     created_at: datetime = field(default_factory=utc_now)
+    swim_seconds: Decimal | None = None
+    rest_seconds: Decimal | None = None
+    stationary_seconds: Decimal | None = None
+    garmin_reported_speed_m_per_s: Decimal | None = None
+    pace_from_garmin_reported_speed_seconds_per_100m: Decimal | None = None
+    moving_pace_seconds_per_100m: Decimal | None = None
+    swim_pace_seconds_per_100m: Decimal | None = None
+    timer_pace_seconds_per_100m: Decimal | None = None
+    session_pace_seconds_per_100m: Decimal | None = None
+    provenance: JsonObject = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.parser_version.strip() or not self.profile_version.strip():
@@ -180,10 +449,46 @@ class ActivityNormalization:
             (self.elapsed_seconds, "normalization elapsed duration"),
             (self.timer_seconds, "normalization timer duration"),
             (self.moving_seconds, "normalization moving duration"),
+            (self.swim_seconds, "normalization swim duration"),
+            (self.rest_seconds, "normalization rest duration"),
+            (self.stationary_seconds, "normalization stationary duration"),
+            (self.garmin_reported_speed_m_per_s, "normalization Garmin speed"),
+            (
+                self.pace_from_garmin_reported_speed_seconds_per_100m,
+                "normalization pace from Garmin-reported speed",
+            ),
+            (self.moving_pace_seconds_per_100m, "normalization moving pace"),
+            (self.swim_pace_seconds_per_100m, "normalization swim pace"),
+            (self.timer_pace_seconds_per_100m, "normalization timer pace"),
+            (self.session_pace_seconds_per_100m, "normalization session pace"),
         ):
             _non_negative(value, label)
         if not Decimal("0") <= self.completeness <= Decimal("1"):
             raise DomainValidationError("normalization completeness must be between zero and one")
+
+    @property
+    def elapsed_duration_s(self) -> Decimal:
+        return self.elapsed_seconds
+
+    @property
+    def timer_duration_s(self) -> Decimal:
+        return self.timer_seconds
+
+    @property
+    def moving_duration_s(self) -> Decimal | None:
+        return self.moving_seconds
+
+    @property
+    def swim_duration_s(self) -> Decimal | None:
+        return self.swim_seconds
+
+    @property
+    def rest_duration_s(self) -> Decimal | None:
+        return self.rest_seconds
+
+    @property
+    def stationary_duration_s(self) -> Decimal | None:
+        return self.stationary_seconds
 
 
 @dataclass(frozen=True, slots=True)

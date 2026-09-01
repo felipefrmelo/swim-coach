@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -84,6 +85,10 @@ class McpFixtureGarminProvider(FixtureGarminProvider):
         )
 
 
+def _tool_error_envelope(text: str) -> dict[str, object]:
+    return cast(dict[str, object], json.loads(text[text.index("{") :]))
+
+
 @pytest.mark.asyncio
 async def test_mcp_lists_and_calls_get_capabilities() -> None:
     app = create_app()
@@ -107,6 +112,7 @@ async def test_mcp_lists_and_calls_get_capabilities() -> None:
     assert tool.annotations.openWorldHint is False
     assert result.isError is False
     assert result.structuredContent is not None
+    assert result.structuredContent["schema_version"] == "1.0"
     assert result.structuredContent["status"] == "OK"
     assert result.structuredContent["data"]["available_tools"] == ["get_capabilities"]
 
@@ -260,6 +266,9 @@ async def test_authenticated_mcp_read_tools_scopes_ownership_contract_and_zero_b
                     invalid = await session.call_tool(
                         "list_recent_swims", {"limit": 1, "unexpected": True}
                     )
+                    invalid_before = await session.call_tool(
+                        "list_recent_swims", {"before": "2000-01-01T09:00:00"}
+                    )
                     idor = await session.call_tool(
                         "get_swim_activity",
                         {"activity_id": str(other_activities[0].id)},
@@ -304,10 +313,21 @@ async def test_authenticated_mcp_read_tools_scopes_ownership_contract_and_zero_b
         sync_status,
     ]
     assert all(result.isError is False and result.structuredContent for result in successful)
+    assert all(result.structuredContent["schema_version"] == "1.0" for result in successful)
     assert capabilities.structuredContent["data"]["garmin_write_enabled"] is False
     assert today_result.structuredContent["data"]["workout"]["totals"]["distance_m"] == 1_600
     assert len(recent.structuredContent["data"]["items"]) == 1
+    recent_item = recent.structuredContent["data"]["items"][0]
+    assert "started_local" in recent_item
+    assert "moving_seconds" in recent_item
+    assert "pace_seconds_per_100m" in recent_item
+    assert "started_at_local" not in recent_item
+    assert "durations" not in recent_item
     assert activity.structuredContent["status"] == "OK"
+    assert "moving_seconds" in activity.structuredContent["data"]
+    assert "pace_seconds_per_100m" in activity.structuredContent["data"]
+    assert "durations" not in activity.structuredContent["data"]
+    assert "paces" not in activity.structuredContent["data"]
     dimensions = progress.structuredContent["data"]["dimensions"]
     assert set(dimensions) == {"endurance", "pace", "consistency", "confidence"}
     assert (
@@ -315,15 +335,23 @@ async def test_authenticated_mcp_read_tools_scopes_ownership_contract_and_zero_b
     )
     serialized = cast(str, activity.content[0].text)
     assert "external_activity_id" not in serialized
-    assert "raw_fit" not in serialized
+    assert '"raw_fit":' not in serialized
+    assert "raw_fit_exposed" not in serialized
     assert "input_checksum" not in serialized
     assert invalid.isError is True
+    assert invalid_before.isError is True
+    assert _tool_error_envelope(invalid_before.content[0].text)["schema_version"] == "1.0"
     assert idor.isError is True
     assert "RESOURCE_NOT_FOUND" in idor.content[0].text
+    assert _tool_error_envelope(idor.content[0].text)["schema_version"] == "1.0"
     assert missing_scope.isError is True
     assert "SCOPE_REQUIRED" in missing_scope.content[0].text
+    assert missing_scope.structuredContent is not None
+    assert missing_scope.structuredContent["schema_version"] == "1.0"
+    assert _tool_error_envelope(missing_scope.content[0].text)["schema_version"] == "1.0"
     assert unlinked.isError is True
     assert "ACCOUNT_DISABLED" in unlinked.content[0].text
+    assert _tool_error_envelope(unlinked.content[0].text)["schema_version"] == "1.0"
 
     async with database.session_factory() as db_session:
         assert (
@@ -382,6 +410,6 @@ async def test_authenticated_mcp_read_tools_scopes_ownership_contract_and_zero_b
     finally:
         event.remove(database.engine.sync_engine, "before_cursor_execute", count_query)
     p95_ms = sorted(timings_ms)[int(len(timings_ms) * 0.95) - 1]
-    assert recent_query_count == 2
+    assert recent_query_count == 3
     assert week_query_count <= 5
     assert p95_ms < 500

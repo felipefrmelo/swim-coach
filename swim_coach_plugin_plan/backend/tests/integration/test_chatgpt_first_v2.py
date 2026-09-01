@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, date, datetime, time, timedelta
 
 import httpx
@@ -140,6 +141,10 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
                     workouts = await session.call_tool(
                         "get_workouts", {"date": target_date.isoformat()}
                     )
+                    swims = await session.call_tool("get_swims", {})
+                    missing_swim = await session.call_tool(
+                        "get_swims", {"activity_id": str(EntityId.new())}
+                    )
                     generated = await session.call_tool(
                         "generate_week",
                         {
@@ -151,6 +156,10 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
 
     assert saved.isError is False
     assert saved.structuredContent is not None
+    assert all(
+        result.structuredContent is not None and result.structuredContent["schema_version"] == "2.0"
+        for result in (saved, published, workouts, swims, generated)
+    )
     assert saved.structuredContent["data"]["status"] == "scheduled"
     assert workouts.isError is False
     assert workouts.structuredContent is not None
@@ -168,6 +177,11 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
     assert generated.isError is False
     assert generated.structuredContent is not None
     assert generated.structuredContent["data"]["session_count"] == 2
+    assert swims.structuredContent is not None
+    assert "items" in swims.structuredContent["data"]
+    assert missing_swim.isError is True
+    error_text = missing_swim.content[0].text
+    assert json.loads(error_text[error_text.index("{") :])["schema_version"] == "2.0"
     serialized = (
         str(saved.structuredContent)
         + str(workouts.structuredContent)

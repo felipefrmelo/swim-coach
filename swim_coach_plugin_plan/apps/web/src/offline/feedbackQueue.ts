@@ -66,6 +66,11 @@ export async function flushFeedbackQueue(): Promise<number> {
   return flushed;
 }
 
+export async function clearFeedbackQueue(): Promise<void> {
+  await transaction("readwrite", (store) => store.clear());
+  window.dispatchEvent(new CustomEvent("swim-coach:feedback-cleared"));
+}
+
 function database(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DATABASE, 1);

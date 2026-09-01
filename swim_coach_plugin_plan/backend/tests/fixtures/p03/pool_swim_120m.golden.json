@@ -5,9 +5,9 @@
   "elapsed_seconds": "210",
   "interval_distances_m": [40, 40, 40],
   "interval_paces_seconds_per_100m": ["150.000", "155.000", "145.000"],
-  "moving_seconds": "180",
+  "moving_seconds": "170",
   "pool_length_m": 20,
-  "quality": "complete",
+  "quality": "partial",
   "timer_seconds": "180",
-  "warnings": []
+  "warnings": ["LENGTH_ELAPSED_DURATION_FALLBACK_INFERRED"]
 }

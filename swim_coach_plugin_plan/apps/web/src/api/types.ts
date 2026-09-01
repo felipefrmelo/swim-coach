@@ -136,6 +136,88 @@ export interface SwimActivityDetail {
   raw_fit_exposed: false;
 }
 
+export interface SwimActivityV2 {
+  activity_id: string;
+  name: string;
+  subtype: string;
+  started_at_utc: string;
+  started_at_local: string;
+  timezone: string;
+  distance_m: number;
+  durations: {
+    elapsed_s: string | null;
+    timer_s: string | null;
+    moving_s: string | null;
+    swim_s: string | null;
+    rest_s: string | null;
+    stationary_s: string | null;
+  };
+  speeds: {
+    garmin_reported_m_per_s: string | null;
+  };
+  paces: {
+    pace_from_garmin_reported_speed_s_per_100m: string | null;
+    moving_s_per_100m: string | null;
+    swim_s_per_100m: string | null;
+    timer_s_per_100m: string | null;
+    session_s_per_100m: string | null;
+  };
+  pool: { length_m: number | null; active_length_count: number | null };
+  provenance: Record<string, unknown>;
+  data_quality: { level: "HIGH" | "MEDIUM" | "LOW"; reasons: string[] };
+}
+
+export interface SwimActivityDetailV2 extends SwimActivityV2 {
+  schema_version: "2.0";
+  normalization: {
+    parser_version: string;
+    profile_version: string;
+    completeness: string;
+    warnings: string[];
+  } | null;
+  intervals: Array<{
+    index: number;
+    interval_type: "SWIM" | "REST" | "DRILL" | "UNKNOWN";
+    planned_role: "WARMUP" | "WORK" | "RECOVERY" | "REST" | "COOLDOWN" | "DRILL" | "OTHER" | null;
+    distance_m: number;
+    durations: SwimActivityV2["durations"];
+    speeds: SwimActivityV2["speeds"];
+    paces: Omit<SwimActivityV2["paces"], "session_s_per_100m"> & { elapsed_s_per_100m: string | null };
+    detected_stroke: string | null;
+    planned_stroke: string | null;
+    stroke_count: number | null;
+    stroke_rate: string | null;
+    swolf: string | null;
+    provenance: Record<string, unknown>;
+    quality_warnings: string[];
+  }>;
+  lengths: Array<{
+    index: number;
+    length_type: "ACTIVE" | "IDLE" | "UNKNOWN";
+    distance_m: number;
+    durations: SwimActivityV2["durations"];
+    speeds: SwimActivityV2["speeds"];
+    paces: Omit<SwimActivityV2["paces"], "session_s_per_100m"> & { elapsed_s_per_100m: string | null };
+    detected_stroke: string | null;
+    planned_stroke: string | null;
+    stroke_count: number | null;
+    stroke_rate: string | null;
+    swolf: string | null;
+    provenance: Record<string, unknown>;
+    quality_warnings: string[];
+  }>;
+  analysis: {
+    version: string;
+    quality: "complete" | "partial" | "poor";
+    metrics: Record<string, unknown>;
+    flags: string[];
+    summary: Record<string, unknown>;
+  } | null;
+  match: { planned_workout_id: string; confidence: string; method: string } | null;
+  feedback: SwimActivityDetail["feedback"];
+  raw_fit_exposed: false;
+}
+
 export interface GarminSyncRun {
   id: string;
   status: "running" | "succeeded" | "partial" | "failed" | "cancelled";

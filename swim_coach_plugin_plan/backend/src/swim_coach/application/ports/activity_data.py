@@ -48,5 +48,5 @@ class FitActivityParser(Protocol):
         activity_id: EntityId,
         artifact_id: EntityId,
         input_checksum: str,
-        fallback_pool_length_m: int,
+        fallback_pool_length_m: int | None,
     ) -> NormalizedActivity: ...

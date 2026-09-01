@@ -5,9 +5,11 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 from datetime import UTC, date, datetime, time, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from swim_coach.application.ports.garmin import ActivityFilter, GarminProvider, GarminProviderError
 from swim_coach.application.ports.repositories import UnitOfWorkFactory
@@ -23,7 +25,7 @@ from swim_coach.domain.garmin import (
 )
 from swim_coach.domain.operations import Job
 from swim_coach.domain.shared.errors import DomainError
-from swim_coach.domain.shared.types import JsonObject
+from swim_coach.domain.shared.types import JsonObject, JsonValue
 from swim_coach.domain.shared.value_objects import (
     Distance,
     Duration,
@@ -33,6 +35,7 @@ from swim_coach.domain.shared.value_objects import (
 )
 
 UserLockFactory = Callable[[UserId], AbstractAsyncContextManager[None]]
+LOGGER = logging.getLogger(__name__)
 
 
 class GarminSyncService:
@@ -140,20 +143,45 @@ class GarminSyncService:
 
         if not isinstance(item, GarminActivitySummaryDTO):
             raise TypeError("provider returned an invalid activity DTO")
-        checksum = self._checksum(item.raw_safe)
-        payload = RawProviderPayload(
-            id=EntityId.new(),
-            user_id=user_id,
-            provider=self.PROVIDER,
-            entity_type=self.ENTITY_TYPE,
-            external_id=item.external_id,
-            content_type="application/json",
-            payload=item.raw_safe,
-            checksum=checksum,
-            provider_updated_at=item.provider_updated_at,
-        )
         async with self._uow_factory() as uow:
+            user = await uow.users.get(user_id)
+            activity_timezone = user.timezone if user is not None else (item.timezone or "UTC")
+            semantic_warnings: list[JsonValue] = list(item.warnings)
+            try:
+                zone = ZoneInfo(activity_timezone)
+            except ZoneInfoNotFoundError:
+                zone = ZoneInfo("UTC")
+                semantic_warnings.append("ATHLETE_TIMEZONE_INVALID_FALLBACK_UTC")
+            expected_local_wall = item.start_time_utc.astimezone(zone).replace(tzinfo=None)
+            if (
+                item.start_time_local_wall is not None
+                and item.start_time_local_wall != expected_local_wall
+            ):
+                semantic_warnings.append("GARMIN_LOCAL_WALL_TIME_MISMATCH")
+            raw_payload: JsonObject = dict(item.raw_safe)
+            semantics: JsonObject = {
+                "provenance": item.provenance,
+                "warnings": semantic_warnings,
+                "athlete_timezone": activity_timezone,
+                "expected_local_wall": expected_local_wall.isoformat(),
+            }
+            raw_payload["_swim_coach_semantics"] = semantics
+            checksum = self._checksum(raw_payload)
+            payload = RawProviderPayload(
+                id=EntityId.new(),
+                user_id=user_id,
+                provider=self.PROVIDER,
+                entity_type=self.ENTITY_TYPE,
+                external_id=item.external_id,
+                content_type="application/json",
+                payload=raw_payload,
+                checksum=checksum,
+                provider_updated_at=item.provider_updated_at,
+            )
             raw_summary_id = await uow.raw_provider_payloads.add_if_absent(payload)
+            legacy_moving = (
+                item.moving_seconds if item.moving_seconds is not None else item.timer_seconds
+            )
             activity = Activity(
                 id=EntityId.new(),
                 user_id=user_id,
@@ -163,11 +191,17 @@ class GarminSyncService:
                 sport=item.sport,
                 subtype=item.subtype,
                 start_time_utc=item.start_time_utc,
-                timezone=item.timezone,
+                # Garmin's startTimeLocal is a wall-clock value without a
+                # trustworthy IANA zone.  The athlete profile owns that zone;
+                # the raw local value remains in RawProviderPayload for audit.
+                timezone=activity_timezone,
                 distance=Distance(item.distance_m),
                 elapsed=Duration(item.elapsed_seconds),
                 timer=Duration(item.timer_seconds),
-                moving=Duration(item.moving_seconds),
+                # Activity is the legacy summary model and still requires a
+                # value.  The v2 normalization never consumes this fallback as
+                # a Garmin moving fact; provenance above marks it explicitly.
+                moving=Duration(legacy_moving),
                 pool_length=(
                     PoolLength(item.pool_length_m)
                     if item.pool_length_m is not None and item.pool_length_m > 0
@@ -182,7 +216,7 @@ class GarminSyncService:
                 avg_strokes_per_length=item.avg_strokes_per_length,
                 avg_swolf=item.avg_swolf,
                 source_updated_at=item.provider_updated_at,
-                normalization_version="garmin-summary-v1",
+                normalization_version="garmin-summary-v2",
                 raw_summary_id=raw_summary_id,
                 summary_checksum=checksum,
             )
@@ -211,6 +245,23 @@ class GarminSyncService:
                     )
                 )
             await uow.commit()
+        LOGGER.info(
+            "garmin_activity_summary_imported",
+            extra={
+                "activity_id": str(activity_id),
+                "garmin_activity_id_hash": hashlib.sha256(item.external_id.encode()).hexdigest(),
+                "raw_pool_length": item.raw_safe.get("poolLength"),
+                "normalized_pool_length_m": item.pool_length_m,
+                "distance_m": item.distance_m,
+                "elapsed_duration_s": format(item.elapsed_seconds, "f"),
+                "timer_duration_s": format(item.timer_seconds, "f"),
+                "moving_duration_s": (
+                    format(item.moving_seconds, "f") if item.moving_seconds is not None else None
+                ),
+                "length_count": item.length_count,
+                "normalization_warnings": semantic_warnings,
+            },
+        )
         if status is ActivityImportStatus.CREATED:
             run.created += 1
         elif status is ActivityImportStatus.UPDATED:

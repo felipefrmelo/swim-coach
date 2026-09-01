@@ -25,7 +25,7 @@ async function mountBridge(page: Page) {
             id: message.id,
             result: {
               structuredContent: {
-                schema_version: "1.0",
+                schema_version: "2.0",
                 request_id: "bridge-response",
                 status: "OK",
                 data: { status: "APPROVED" },

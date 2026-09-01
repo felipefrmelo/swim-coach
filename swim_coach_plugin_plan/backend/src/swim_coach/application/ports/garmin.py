@@ -106,11 +106,11 @@ class GarminActivitySummaryDTO:
     sport: str
     subtype: str
     start_time_utc: datetime
-    timezone: str
+    timezone: str | None
     distance_m: int
     elapsed_seconds: Decimal
     timer_seconds: Decimal
-    moving_seconds: Decimal
+    moving_seconds: Decimal | None
     provider_updated_at: datetime | None
     pool_length_m: int | None = None
     length_count: int | None = None
@@ -121,6 +121,9 @@ class GarminActivitySummaryDTO:
     avg_stroke_rate: Decimal | None = None
     avg_strokes_per_length: Decimal | None = None
     avg_swolf: Decimal | None = None
+    start_time_local_wall: datetime | None = None
+    provenance: JsonObject = field(default_factory=dict)
+    warnings: tuple[str, ...] = ()
     raw_safe: JsonObject = field(default_factory=dict)
 
 
