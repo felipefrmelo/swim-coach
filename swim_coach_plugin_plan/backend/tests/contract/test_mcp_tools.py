@@ -53,7 +53,7 @@ async def test_v1_list_tools_freezes_the_advertised_envelope_at_1_0() -> None:
 
 
 @pytest.mark.asyncio
-async def test_v2_announces_exactly_nine_intent_tools_with_one_scope() -> None:
+async def test_v2_announces_training_cycle_intent_tools_with_one_scope() -> None:
     contract = yaml.safe_load((ROOT / "contracts/mcp-tools.yaml").read_text())
     assert contract["result_envelope"] == "./tool-result-envelope-v2.schema.json"
     expected = {item["name"]: item for item in contract["tools"]}
@@ -69,8 +69,8 @@ async def test_v2_announces_exactly_nine_intent_tools_with_one_scope() -> None:
 
     registered = server._tool_manager._tools
     assert list(registered) == list(expected)
-    assert len(registered) == 9
-    assert "nine intent-level tools" in server.instructions
+    assert len(registered) == 17
+    assert "approval-gated training cycles" in server.instructions
     assert "delete_workout" in server.instructions
     listed = {tool.name: tool for tool in await server.list_tools()}
     assert set(listed) == set(expected)
@@ -95,14 +95,11 @@ async def test_v2_announces_exactly_nine_intent_tools_with_one_scope() -> None:
         assert listed[name].meta["securitySchemes"] == [{"type": "oauth2", "scopes": ["coach"]}]
 
 
-def test_v2_contract_never_exposes_workflow_protocol_fields() -> None:
+def test_v2_contract_exposes_approval_fields_only_for_plan_revisions() -> None:
     text = (ROOT / "contracts/mcp-tools.yaml").read_text()
-    forbidden = (
-        "action_hash",
-        "proposal_id",
-        "approve_action",
-        "execute_approved",
-        "idempotency_key",
-        "expected_revision",
-    )
-    assert all(item not in text for item in forbidden)
+    assert "idempotency_key" not in text
+    assert "approve_action" not in text
+    assert "execute_approved" not in text
+    assert "proposal_id" in text
+    assert "expected_revision" in text
+    assert "approval_hash" in text

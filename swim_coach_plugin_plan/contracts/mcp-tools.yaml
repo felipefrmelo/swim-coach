@@ -13,6 +13,119 @@ tools:
     scopes: [coach]
     annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
     input: {type: object, additionalProperties: false, properties: {include_constraints: {type: boolean, default: true}}}
+  - name: propose_training_plan
+    title: Propose a training cycle
+    description: Create an approval-gated rolling training-cycle proposal without changing workouts or Garmin.
+    scopes: [coach]
+    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
+    input:
+      type: object
+      additionalProperties: false
+      required: [start_date]
+      properties:
+        start_date: {type: string, format: date}
+        duration_weeks: {type: integer, minimum: 4, maximum: 16, default: 8}
+        goal_id: {type: [string, "null"], format: uuid}
+        title: {type: [string, "null"], maxLength: 160}
+        strategy_summary: {type: [string, "null"], maxLength: 4000}
+  - name: get_training_plan
+    title: Get a training cycle
+    description: Return the live or selected cycle, current revision, bindings, reviews, and notes.
+    scopes: [coach]
+    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
+    input:
+      type: object
+      additionalProperties: false
+      properties:
+        plan_id: {type: [string, "null"], format: uuid}
+  - name: review_training_plan
+    title: Review one plan week
+    description: Create a deterministic evidence snapshot for an ended or fully resolved plan week without changing the plan.
+    scopes: [coach]
+    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
+    input:
+      type: object
+      additionalProperties: false
+      required: [plan_id, week_number]
+      properties:
+        plan_id: {type: string, format: uuid}
+        week_number: {type: integer, minimum: 1, maximum: 16}
+  - name: propose_plan_revision
+    title: Propose an adaptive plan revision
+    description: Turn one eligible review into a validated exact-hash revision proposal.
+    scopes: [coach]
+    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
+    input:
+      type: object
+      additionalProperties: false
+      required: [plan_id, review_id, expected_revision, decision, rationale]
+      properties:
+        plan_id: {type: string, format: uuid}
+        review_id: {type: string, format: uuid}
+        expected_revision: {type: integer, minimum: 1}
+        decision: {type: string, enum: [PROGRESS, HOLD, REGRESS, RECOVERY, RETEST, RESCHEDULE, PAUSE]}
+        rationale: {type: string, minLength: 1, maxLength: 2000}
+  - name: apply_plan_revision
+    title: Apply an approved plan revision
+    description: Apply one exact proposed revision with optimistic concurrency and queue local materialization without changing Garmin.
+    scopes: [coach]
+    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
+    input:
+      type: object
+      additionalProperties: false
+      required: [plan_id, proposal_id, expected_revision, approval_hash]
+      properties:
+        plan_id: {type: string, format: uuid}
+        proposal_id: {type: string, format: uuid}
+        expected_revision: {type: integer, minimum: 0}
+        approval_hash: {type: string, minLength: 64, maxLength: 64}
+  - name: add_plan_note
+    title: Add a structured plan note
+    description: Attach bounded reusable context to a plan, week, session, or activity.
+    scopes: [coach]
+    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
+    input:
+      type: object
+      additionalProperties: false
+      required: [plan_id, scope_type, scope_ref, category, text]
+      properties:
+        plan_id: {type: string, format: uuid}
+        scope_type: {type: string, enum: [PLAN, WEEK, SESSION, ACTIVITY]}
+        scope_ref: {type: string, minLength: 1, maxLength: 255}
+        category: {type: string, enum: [PERFORMANCE, TECHNIQUE, PAIN, RECOVERY, SCHEDULE, DECISION, DATA_QUALITY]}
+        text: {type: string, minLength: 1, maxLength: 2000}
+        author_type: {type: string, enum: [ATHLETE, COACH], default: ATHLETE}
+        importance: {type: string, enum: [LOW, MEDIUM, HIGH], default: MEDIUM}
+        affects_adaptation: {type: boolean, default: true}
+        valid_from: {type: [string, "null"], format: date}
+        valid_until: {type: [string, "null"], format: date}
+        evidence_activity_ids:
+          type: [array, "null"]
+          items: {type: string, format: uuid}
+  - name: set_training_plan_status
+    title: Pause or resume a training cycle
+    description: Explicitly pause or resume the selected plan without changing Garmin.
+    scopes: [coach]
+    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
+    input:
+      type: object
+      additionalProperties: false
+      required: [plan_id, status]
+      properties:
+        plan_id: {type: string, format: uuid}
+        status: {type: string, enum: [ACTIVE, PAUSED]}
+  - name: skip_plan_session
+    title: Skip a plan session
+    description: Resolve one uncompleted plan session as intentionally skipped.
+    scopes: [coach]
+    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
+    input:
+      type: object
+      additionalProperties: false
+      required: [plan_id, session_intent_id]
+      properties:
+        plan_id: {type: string, format: uuid}
+        session_intent_id: {type: string, format: uuid}
   - name: get_workouts
     title: Get swim workouts
     description: Return one workout or the workouts for a day or week, including schedule, steps, revision, and Garmin status.
@@ -87,13 +200,11 @@ tools:
     input:
       type: object
       additionalProperties: false
-      required: [week_start]
+      required: [plan_id, week_number, week_start]
       properties:
+        plan_id: {type: string, format: uuid}
+        week_number: {type: integer, minimum: 1, maximum: 16}
         week_start: {type: string, format: date}
-        session_count: {type: [integer, "null"], minimum: 1, maximum: 7}
-        max_session_duration_minutes: {type: [integer, "null"], minimum: 20, maximum: 120}
-        focus: {type: string, enum: [BALANCED, TECHNIQUE, ENDURANCE, GOAL_PACE], default: BALANCED}
-        avoid_high_intensity: {type: boolean, default: false}
   - name: sync_garmin
     title: Sync Garmin activities
     description: Queue an idempotent Garmin activity sync and return its current job state.

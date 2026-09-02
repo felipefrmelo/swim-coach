@@ -64,10 +64,14 @@ resolução de login e checksums de artefatos. Só então declare o backup verif
 
 ## API ou banco indisponível
 
-Veja `/health/live` e `/health/ready`. Readiness exige banco, migration `000013` e
+Veja `/health/live` e `/health/ready`. Readiness exige banco, migration `000014` e
 volume de artefatos gravável. Não reinicie em loop se houver `SCHEMA_MISMATCH`;
 execute a migration controlada. Em falha de storage, preserve o volume e corrija
 owner/permissões antes de reabrir exports ou FIT.
+
+O downgrade de `000014` para `000013` é bloqueado quando algum feedback já ficou
+temporariamente desacoplado da atividade interna após uma exclusão/reimportação. Preserve o
+schema atual ou restaure um backup anterior; não apague feedback para forçar o rollback.
 
 Antes de rollback, consulte `activity_normalization` e `activity_analysis`. O downgrade de
 `000013` para `000012` é bloqueado quando já existe RPE/sensação Garmin normalizado,
@@ -103,7 +107,7 @@ apague FIT, volume PostgreSQL ou export diretamente. Faça export/delete pela AP
 Para OAuth, reexecute o metadata probe e valide issuer/audience/PKCE sem imprimir
 token. Para Garmin, respeite `429`, espere o backoff e reconecte pela CLI segura;
 senha não entra no painel auxiliar. Para o plugin, confirme o app mapping,
-reinstale a versão 2.1.0 e abra uma conversa nova no ChatGPT. Faça o smoke
+reinstale a versão 3.0.0 e abra uma conversa nova no ChatGPT. Faça o smoke
 principal pelo ChatGPT: consulte contexto, natação recente e treinos planejados.
 Mantenha writes desligados até o read smoke user-scoped passar; só depois valide
 o painel auxiliar e efeitos externos descartáveis.

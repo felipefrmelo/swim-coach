@@ -22,6 +22,7 @@ from swim_coach.application.services import (
     PlanningService,
     PrivacyService,
     SessionService,
+    TrainingCycleService,
     WorkoutDeletionService,
     WorkoutService,
 )
@@ -60,6 +61,7 @@ class AppServices:
     mcp_write: McpWriteService | None
     coach_commands: CoachCommandService
     planning: PlanningService | None
+    training_cycles: TrainingCycleService | None
     automation: AutomationService | None
     artifact_storage: FilesystemObjectStorage
     privacy: PrivacyService
@@ -156,6 +158,15 @@ def build_services(settings: Settings, database: Database | None = None) -> AppS
         activity_data=activity_data,
     )
     planning = PlanningService(uow_factory) if settings.planning_enabled else None
+    training_cycles = (
+        TrainingCycleService(
+            uow_factory=uow_factory,
+            planning=planning,
+            workouts=workouts,
+        )
+        if planning is not None
+        else None
+    )
     automation = (
         AutomationService(
             uow_factory,
@@ -175,6 +186,7 @@ def build_services(settings: Settings, database: Database | None = None) -> AppS
         garmin_upsert=garmin_upsert,
         workout_deletion=workout_deletion,
         planning=planning,
+        training_cycles=training_cycles,
     )
     return AppServices(
         database=database,
@@ -193,6 +205,7 @@ def build_services(settings: Settings, database: Database | None = None) -> AppS
         activity_data=activity_data,
         mcp_read=mcp_read,
         planning=planning,
+        training_cycles=training_cycles,
         automation=automation,
         artifact_storage=artifact_storage,
         privacy=privacy,

@@ -1123,9 +1123,11 @@ class SessionFeedbackModel(Base):
     user_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
     )
-    activity_id: Mapped[UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("activity.id", ondelete="CASCADE"), nullable=False
+    activity_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("activity.id", ondelete="SET NULL"), nullable=True
     )
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
+    external_activity_id: Mapped[str] = mapped_column(String(255), nullable=False)
     rpe: Mapped[int | None] = mapped_column(Integer)
     technique_rating: Mapped[int | None] = mapped_column(Integer)
     fatigue_rating: Mapped[int | None] = mapped_column(Integer)
@@ -1164,6 +1166,12 @@ class SessionFeedbackModel(Base):
         ),
         CheckConstraint("version >= 1", name="ck_session_feedback_version"),
         UniqueConstraint("activity_id", name="uq_session_feedback_activity"),
+        UniqueConstraint(
+            "user_id",
+            "provider",
+            "external_activity_id",
+            name="uq_session_feedback_external_identity",
+        ),
     )
 
 
@@ -1447,6 +1455,212 @@ class TrainingDecisionModel(Base):
         UniqueConstraint("planning_run_id", "order_index", name="uq_training_decision_run_order"),
         CheckConstraint("order_index >= 1", name="ck_training_decision_order"),
         Index("ix_training_decision_user_date", "user_id", "effective_date"),
+    )
+
+
+class TrainingPlanModel(Base):
+    __tablename__ = "training_plan"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
+    )
+    goal_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("training_goal.id", ondelete="RESTRICT"), nullable=False
+    )
+    title: Mapped[str] = mapped_column(String(160), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date] = mapped_column(Date, nullable=False)
+    duration_weeks: Mapped[int] = mapped_column(Integer, nullable=False)
+    adaptation_mode: Mapped[str] = mapped_column(String(30), nullable=False)
+    current_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    current_revision_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "training_plan_revision.id",
+            name="fk_training_plan_current_revision",
+            ondelete="RESTRICT",
+            use_alter=True,
+        ),
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('DRAFT','ACTIVE','PAUSED','COMPLETED','CANCELLED')",
+            name="ck_training_plan_status",
+        ),
+        CheckConstraint("duration_weeks BETWEEN 4 AND 16", name="ck_training_plan_duration"),
+        CheckConstraint("end_date >= start_date", name="ck_training_plan_dates"),
+        CheckConstraint("current_revision >= 0 AND version >= 1", name="ck_training_plan_versions"),
+        CheckConstraint(
+            "adaptation_mode = 'MANUAL_APPROVAL'", name="ck_training_plan_adaptation_mode"
+        ),
+        Index("ix_training_plan_user_status", "user_id", "status"),
+        Index(
+            "uq_training_plan_one_live_per_user",
+            "user_id",
+            unique=True,
+            postgresql_where=text("status IN ('ACTIVE','PAUSED')"),
+        ),
+    )
+
+
+class TrainingPlanRevisionModel(Base):
+    __tablename__ = "training_plan_revision"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    plan_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("training_plan.id", ondelete="CASCADE"), nullable=False
+    )
+    revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    previous_revision_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("training_plan_revision.id", ondelete="RESTRICT")
+    )
+    document_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    reason: Mapped[str] = mapped_column(String(1000), nullable=False)
+    effective_from: Mapped[date | None] = mapped_column(Date)
+    evidence_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    diff_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    proposal_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("action_proposal.id", ondelete="SET NULL")
+    )
+    created_by: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("plan_id", "revision_number", name="uq_training_plan_revision_number"),
+        UniqueConstraint("plan_id", "content_hash", name="uq_training_plan_revision_hash"),
+        CheckConstraint("revision_number >= 1", name="ck_training_plan_revision_number"),
+        Index("ix_training_plan_revision_plan_created", "plan_id", "created_at"),
+    )
+
+
+class PlanSessionBindingModel(Base):
+    __tablename__ = "plan_session_binding"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
+    )
+    plan_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("training_plan.id", ondelete="CASCADE"), nullable=False
+    )
+    session_intent_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    week_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    state: Mapped[str] = mapped_column(String(20), nullable=False)
+    workout_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("planned_workout.id", ondelete="SET NULL")
+    )
+    materialized_plan_revision: Mapped[int | None] = mapped_column(Integer)
+    materialized_workout_hash: Mapped[str | None] = mapped_column(String(64))
+    locked_reason: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        UniqueConstraint("plan_id", "session_intent_id", name="uq_plan_session_intent"),
+        UniqueConstraint("workout_id", name="uq_plan_session_workout"),
+        CheckConstraint("week_number >= 1 AND version >= 1", name="ck_plan_session_versions"),
+        CheckConstraint(
+            "state IN ('PLANNED','MATERIALIZED','COMPLETED','SKIPPED','CANCELLED','SUPERSEDED')",
+            name="ck_plan_session_state",
+        ),
+        Index("ix_plan_session_plan_week", "plan_id", "week_number"),
+    )
+
+
+class PlanReviewModel(Base):
+    __tablename__ = "plan_review"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
+    )
+    plan_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("training_plan.id", ondelete="CASCADE"), nullable=False
+    )
+    plan_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    week_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    evidence_snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    evidence_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    confidence_cap: Mapped[str] = mapped_column(String(10), nullable=False)
+    eligible: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    eligibility_reason: Mapped[str] = mapped_column(String(500), nullable=False)
+    decision: Mapped[str | None] = mapped_column(String(20))
+    rationale: Mapped[str | None] = mapped_column(String(2000))
+    recommendation_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    proposal_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("action_proposal.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "plan_id",
+            "plan_revision",
+            "week_number",
+            "evidence_hash",
+            name="uq_plan_review_evidence",
+        ),
+        CheckConstraint("plan_revision >= 1 AND week_number >= 1", name="ck_plan_review_target"),
+        CheckConstraint(
+            "confidence_cap IN ('LOW','MEDIUM','HIGH')", name="ck_plan_review_confidence"
+        ),
+        CheckConstraint(
+            "decision IS NULL OR decision IN "
+            "('PROGRESS','HOLD','REGRESS','RECOVERY','RETEST','RESCHEDULE','PAUSE')",
+            name="ck_plan_review_decision",
+        ),
+        Index("ix_plan_review_plan_week", "plan_id", "week_number", "created_at"),
+    )
+
+
+class PlanNoteModel(Base):
+    __tablename__ = "plan_note"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
+    )
+    plan_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("training_plan.id", ondelete="CASCADE"), nullable=False
+    )
+    scope_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    scope_ref: Mapped[str] = mapped_column(String(255), nullable=False)
+    category: Mapped[str] = mapped_column(String(30), nullable=False)
+    author_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    importance: Mapped[str] = mapped_column(String(10), nullable=False)
+    affects_adaptation: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    valid_from: Mapped[date | None] = mapped_column(Date)
+    valid_until: Mapped[date | None] = mapped_column(Date)
+    evidence_activity_refs_json: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(
+            "scope_type IN ('PLAN','WEEK','SESSION','ACTIVITY')", name="ck_plan_note_scope"
+        ),
+        CheckConstraint(
+            "category IN ('PERFORMANCE','TECHNIQUE','PAIN','RECOVERY','SCHEDULE',"
+            "'DECISION','DATA_QUALITY')",
+            name="ck_plan_note_category",
+        ),
+        CheckConstraint("importance IN ('LOW','MEDIUM','HIGH')", name="ck_plan_note_importance"),
+        CheckConstraint("author_type IN ('ATHLETE','COACH','SYSTEM')", name="ck_plan_note_author"),
+        CheckConstraint(
+            "valid_until IS NULL OR valid_from IS NULL OR valid_until >= valid_from",
+            name="ck_plan_note_validity",
+        ),
+        Index("ix_plan_note_plan_scope", "plan_id", "scope_type", "created_at"),
     )
 
 

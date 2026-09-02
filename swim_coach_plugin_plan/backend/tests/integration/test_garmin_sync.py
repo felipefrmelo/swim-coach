@@ -7,7 +7,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 
 from swim_coach.application.ports.garmin import (
     ActivityFilter,
@@ -18,15 +18,18 @@ from swim_coach.application.ports.garmin import (
     ProviderPage,
 )
 from swim_coach.application.services import GarminSyncService, IdentityService
+from swim_coach.domain.activities import SessionFeedback
 from swim_coach.domain.garmin import GarminConnection, GarminConnectionStatus
 from swim_coach.domain.shared import CorrelationId, EncryptedSecret, UserId
 from swim_coach.domain.shared.errors import DomainError
+from swim_coach.domain.shared.value_objects import EntityId
 from swim_coach.infrastructure.db import Database, SqlAlchemyUnitOfWorkFactory
 from swim_coach.infrastructure.db.models import (
     ActivityImportModel,
     ActivityModel,
     JobModel,
     RawProviderPayloadModel,
+    SessionFeedbackModel,
     SyncCursorModel,
     SyncRunModel,
 )
@@ -134,6 +137,76 @@ async def test_incremental_sync_paginates_and_replay_deduplicates(database: Data
     assert payload_count == 2
     assert import_count == 4
     assert cursor_count == 1
+
+
+async def test_sync_relinks_feedback_after_activity_reimport(database: Database) -> None:
+    uow_factory = SqlAlchemyUnitOfWorkFactory(database.session_factory)
+    identity = IdentityService(
+        uow_factory,
+        allowed_emails=frozenset({"first@example.test"}),
+        allowed_subjects=frozenset(),
+    )
+    user = await identity.ensure_identity(
+        provider="test-oidc",
+        subject="feedback-reimport-user",
+        email="first@example.test",
+        display_name="Swimmer",
+        claims_snapshot={"email_verified": True},
+        correlation_id=CorrelationId.new(),
+    )
+    service = GarminSyncService(
+        uow_factory,
+        FixtureGarminProvider(),
+        no_op_user_lock,
+        lookback_days=365,
+        page_size=1,
+    )
+    await service.sync(user.id, trigger="test")
+    async with uow_factory() as uow:
+        original = next(
+            item
+            for item in await uow.activities.list_recent(user.id)
+            if item.external_activity_id == "activity-1"
+        )
+        feedback = SessionFeedback(
+            id=EntityId.new(),
+            user_id=user.id,
+            activity_id=original.id,
+            provider=original.provider,
+            external_activity_id=original.external_activity_id,
+            rpe=7,
+            technique_rating=3,
+            pain_present=False,
+            comment="Feedback must survive a Garmin reimport.",
+        )
+        await uow.activity_data.upsert_feedback(feedback, expected_version=None)
+        await uow.commit()
+
+    async with database.session_factory.begin() as session:
+        await session.execute(delete(ActivityModel).where(ActivityModel.id == original.id.value))
+    async with database.session_factory() as session:
+        detached_activity_id = await session.scalar(
+            select(SessionFeedbackModel.activity_id).where(
+                SessionFeedbackModel.id == feedback.id.value
+            )
+        )
+    assert detached_activity_id is None
+
+    replay = await service.sync(user.id, trigger="test-reimport", force=True)
+    assert replay.created == 1
+    async with uow_factory() as uow:
+        replacement = next(
+            item
+            for item in await uow.activities.list_recent(user.id)
+            if item.external_activity_id == "activity-1"
+        )
+        restored = await uow.activity_data.get_feedback(user.id, replacement.id)
+
+    assert replacement.id != original.id
+    assert restored is not None
+    assert restored.id == feedback.id
+    assert restored.rpe == 7
+    assert restored.comment == "Feedback must survive a Garmin reimport."
 
 
 async def test_cancelled_sync_records_terminal_run_without_advancing_cursor(

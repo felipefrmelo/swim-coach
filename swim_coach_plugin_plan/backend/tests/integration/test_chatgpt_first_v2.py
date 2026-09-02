@@ -21,6 +21,8 @@ from swim_coach.infrastructure.db.models import (
     ActionProposalModel,
     ExternalWorkoutBindingModel,
     JobModel,
+    PlanReviewModel,
+    TrainingPlanRevisionModel,
 )
 from swim_coach.infrastructure.garmin import FakeGarminWorkoutProvider
 from swim_coach.interfaces.mcp.server import create_mcp_server
@@ -103,6 +105,14 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
                     listed = await session.list_tools()
                     assert [tool.name for tool in listed.tools] == [
                         "get_coach_context",
+                        "propose_training_plan",
+                        "get_training_plan",
+                        "review_training_plan",
+                        "propose_plan_revision",
+                        "apply_plan_revision",
+                        "add_plan_note",
+                        "set_training_plan_status",
+                        "skip_plan_session",
                         "get_workouts",
                         "get_swims",
                         "save_workout",
@@ -145,12 +155,89 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
                     missing_swim = await session.call_tool(
                         "get_swims", {"activity_id": str(EntityId.new())}
                     )
+                    proposed_plan = await session.call_tool(
+                        "propose_training_plan",
+                        {
+                            "start_date": next_monday.isoformat(),
+                            "duration_weeks": 8,
+                        },
+                    )
+                    assert proposed_plan.structuredContent is not None
+                    plan_data = proposed_plan.structuredContent["data"]
+                    applied_plan = await session.call_tool(
+                        "apply_plan_revision",
+                        {
+                            "plan_id": plan_data["plan_id"],
+                            "proposal_id": plan_data["proposal_id"],
+                            "expected_revision": 0,
+                            "approval_hash": plan_data["action_hash"],
+                        },
+                    )
                     generated = await session.call_tool(
                         "generate_week",
                         {
+                            "plan_id": plan_data["plan_id"],
+                            "week_number": 1,
                             "week_start": next_monday.isoformat(),
-                            "session_count": 2,
-                            "focus": "BALANCED",
+                        },
+                    )
+                    generated_replay = await session.call_tool(
+                        "generate_week",
+                        {
+                            "plan_id": plan_data["plan_id"],
+                            "week_number": 1,
+                            "week_start": next_monday.isoformat(),
+                        },
+                    )
+                    added_note = await session.call_tool(
+                        "add_plan_note",
+                        {
+                            "plan_id": plan_data["plan_id"],
+                            "scope_type": "PLAN",
+                            "scope_ref": plan_data["plan_id"],
+                            "category": "DECISION",
+                            "author_type": "COACH",
+                            "text": "Consolidar antes de aumentar a carga.",
+                        },
+                    )
+                    loaded_plan = await session.call_tool(
+                        "get_training_plan", {"plan_id": plan_data["plan_id"]}
+                    )
+                    skipped_sessions = [
+                        await session.call_tool(
+                            "skip_plan_session",
+                            {
+                                "plan_id": plan_data["plan_id"],
+                                "session_intent_id": item["session_intent_id"],
+                            },
+                        )
+                        for item in generated.structuredContent["data"]["sessions"]
+                    ]
+                    plan_review = await session.call_tool(
+                        "review_training_plan",
+                        {"plan_id": plan_data["plan_id"], "week_number": 1},
+                    )
+                    assert plan_review.structuredContent is not None
+                    review_data = plan_review.structuredContent["data"]
+                    revision_proposal = await session.call_tool(
+                        "propose_plan_revision",
+                        {
+                            "plan_id": plan_data["plan_id"],
+                            "review_id": review_data["review_id"],
+                            "expected_revision": 1,
+                            "decision": "HOLD",
+                            "rationale": "Consolidar após duas sessões ignoradas.",
+                        },
+                    )
+                    assert revision_proposal.structuredContent is not None
+                    revision_data = revision_proposal.structuredContent["data"]
+                    applied_revision = await session.call_tool(
+                        "apply_plan_revision",
+                        {
+                            "plan_id": plan_data["plan_id"],
+                            "proposal_id": revision_data["proposal_id"],
+                            "expected_revision": 1,
+                            "approval_hash": revision_data["action_hash"],
                         },
                     )
 
@@ -158,7 +245,22 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
     assert saved.structuredContent is not None
     assert all(
         result.structuredContent is not None and result.structuredContent["schema_version"] == "2.0"
-        for result in (saved, published, workouts, swims, generated)
+        for result in (
+            saved,
+            published,
+            workouts,
+            swims,
+            proposed_plan,
+            applied_plan,
+            generated,
+            generated_replay,
+            added_note,
+            loaded_plan,
+            *skipped_sessions,
+            plan_review,
+            revision_proposal,
+            applied_revision,
+        )
     )
     assert saved.structuredContent["data"]["status"] == "scheduled"
     assert workouts.isError is False
@@ -177,6 +279,21 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
     assert generated.isError is False
     assert generated.structuredContent is not None
     assert generated.structuredContent["data"]["session_count"] == 2
+    assert generated.structuredContent["data"]["replayed"] is False
+    assert generated_replay.structuredContent is not None
+    assert generated_replay.structuredContent["data"]["replayed"] is True
+    assert (
+        generated_replay.structuredContent["data"]["workout_ids"]
+        == generated.structuredContent["data"]["workout_ids"]
+    )
+    assert loaded_plan.structuredContent is not None
+    assert loaded_plan.structuredContent["data"]["notes"][0]["author_type"] == "COACH"
+    assert plan_review.structuredContent is not None
+    assert plan_review.structuredContent["data"]["eligible"] is True
+    assert revision_proposal.structuredContent is not None
+    assert revision_proposal.structuredContent["data"]["decision"] == "HOLD"
+    assert applied_revision.structuredContent is not None
+    assert applied_revision.structuredContent["data"]["revision"] == 2
     assert swims.structuredContent is not None
     assert "items" in swims.structuredContent["data"]
     assert missing_swim.isError is True
@@ -191,9 +308,16 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
     assert "content_hash" not in serialized
     assert "proposal" not in serialized.casefold()
     async with database.session_factory() as session:
-        assert await session.scalar(select(func.count()).select_from(ActionProposalModel)) == 0
-        assert await session.scalar(select(func.count()).select_from(ActionApprovalModel)) == 0
+        assert await session.scalar(select(func.count()).select_from(ActionProposalModel)) == 2
+        assert await session.scalar(select(func.count()).select_from(ActionApprovalModel)) == 2
         assert await session.scalar(select(func.count()).select_from(ActionExecutionModel)) == 0
+        assert (
+            await session.scalar(select(func.count()).select_from(TrainingPlanRevisionModel)) == 2
+        )
+        stored_review = await session.scalar(select(PlanReviewModel))
+        assert stored_review is not None
+        assert stored_review.decision == "HOLD"
+        assert stored_review.proposal_id is not None
 
 
 async def test_direct_save_publish_update_and_reschedule_use_one_binding(

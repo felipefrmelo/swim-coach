@@ -74,6 +74,11 @@ async def test_migration_up_down_up_and_constraints(
         "notification",
         "data_export",
         "deletion_request",
+        "training_plan",
+        "training_plan_revision",
+        "plan_session_binding",
+        "plan_review",
+        "plan_note",
     }
     assert expected_tables <= round_trip.tables_after_upgrade
     assert expected_tables.isdisjoint(round_trip.tables_after_downgrade)
@@ -122,11 +127,18 @@ async def test_migration_up_down_up_and_constraints(
                     "WHERE tgname = 'trg_workout_revision_immutable' AND NOT tgisinternal"
                 )
             ).scalar_one()
+            plan_immutable_trigger = (
+                await connection.exec_driver_sql(
+                    "SELECT count(*) FROM pg_trigger "
+                    "WHERE tgname = 'trg_training_plan_revision_immutable' AND NOT tgisinternal"
+                )
+            ).scalar_one()
     finally:
         await database.dispose()
 
-        assert revision == "000013"
+        assert revision == "000014"
     assert immutable_trigger == 1
+    assert plan_immutable_trigger == 1
     assert {item["name"] for item in constraints} >= {
         "ck_pool_length_positive",
         "ck_pool_version",
@@ -134,7 +146,8 @@ async def test_migration_up_down_up_and_constraints(
     assert all("garmin_reported_speed_m_per_s" in columns for columns in canonical_columns.values())
     assert {"perceived_effort_rpe", "feeling_score"} <= canonical_columns["activity_normalization"]
     assert feedback_columns["rpe"]["nullable"] is True
-    assert "feeling_score" in feedback_columns
+    assert feedback_columns["activity_id"]["nullable"] is True
+    assert {"feeling_score", "provider", "external_activity_id"} <= set(feedback_columns)
     assert {item["name"] for item in normalization_constraints} >= {
         "ck_activity_normalization_rpe",
         "ck_activity_normalization_feeling",
@@ -345,7 +358,7 @@ async def test_canonical_v2_downgrade_refuses_to_destroy_persisted_facts(
             )
         with pytest.raises(DBAPIError, match="000013 downgrade is unsafe"):
             await asyncio.to_thread(command.downgrade, config, "000012")
-        assert await database.revision() == "000013"
+        assert await database.revision() == "000014"
         async with database.engine.begin() as connection:
             await connection.execute(
                 text(
@@ -357,9 +370,10 @@ async def test_canonical_v2_downgrade_refuses_to_destroy_persisted_facts(
             await connection.execute(
                 text(
                     "INSERT INTO session_feedback "
-                    "(id,user_id,activity_id,rpe,feeling_score,pain_present,created_at,"
-                    "updated_at,version) VALUES "
-                    "(:id,:user_id,:activity_id,NULL,75,false,:now,:now,1)"
+                    "(id,user_id,activity_id,provider,external_activity_id,rpe,feeling_score,"
+                    "pain_present,created_at,updated_at,version) VALUES "
+                    "(:id,:user_id,:activity_id,'garmin','legacy-feedback',NULL,75,false,"
+                    ":now,:now,1)"
                 ),
                 {
                     "id": feedback_id,
@@ -370,7 +384,7 @@ async def test_canonical_v2_downgrade_refuses_to_destroy_persisted_facts(
             )
         with pytest.raises(DBAPIError, match="000013 downgrade is unsafe"):
             await asyncio.to_thread(command.downgrade, config, "000012")
-        assert await database.revision() == "000013"
+        assert await database.revision() == "000014"
         async with database.engine.begin() as connection:
             await connection.execute(
                 text("DELETE FROM session_feedback WHERE id=:id"), {"id": feedback_id}
@@ -380,7 +394,7 @@ async def test_canonical_v2_downgrade_refuses_to_destroy_persisted_facts(
 
         # Alembic rolls the multi-revision downgrade back atomically when the
         # canonical-v2 guard rejects the following step.
-        assert await database.revision() == "000013"
+        assert await database.revision() == "000014"
         async with database.engine.connect() as connection:
             stored = (
                 await connection.execute(

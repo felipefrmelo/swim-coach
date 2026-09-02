@@ -44,7 +44,15 @@ from swim_coach.application.services.mcp_write import (
     MCP_WRITE_TOOL_SCOPES,
     McpWriteService,
 )
-from swim_coach.domain.planning import PlanningPreferences
+from swim_coach.domain.planning import (
+    NoteAuthor,
+    NoteCategory,
+    NoteImportance,
+    NoteScope,
+    PlanDecision,
+    PlanningPreferences,
+    PlanStatus,
+)
 from swim_coach.domain.shared.errors import DomainError
 from swim_coach.domain.shared.value_objects import CorrelationId, EntityId
 from swim_coach.domain.workouts import CanonicalWorkout
@@ -172,10 +180,13 @@ def create_mcp_server(
     write_enabled = bool(oauth_enabled and write_service)
     ui_enabled = bool(oauth_enabled and write_enabled and ui_enabled)
     instructions = (
-        "Swim Coach is a personal, ChatGPT-first swimming coach. Use the nine "
-        "intent-level tools directly. Local saves need no extra confirmation. Calling "
+        "Swim Coach is a personal, ChatGPT-first swimming coach. Use the intent-level "
+        "tools directly, including approval-gated training cycles. Local ad-hoc saves "
+        "need no extra confirmation. Calling "
         "publish_workout means the user asked to send that workout to Garmin; do not add "
-        "proposal, hash, approval, execution, revision, or idempotency ceremony. Calling "
+        "proposal or idempotency ceremony for Garmin publication. Plan revisions are the "
+        "exception: show their exact diff and hash, then apply only after explicit "
+        "approval. Calling "
         "delete_workout means the user asked to remove the planned workout locally, from "
         "the calendar, and from Garmin after the host's destructive-action confirmation."
         if v2_enabled and oauth_enabled
@@ -260,9 +271,7 @@ def create_mcp_server(
                 request_id=request_id,
                 arguments=arguments,
                 started_at=started_at,
-                outcome=result.status
-                if result.status in {"OK", "NOT_FOUND", "PARTIAL"}
-                else "FAILED",
+                outcome=_invocation_outcome(result.status),
             )
             return _result_with_schema_version(result, envelope_schema_version)
         except DomainError as error:
@@ -344,7 +353,7 @@ def create_mcp_server(
                 request_id=request_id,
                 arguments=arguments,
                 started_at=started_at,
-                outcome=result.status,
+                outcome=_invocation_outcome(result.status),
                 correlation_id=correlation_id,
                 causation_id=causation_id,
             )
@@ -1380,7 +1389,7 @@ def _register_v2_tools(
     execute: Callable[..., Awaitable[McpResult]],
     execute_write: Callable[..., Awaitable[McpResult]],
 ) -> None:
-    """Register the complete public v2 surface: nine intent-level tools."""
+    """Register the public ChatGPT-first coaching surface."""
 
     scope = frozenset({"coach"})
 
@@ -1410,6 +1419,22 @@ def _register_v2_tools(
                 if error.code != "RESOURCE_NOT_FOUND":
                     raise
                 progress_data = None
+            try:
+                plan_detail = await coach_service.get_training_plan(principal.user_id)
+                active_plan: dict[str, Any] | None = {
+                    "plan_id": str(plan_detail.plan.id),
+                    "goal_id": str(plan_detail.plan.goal_id),
+                    "title": plan_detail.plan.title,
+                    "status": plan_detail.plan.status.value,
+                    "start_date": plan_detail.plan.start_date.isoformat(),
+                    "end_date": plan_detail.plan.end_date.isoformat(),
+                    "duration_weeks": plan_detail.plan.duration_weeks,
+                    "current_revision": plan_detail.plan.current_revision,
+                }
+            except DomainError as error:
+                if error.code != "RESOURCE_NOT_FOUND":
+                    raise
+                active_plan = None
             return McpResult(
                 request_id=request_id,
                 status="OK",
@@ -1417,8 +1442,11 @@ def _register_v2_tools(
                     "training": training.data,
                     "goal_progress": progress_data,
                     "garmin": sync.data,
+                    "active_plan": active_plan,
                     "capabilities": {
                         "save_workout": True,
+                        "training_cycles": coach_service.planning_enabled,
+                        "plan_revision_approval_required": True,
                         "generate_week": coach_service.planning_enabled,
                         "publish_workout": coach_service.garmin_write_enabled,
                         "delete_workout": True,
@@ -1432,6 +1460,462 @@ def _register_v2_tools(
             )
 
         return _as_v2_result(await execute("get_coach_context", ctx, scope, args, query))
+
+    @server.tool(
+        name="propose_training_plan",
+        title="Propose a training cycle",
+        description=(
+            "Create an approval-gated rolling training-cycle proposal. No workout or Garmin "
+            "state changes until the exact proposal hash is applied."
+        ),
+        annotations=LOCAL_WRITE,
+        structured_output=True,
+    )
+    async def propose_training_plan(
+        ctx: Context[Any, Any, Any],
+        start_date: LocalDate,
+        duration_weeks: Annotated[int, Field(ge=4, le=16)] = 8,
+        goal_id: UUID | None = None,
+        title: Annotated[str | None, Field(max_length=160)] = None,
+        strategy_summary: Annotated[str | None, Field(max_length=4000)] = None,
+    ) -> McpResultV2:
+        args = {
+            "goal_id": str(goal_id) if goal_id else None,
+            "title": title,
+            "start_date": start_date.isoformat(),
+            "duration_weeks": duration_weeks,
+            "strategy_summary": strategy_summary,
+        }
+
+        async def command(
+            principal: McpPrincipal, request_id: str, correlation_id: CorrelationId
+        ) -> McpResult:
+            result = await coach_service.propose_training_plan(
+                principal.user_id,
+                actor_id=principal.subject,
+                goal_id=EntityId(goal_id) if goal_id else None,
+                title=title,
+                start_date=start_date,
+                duration_weeks=duration_weeks,
+                strategy_summary=strategy_summary,
+                correlation_id=correlation_id,
+            )
+            return McpResult(
+                request_id=request_id,
+                status="OK",
+                data={
+                    "plan_id": str(result.plan.id),
+                    "status": result.plan.status.value,
+                    "proposal_id": str(result.proposal.id),
+                    "action_hash": result.proposal.action_hash,
+                    "expected_revision": 0,
+                    "expires_at": result.proposal.expires_at.isoformat(),
+                    "plan": result.document.model_dump(mode="json"),
+                    "diff": result.proposal.impact.get("diff"),
+                },
+                human_summary="Created a draft cycle proposal for exact-hash approval.",
+            )
+
+        return _as_v2_result(
+            await execute_write("propose_training_plan", ctx, scope, args, command)
+        )
+
+    @server.tool(
+        name="get_training_plan",
+        title="Get a training cycle",
+        description=(
+            "Return the live or selected cycle, current revision, bindings, reviews, and notes."
+        ),
+        annotations=READ_ONLY,
+        structured_output=True,
+    )
+    async def get_training_plan(
+        ctx: Context[Any, Any, Any], plan_id: UUID | None = None
+    ) -> McpResultV2:
+        args = {"plan_id": str(plan_id) if plan_id else None}
+
+        async def query(principal: McpPrincipal, request_id: str) -> McpResult:
+            detail = await coach_service.get_training_plan(
+                principal.user_id, EntityId(plan_id) if plan_id else None
+            )
+            return McpResult(
+                request_id=request_id,
+                status="OK",
+                data={
+                    "plan": {
+                        "plan_id": str(detail.plan.id),
+                        "goal_id": str(detail.plan.goal_id),
+                        "title": detail.plan.title,
+                        "status": detail.plan.status.value,
+                        "start_date": detail.plan.start_date.isoformat(),
+                        "end_date": detail.plan.end_date.isoformat(),
+                        "duration_weeks": detail.plan.duration_weeks,
+                        "current_revision": detail.plan.current_revision,
+                    },
+                    "revision": (
+                        detail.revision.document.model_dump(mode="json")
+                        if detail.revision
+                        else None
+                    ),
+                    "revision_history": [
+                        {
+                            "revision": item.revision_number,
+                            "reason": item.reason,
+                            "content_hash": item.content_hash,
+                            "created_at": item.created_at.isoformat(),
+                            "diff": item.diff,
+                        }
+                        for item in detail.revisions
+                    ],
+                    "sessions": [
+                        {
+                            "session_intent_id": str(item.session_intent_id),
+                            "week_number": item.week_number,
+                            "state": item.state.value,
+                            "workout_id": str(item.workout_id) if item.workout_id else None,
+                            "locked": item.locked,
+                            "locked_reason": item.locked_reason,
+                        }
+                        for item in detail.bindings
+                    ],
+                    "reviews": [
+                        {
+                            "review_id": str(item.id),
+                            "plan_revision": item.plan_revision,
+                            "week_number": item.week_number,
+                            "eligible": item.eligible,
+                            "eligibility_reason": item.eligibility_reason,
+                            "confidence_cap": item.confidence_cap.value,
+                            "evidence_hash": item.evidence_hash,
+                            "decision": item.decision.value if item.decision else None,
+                            "rationale": item.rationale,
+                            "recommendation": item.recommendation,
+                            "proposal_id": str(item.proposal_id) if item.proposal_id else None,
+                            "created_at": item.created_at.isoformat(),
+                        }
+                        for item in detail.reviews
+                    ],
+                    "notes": [
+                        {
+                            "note_id": str(item.id),
+                            "scope_type": item.scope_type.value,
+                            "scope_ref": item.scope_ref,
+                            "category": item.category.value,
+                            "author_type": item.author_type.value,
+                            "importance": item.importance.value,
+                            "text": item.text,
+                            "affects_adaptation": item.affects_adaptation,
+                        }
+                        for item in detail.notes
+                    ],
+                },
+                human_summary=(
+                    f"Loaded {detail.plan.title} at revision {detail.plan.current_revision}."
+                ),
+            )
+
+        return _as_v2_result(await execute("get_training_plan", ctx, scope, args, query))
+
+    @server.tool(
+        name="review_training_plan",
+        title="Review one plan week",
+        description=(
+            "Create an immutable deterministic evidence snapshot for an ended or fully "
+            "resolved plan week. This tool does not change the plan."
+        ),
+        annotations=LOCAL_WRITE,
+        structured_output=True,
+    )
+    async def review_training_plan(
+        ctx: Context[Any, Any, Any],
+        plan_id: UUID,
+        week_number: Annotated[int, Field(ge=1, le=16)],
+    ) -> McpResultV2:
+        args = {"plan_id": str(plan_id), "week_number": week_number}
+
+        async def command(
+            principal: McpPrincipal, request_id: str, correlation_id: CorrelationId
+        ) -> McpResult:
+            review = await coach_service.review_training_plan(
+                principal.user_id,
+                actor_id=principal.subject,
+                plan_id=EntityId(plan_id),
+                week_number=week_number,
+                correlation_id=correlation_id,
+            )
+            return McpResult(
+                request_id=request_id,
+                status="OK",
+                data={
+                    "review_id": str(review.id),
+                    "plan_id": str(review.plan_id),
+                    "plan_revision": review.plan_revision,
+                    "week_number": review.week_number,
+                    "eligible": review.eligible,
+                    "eligibility_reason": review.eligibility_reason,
+                    "confidence_cap": review.confidence_cap.value,
+                    "evidence_hash": review.evidence_hash,
+                    "evidence": review.evidence_snapshot,
+                },
+                human_summary=(
+                    "The week is eligible for an adaptation proposal."
+                    if review.eligible
+                    else "The week is still open; evidence was recorded without adapting the plan."
+                ),
+            )
+
+        return _as_v2_result(await execute_write("review_training_plan", ctx, scope, args, command))
+
+    @server.tool(
+        name="propose_plan_revision",
+        title="Propose an adaptive plan revision",
+        description="Turn one eligible review into a validated, exact-hash revision proposal.",
+        annotations=LOCAL_WRITE,
+        structured_output=True,
+    )
+    async def propose_plan_revision(
+        ctx: Context[Any, Any, Any],
+        plan_id: UUID,
+        review_id: UUID,
+        expected_revision: Annotated[int, Field(ge=1)],
+        decision: Literal[
+            "PROGRESS", "HOLD", "REGRESS", "RECOVERY", "RETEST", "RESCHEDULE", "PAUSE"
+        ],
+        rationale: Annotated[str, Field(min_length=1, max_length=2000)],
+    ) -> McpResultV2:
+        args = {
+            "plan_id": str(plan_id),
+            "review_id": str(review_id),
+            "expected_revision": expected_revision,
+            "decision": decision,
+            "rationale": rationale,
+        }
+
+        async def command(
+            principal: McpPrincipal, request_id: str, correlation_id: CorrelationId
+        ) -> McpResult:
+            result = await coach_service.propose_plan_revision(
+                principal.user_id,
+                actor_id=principal.subject,
+                plan_id=EntityId(plan_id),
+                review_id=EntityId(review_id),
+                expected_revision=expected_revision,
+                decision=PlanDecision(decision),
+                rationale=rationale,
+                correlation_id=correlation_id,
+            )
+            return McpResult(
+                request_id=request_id,
+                status="OK",
+                data={
+                    "plan_id": str(result.plan.id),
+                    "proposal_id": str(result.proposal.id),
+                    "action_hash": result.proposal.action_hash,
+                    "expected_revision": expected_revision,
+                    "decision": decision,
+                    "diff": result.proposal.impact.get("diff"),
+                    "expires_at": result.proposal.expires_at.isoformat(),
+                },
+                human_summary="Created a validated plan revision proposal; nothing was applied.",
+            )
+
+        return _as_v2_result(
+            await execute_write("propose_plan_revision", ctx, scope, args, command)
+        )
+
+    @server.tool(
+        name="apply_plan_revision",
+        title="Apply an approved plan revision",
+        description=(
+            "Apply the exact proposed revision with optimistic concurrency and queue local "
+            "materialization. Garmin is never changed by this tool."
+        ),
+        annotations=LOCAL_WRITE,
+        structured_output=True,
+    )
+    async def apply_plan_revision(
+        ctx: Context[Any, Any, Any],
+        plan_id: UUID,
+        proposal_id: UUID,
+        expected_revision: Annotated[int, Field(ge=0)],
+        approval_hash: Annotated[str, Field(min_length=64, max_length=64)],
+    ) -> McpResultV2:
+        args = {
+            "plan_id": str(plan_id),
+            "proposal_id": str(proposal_id),
+            "expected_revision": expected_revision,
+            "approval_hash": approval_hash,
+        }
+
+        async def command(
+            principal: McpPrincipal, request_id: str, correlation_id: CorrelationId
+        ) -> McpResult:
+            result = await coach_service.apply_plan_revision(
+                principal.user_id,
+                actor_id=principal.subject,
+                plan_id=EntityId(plan_id),
+                proposal_id=EntityId(proposal_id),
+                expected_revision=expected_revision,
+                approval_hash=approval_hash,
+                correlation_id=correlation_id,
+            )
+            return McpResult(
+                request_id=request_id,
+                status="ACCEPTED" if result.materialization_job_id else "OK",
+                data={
+                    "plan_id": str(result.plan.id),
+                    "status": result.plan.status.value,
+                    "revision": result.revision.revision_number,
+                    "content_hash": result.revision.content_hash,
+                    "materialization_job_id": (
+                        str(result.materialization_job_id)
+                        if result.materialization_job_id
+                        else None
+                    ),
+                    "garmin_changed": False,
+                },
+                human_summary=(
+                    "Applied the plan revision and queued its detailed week locally."
+                    if result.materialization_job_id
+                    else "Applied the plan revision without a materializable week."
+                ),
+            )
+
+        return _as_v2_result(await execute_write("apply_plan_revision", ctx, scope, args, command))
+
+    @server.tool(
+        name="add_plan_note",
+        title="Add a structured plan note",
+        description="Attach bounded, reusable context to a plan, week, session, or activity.",
+        annotations=LOCAL_WRITE,
+        structured_output=True,
+    )
+    async def add_plan_note(
+        ctx: Context[Any, Any, Any],
+        plan_id: UUID,
+        scope_type: Literal["PLAN", "WEEK", "SESSION", "ACTIVITY"],
+        scope_ref: Annotated[str, Field(min_length=1, max_length=255)],
+        category: Literal[
+            "PERFORMANCE", "TECHNIQUE", "PAIN", "RECOVERY", "SCHEDULE", "DECISION", "DATA_QUALITY"
+        ],
+        text: Annotated[str, Field(min_length=1, max_length=2000)],
+        author_type: Literal["ATHLETE", "COACH"] = "ATHLETE",
+        importance: Literal["LOW", "MEDIUM", "HIGH"] = "MEDIUM",
+        affects_adaptation: bool = True,
+        valid_from: LocalDate | None = None,
+        valid_until: LocalDate | None = None,
+        evidence_activity_ids: list[UUID] | None = None,
+    ) -> McpResultV2:
+        args = {
+            "plan_id": str(plan_id),
+            "scope_type": scope_type,
+            "scope_ref": scope_ref,
+            "category": category,
+            "text": text,
+            "author_type": author_type,
+            "importance": importance,
+            "affects_adaptation": affects_adaptation,
+            "valid_from": valid_from.isoformat() if valid_from else None,
+            "valid_until": valid_until.isoformat() if valid_until else None,
+            "evidence_activity_ids": [str(item) for item in evidence_activity_ids or []],
+        }
+
+        async def command(
+            principal: McpPrincipal, request_id: str, correlation_id: CorrelationId
+        ) -> McpResult:
+            note = await coach_service.add_plan_note(
+                principal.user_id,
+                actor_id=principal.subject,
+                plan_id=EntityId(plan_id),
+                scope_type=NoteScope(scope_type),
+                scope_ref=scope_ref,
+                category=NoteCategory(category),
+                author_type=NoteAuthor(author_type),
+                text=text,
+                importance=NoteImportance(importance),
+                affects_adaptation=affects_adaptation,
+                valid_from=valid_from,
+                valid_until=valid_until,
+                evidence_activity_ids=tuple(EntityId(item) for item in evidence_activity_ids or []),
+                correlation_id=correlation_id,
+            )
+            return McpResult(
+                request_id=request_id,
+                status="OK",
+                data={"note_id": str(note.id), "plan_id": str(note.plan_id)},
+                human_summary="Added the structured plan note.",
+            )
+
+        return _as_v2_result(await execute_write("add_plan_note", ctx, scope, args, command))
+
+    @server.tool(
+        name="set_training_plan_status",
+        title="Pause or resume a training cycle",
+        description="Explicitly pause or resume the selected plan without changing Garmin.",
+        annotations=LOCAL_WRITE,
+        structured_output=True,
+    )
+    async def set_training_plan_status(
+        ctx: Context[Any, Any, Any],
+        plan_id: UUID,
+        status: Literal["ACTIVE", "PAUSED"],
+    ) -> McpResultV2:
+        args = {"plan_id": str(plan_id), "status": status}
+
+        async def command(
+            principal: McpPrincipal, request_id: str, correlation_id: CorrelationId
+        ) -> McpResult:
+            applied = await coach_service.set_training_plan_status(
+                principal.user_id,
+                actor_id=principal.subject,
+                plan_id=EntityId(plan_id),
+                status=PlanStatus(status),
+                correlation_id=correlation_id,
+            )
+            return McpResult(
+                request_id=request_id,
+                status="OK",
+                data={"plan_id": str(plan_id), "status": applied.value},
+                human_summary=f"Training plan is now {applied.value}.",
+            )
+
+        return _as_v2_result(
+            await execute_write("set_training_plan_status", ctx, scope, args, command)
+        )
+
+    @server.tool(
+        name="skip_plan_session",
+        title="Skip a plan session",
+        description="Resolve one uncompleted plan session as intentionally skipped.",
+        annotations=LOCAL_WRITE,
+        structured_output=True,
+    )
+    async def skip_plan_session(
+        ctx: Context[Any, Any, Any], plan_id: UUID, session_intent_id: UUID
+    ) -> McpResultV2:
+        args = {"plan_id": str(plan_id), "session_intent_id": str(session_intent_id)}
+
+        async def command(
+            principal: McpPrincipal, request_id: str, correlation_id: CorrelationId
+        ) -> McpResult:
+            del correlation_id
+            binding = await coach_service.skip_plan_session(
+                principal.user_id,
+                plan_id=EntityId(plan_id),
+                session_intent_id=EntityId(session_intent_id),
+            )
+            return McpResult(
+                request_id=request_id,
+                status="OK",
+                data={
+                    "plan_id": str(plan_id),
+                    "session_intent_id": str(binding.session_intent_id),
+                    "state": binding.state.value,
+                },
+                human_summary="Marked the plan session as skipped.",
+            )
+
+        return _as_v2_result(await execute_write("skip_plan_session", ctx, scope, args, command))
 
     @server.tool(
         name="get_workouts",
@@ -1687,18 +2171,14 @@ def _register_v2_tools(
     )
     async def generate_week(
         ctx: Context[Any, Any, Any],
+        plan_id: UUID,
+        week_number: Annotated[int, Field(ge=1, le=16)],
         week_start: LocalDate,
-        session_count: Annotated[int | None, Field(ge=1, le=7)] = None,
-        max_session_duration_minutes: Annotated[int | None, Field(ge=20, le=120)] = None,
-        focus: Literal["BALANCED", "TECHNIQUE", "ENDURANCE", "GOAL_PACE"] = "BALANCED",
-        avoid_high_intensity: bool = False,
     ) -> McpResultV2:
         args = {
+            "plan_id": str(plan_id),
+            "week_number": week_number,
             "week_start": week_start.isoformat(),
-            "session_count": session_count,
-            "max_session_duration_minutes": max_session_duration_minutes,
-            "focus": focus,
-            "avoid_high_intensity": avoid_high_intensity,
         }
 
         async def command(
@@ -1708,13 +2188,10 @@ def _register_v2_tools(
                 principal.user_id,
                 actor_id=principal.subject,
                 week_start=week_start,
-                preferences=PlanningPreferences(
-                    session_count=session_count,
-                    max_session_duration_minutes=max_session_duration_minutes,
-                    focus=focus,
-                    avoid_high_intensity=avoid_high_intensity,
-                ),
+                preferences=PlanningPreferences(),
                 correlation_id=correlation_id,
+                plan_id=EntityId(plan_id),
+                week_number=week_number,
             )
             sessions = result.week.get("sessions", [])
             return McpResult(
@@ -1725,7 +2202,7 @@ def _register_v2_tools(
                     "workout_ids": [str(item) for item in result.workout_ids],
                     "week_start": week_start.isoformat(),
                     "session_count": len(result.workout_ids),
-                    "target_volume_m": result.week.get("target_volume_m"),
+                    "target_volume_m": result.week.get("target_distance_max_m"),
                     "sessions": sessions,
                     "warnings": result.week.get("warnings", []),
                     "replayed": result.replayed,
@@ -2008,6 +2485,16 @@ def _error(
         sort_keys=True,
         separators=(",", ":"),
     )
+
+
+def _invocation_outcome(status: str) -> str:
+    """Collapse public envelope statuses into the persisted observability vocabulary."""
+
+    if status in {"OK", "ACCEPTED"}:
+        return "OK"
+    if status in {"NOT_FOUND", "PARTIAL"}:
+        return status
+    return "FAILED"
 
 
 def _result_with_schema_version(result: McpResult, schema_version: _McpSchemaVersion) -> McpResult:

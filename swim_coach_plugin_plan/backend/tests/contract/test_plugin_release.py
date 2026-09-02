@@ -32,6 +32,14 @@ SKILLS = {
         "get_coach_context",
         "get_workouts",
         "get_swims",
+        "propose_training_plan",
+        "get_training_plan",
+        "review_training_plan",
+        "propose_plan_revision",
+        "apply_plan_revision",
+        "add_plan_note",
+        "set_training_plan_status",
+        "skip_plan_session",
         "generate_week",
         "publish_workout",
     ),
@@ -64,14 +72,14 @@ def load_eval_cases() -> list[dict[str, Any]]:
     return cases
 
 
-def test_p14_manifest_app_marketplace_and_release_matrix_include_direct_delete_2_1() -> None:
+def test_p15_manifest_and_release_matrix_include_adaptive_cycles_3_0() -> None:
     manifest = load_json(PLUGIN_ROOT / ".codex-plugin/plugin.json")
     app_mapping = load_json(PLUGIN_ROOT / ".app.json")
     marketplace = load_json(ROOT / ".agents/plugins/marketplace.json")
     release_matrix = load_yaml(ROOT / "contracts/capability-release-matrix.yaml")
 
     assert manifest["name"] == "swim-coach"
-    assert manifest["version"].startswith("2.1.0+codex.")
+    assert manifest["version"].startswith("3.0.0+codex.")
     assert manifest["skills"] == "./skills/"
     assert manifest["apps"] == "./.app.json"
     assert manifest["interface"]["capabilities"] == ["Read", "Write"]
@@ -114,12 +122,15 @@ def test_p14_manifest_app_marketplace_and_release_matrix_include_direct_delete_2
     assert p14_release["version"] == "2.1.0"
     assert p14_release["mode"] == "direct-delete-everywhere"
     assert p14_release["oauth_scopes"] == ["coach"]
+    p15_release = next(item for item in release_matrix["plugin_releases"] if item["phase"] == "P15")
+    assert p15_release["version"] == "3.0.0"
+    assert p15_release["mode"] == "approval-gated-training-cycles"
     tool_names = {item["name"] for item in load_yaml(ROOT / "contracts/mcp-tools.yaml")["tools"]}
     assert tool_names == {item["name"] for item in release_matrix["tools"]}
     upgraded_skills = {
         item["name"]: tuple(item["required_tools"])
         for item in release_matrix["skills"]
-        if item.get("introduced") in {"P13", "P14"}
+        if item.get("introduced") in {"P13", "P14", "P15"}
     }
     assert upgraded_skills == SKILLS
     assert release_matrix["ui_resources"] == []
@@ -195,14 +206,14 @@ def test_p14_eval_dataset_validates_direct_command_selection() -> None:
         assert counts == Counter(CATEGORY_COUNTS), skill_name
 
 
-def test_p14_release_manifest_hashes_are_current() -> None:
-    release = load_json(ROOT / "releases/plugin-2.1.0.json")
+def test_p15_release_manifest_hashes_are_current() -> None:
+    release = load_json(ROOT / "releases/plugin-3.0.0.json")
 
-    assert release["version"].startswith("2.1.0+codex.")
-    assert release["mode"] == "direct-delete-everywhere"
+    assert release["version"].startswith("3.0.0+codex.")
+    assert release["mode"] == "approval-gated-training-cycles"
     assert release["status"] == "release_candidate"
     assert release["oauth_scopes"] == ["coach"]
-    assert len(release["tools"]) == 9
+    assert len(release["tools"]) == 17
     for relative, expected in release["hashes"].items():
         actual = hashlib.sha256((ROOT / relative).read_bytes()).hexdigest()
         assert actual == expected, relative

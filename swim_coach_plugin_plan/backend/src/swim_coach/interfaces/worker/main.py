@@ -19,6 +19,7 @@ from swim_coach.application.services import (
     GarminSyncService,
     PlanningService,
     PrivacyService,
+    TrainingCycleService,
 )
 from swim_coach.application.services.garmin_workout_compiler import GarminWorkoutCompiler
 from swim_coach.bootstrap.container import build_services
@@ -54,6 +55,7 @@ class Worker:
     WORKOUT_DELETE_JOB_TYPE = "workout.delete_everywhere"
     ACTIVITY_FETCH_FILE_JOB_TYPE = "activity.fetch_file"
     PLANNING_JOB_TYPE = "planning.generate_week"
+    PLAN_MATERIALIZE_JOB_TYPE = "planning.materialize_cycle_week"
     PRIVACY_DELETE_JOB_TYPE = "privacy.delete_user"
 
     def __init__(
@@ -67,6 +69,7 @@ class Worker:
         automation: AutomationService | None = None,
         coach_commands: CoachCommandService | None = None,
         planning: PlanningService | None = None,
+        training_cycles: TrainingCycleService | None = None,
         privacy: PrivacyService | None = None,
         database: Database | None = None,
         worker_id: str = "worker-p01",
@@ -80,6 +83,7 @@ class Worker:
         self._automation = automation
         self._coach_commands = coach_commands
         self._planning = planning
+        self._training_cycles = training_cycles
         self._privacy = privacy
         self._database = database
         self._worker_id = worker_id
@@ -105,6 +109,8 @@ class Worker:
             job_types.add(self.ACTIVITY_FETCH_FILE_JOB_TYPE)
         if self._planning is not None:
             job_types.add(self.PLANNING_JOB_TYPE)
+        if self._training_cycles is not None:
+            job_types.add(self.PLAN_MATERIALIZE_JOB_TYPE)
         if self._privacy is not None:
             job_types.add(self.PRIVACY_DELETE_JOB_TYPE)
         async with self._uow_factory() as uow:
@@ -130,6 +136,8 @@ class Worker:
             return await self._run_activity_fetch_file(job)
         if job.job_type == self.PLANNING_JOB_TYPE:
             return await self._run_planning(job)
+        if job.job_type == self.PLAN_MATERIALIZE_JOB_TYPE:
+            return await self._run_plan_materialization(job)
         if job.job_type == self.PRIVACY_DELETE_JOB_TYPE:
             return await self._run_privacy_delete(job)
         async with self._uow_factory() as uow:
@@ -156,6 +164,39 @@ class Worker:
                 exc.code,
                 retryable=exc.code == "PRIVACY_STORAGE_DELETE_FAILED",
             )
+        async with self._uow_factory() as uow:
+            finished = await uow.jobs.mark_succeeded(job.id, self._worker_id, datetime.now(UTC))
+            await uow.commit()
+        return finished
+
+    async def _run_plan_materialization(self, job: Job) -> bool:
+        if self._training_cycles is None or job.user_id is None:
+            return await self._finish_failure(job, "PLAN_MATERIALIZATION_INVALID", retryable=False)
+        raw_plan_id = job.payload.get("plan_id")
+        raw_revision = job.payload.get("revision")
+        raw_week = job.payload.get("week_number")
+        if (
+            not isinstance(raw_plan_id, str)
+            or not isinstance(raw_revision, int)
+            or not isinstance(raw_week, int)
+        ):
+            return await self._finish_failure(job, "PLAN_MATERIALIZATION_INVALID", retryable=False)
+        try:
+            await self._training_cycles.materialize_week(
+                job.user_id,
+                plan_id=EntityId.parse(raw_plan_id),
+                expected_revision=raw_revision,
+                week_number=raw_week,
+                correlation_id=CorrelationId.new(),
+            )
+        except DomainError as exc:
+            return await self._finish_failure(
+                job,
+                exc.code,
+                retryable=exc.code in {"REVISION_CONFLICT", "PLAN_REVISION_CONFLICT"},
+            )
+        if self._uow_factory is None:
+            return False
         async with self._uow_factory() as uow:
             finished = await uow.jobs.mark_succeeded(job.id, self._worker_id, datetime.now(UTC))
             await uow.commit()
@@ -1023,6 +1064,7 @@ async def run_worker() -> None:
             automation=services.automation,
             coach_commands=services.coach_commands,
             planning=services.planning,
+            training_cycles=services.training_cycles,
             privacy=services.privacy,
             database=database,
         ).run(stop_event)

@@ -75,10 +75,24 @@ from swim_coach.domain.operations import (
     OutboxEvent,
 )
 from swim_coach.domain.planning import (
+    EvidenceConfidence,
+    NoteAuthor,
+    NoteCategory,
+    NoteImportance,
+    NoteScope,
+    PlanDecision,
     PlanningRules,
     PlanningRun,
     PlanningRunStatus,
+    PlanNote,
+    PlanReview,
+    PlanSessionBinding,
+    PlanSessionState,
+    PlanStatus,
     TrainingDecisionRecord,
+    TrainingPlan,
+    TrainingPlanDocument,
+    TrainingPlanRevision,
     TrainingRuleSet,
 )
 from swim_coach.domain.shared.errors import RevisionConflictError
@@ -133,6 +147,9 @@ from swim_coach.infrastructure.db.models import (
     OutboxEventModel,
     PlannedWorkoutModel,
     PlanningRunModel,
+    PlanNoteModel,
+    PlanReviewModel,
+    PlanSessionBindingModel,
     PoolModel,
     RawProviderPayloadModel,
     SessionFeedbackModel,
@@ -140,6 +157,8 @@ from swim_coach.infrastructure.db.models import (
     SyncRunModel,
     TrainingDecisionModel,
     TrainingGoalModel,
+    TrainingPlanModel,
+    TrainingPlanRevisionModel,
     TrainingRuleSetModel,
     WebSessionModel,
     WorkoutExecutionMatchModel,
@@ -552,6 +571,104 @@ def _training_decision(model: TrainingDecisionModel) -> TrainingDecisionRecord:
     )
 
 
+def _training_plan(model: TrainingPlanModel) -> TrainingPlan:
+    return TrainingPlan(
+        id=EntityId(model.id),
+        user_id=UserId(model.user_id),
+        goal_id=EntityId(model.goal_id),
+        title=model.title,
+        status=PlanStatus(model.status),
+        start_date=model.start_date,
+        end_date=model.end_date,
+        duration_weeks=model.duration_weeks,
+        adaptation_mode=model.adaptation_mode,
+        current_revision=model.current_revision,
+        current_revision_id=(
+            EntityId(model.current_revision_id) if model.current_revision_id else None
+        ),
+        created_at=model.created_at,
+        updated_at=model.updated_at,
+        version=model.version,
+    )
+
+
+def _training_plan_revision(model: TrainingPlanRevisionModel) -> TrainingPlanRevision:
+    return TrainingPlanRevision(
+        id=EntityId(model.id),
+        plan_id=EntityId(model.plan_id),
+        revision_number=model.revision_number,
+        previous_revision_id=(
+            EntityId(model.previous_revision_id) if model.previous_revision_id else None
+        ),
+        document=TrainingPlanDocument.model_validate(model.document_json),
+        content_hash=model.content_hash,
+        reason=model.reason,
+        effective_from=model.effective_from,
+        evidence=_json(model.evidence_json),
+        diff=_json(model.diff_json),
+        proposal_id=EntityId(model.proposal_id) if model.proposal_id else None,
+        created_by=model.created_by,
+        created_at=model.created_at,
+    )
+
+
+def _plan_session_binding(model: PlanSessionBindingModel) -> PlanSessionBinding:
+    return PlanSessionBinding(
+        id=EntityId(model.id),
+        user_id=UserId(model.user_id),
+        plan_id=EntityId(model.plan_id),
+        session_intent_id=EntityId(model.session_intent_id),
+        week_number=model.week_number,
+        state=PlanSessionState(model.state),
+        workout_id=EntityId(model.workout_id) if model.workout_id else None,
+        materialized_plan_revision=model.materialized_plan_revision,
+        materialized_workout_hash=model.materialized_workout_hash,
+        locked_reason=model.locked_reason,
+        created_at=model.created_at,
+        updated_at=model.updated_at,
+        version=model.version,
+    )
+
+
+def _plan_review(model: PlanReviewModel) -> PlanReview:
+    return PlanReview(
+        id=EntityId(model.id),
+        user_id=UserId(model.user_id),
+        plan_id=EntityId(model.plan_id),
+        plan_revision=model.plan_revision,
+        week_number=model.week_number,
+        evidence_snapshot=_json(model.evidence_snapshot_json),
+        evidence_hash=model.evidence_hash,
+        confidence_cap=EvidenceConfidence(model.confidence_cap),
+        eligible=model.eligible,
+        eligibility_reason=model.eligibility_reason,
+        decision=PlanDecision(model.decision) if model.decision else None,
+        rationale=model.rationale,
+        recommendation=_json(model.recommendation_json),
+        proposal_id=EntityId(model.proposal_id) if model.proposal_id else None,
+        created_at=model.created_at,
+    )
+
+
+def _plan_note(model: PlanNoteModel) -> PlanNote:
+    return PlanNote(
+        id=EntityId(model.id),
+        user_id=UserId(model.user_id),
+        plan_id=EntityId(model.plan_id),
+        scope_type=NoteScope(model.scope_type),
+        scope_ref=model.scope_ref,
+        category=NoteCategory(model.category),
+        author_type=NoteAuthor(model.author_type),
+        text=model.text,
+        importance=NoteImportance(model.importance),
+        affects_adaptation=model.affects_adaptation,
+        valid_from=model.valid_from,
+        valid_until=model.valid_until,
+        evidence_activity_refs=tuple(model.evidence_activity_refs_json),
+        created_at=model.created_at,
+    )
+
+
 def _external_workout_binding(model: ExternalWorkoutBindingModel) -> ExternalWorkoutBinding:
     return ExternalWorkoutBinding(
         id=EntityId(model.id),
@@ -733,11 +850,15 @@ def _normalization(model: ActivityNormalizationModel) -> ActivityNormalization:
 
 
 def _feedback(model: SessionFeedbackModel) -> SessionFeedback:
+    if model.activity_id is None:
+        raise RuntimeError("detached feedback must be relinked before it is projected")
     return SessionFeedback(
         id=EntityId(model.id),
         user_id=UserId(model.user_id),
         activity_id=EntityId(model.activity_id),
         rpe=model.rpe,
+        provider=model.provider,
+        external_activity_id=model.external_activity_id,
         technique_rating=model.technique_rating,
         fatigue_rating=model.fatigue_rating,
         enjoyment_rating=model.enjoyment_rating,
@@ -2084,12 +2205,22 @@ class SqlAlchemyActivityDataRepository:
     async def upsert_feedback(
         self, feedback: SessionFeedback, *, expected_version: int | None
     ) -> None:
+        provider = feedback.provider
+        external_activity_id = feedback.external_activity_id
+        if not provider or not external_activity_id:
+            activity = await self._session.get(ActivityModel, feedback.activity_id.value)
+            if activity is None or activity.user_id != feedback.user_id.value:
+                raise RuntimeError("feedback activity identity is missing")
+            provider = activity.provider
+            external_activity_id = activity.external_activity_id
         if expected_version is None:
             self._session.add(
                 SessionFeedbackModel(
                     id=feedback.id.value,
                     user_id=feedback.user_id.value,
                     activity_id=feedback.activity_id.value,
+                    provider=provider,
+                    external_activity_id=external_activity_id,
                     rpe=feedback.rpe,
                     technique_rating=feedback.technique_rating,
                     fatigue_rating=feedback.fatigue_rating,
@@ -2129,6 +2260,24 @@ class SqlAlchemyActivityDataRepository:
         )
         if await self._session.scalar(statement) is None:
             raise RevisionConflictError(expected_version)
+
+    async def relink_feedback(
+        self,
+        user_id: UserId,
+        provider: str,
+        external_activity_id: str,
+        activity_id: EntityId,
+    ) -> None:
+        await self._session.execute(
+            update(SessionFeedbackModel)
+            .where(
+                SessionFeedbackModel.user_id == user_id.value,
+                SessionFeedbackModel.provider == provider,
+                SessionFeedbackModel.external_activity_id == external_activity_id,
+                SessionFeedbackModel.activity_id.is_distinct_from(activity_id.value),
+            )
+            .values(activity_id=activity_id.value)
+        )
 
     async def delete_feedback(
         self, user_id: UserId, activity_id: EntityId, *, expected_version: int
@@ -2849,6 +2998,344 @@ class SqlAlchemyTrainingDecisionsRepository:
             .order_by(TrainingDecisionModel.order_index)
         )
         return [_training_decision(model) for model in await self._session.scalars(statement)]
+
+
+class SqlAlchemyTrainingPlansRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get(self, user_id: UserId, plan_id: EntityId) -> TrainingPlan | None:
+        statement = select(TrainingPlanModel).where(
+            TrainingPlanModel.id == plan_id.value,
+            TrainingPlanModel.user_id == user_id.value,
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _training_plan(model) if model else None
+
+    async def get_for_update(self, user_id: UserId, plan_id: EntityId) -> TrainingPlan | None:
+        statement = (
+            select(TrainingPlanModel)
+            .where(
+                TrainingPlanModel.id == plan_id.value,
+                TrainingPlanModel.user_id == user_id.value,
+            )
+            .with_for_update()
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _training_plan(model) if model else None
+
+    async def get_live(self, user_id: UserId) -> TrainingPlan | None:
+        statement = (
+            select(TrainingPlanModel)
+            .where(
+                TrainingPlanModel.user_id == user_id.value,
+                TrainingPlanModel.status.in_([PlanStatus.ACTIVE.value, PlanStatus.PAUSED.value]),
+            )
+            .order_by(TrainingPlanModel.updated_at.desc())
+            .limit(1)
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _training_plan(model) if model else None
+
+    async def list(self, user_id: UserId) -> Sequence[TrainingPlan]:
+        statement = (
+            select(TrainingPlanModel)
+            .where(TrainingPlanModel.user_id == user_id.value)
+            .order_by(TrainingPlanModel.created_at.desc())
+        )
+        return [_training_plan(model) for model in await self._session.scalars(statement)]
+
+    async def add(self, plan: TrainingPlan) -> None:
+        self._session.add(
+            TrainingPlanModel(
+                id=plan.id.value,
+                user_id=plan.user_id.value,
+                goal_id=plan.goal_id.value,
+                title=plan.title,
+                status=plan.status.value,
+                start_date=plan.start_date,
+                end_date=plan.end_date,
+                duration_weeks=plan.duration_weeks,
+                adaptation_mode=plan.adaptation_mode,
+                current_revision=plan.current_revision,
+                current_revision_id=(
+                    plan.current_revision_id.value if plan.current_revision_id else None
+                ),
+                created_at=plan.created_at,
+                updated_at=plan.updated_at,
+                version=plan.version,
+            )
+        )
+
+    async def update(self, plan: TrainingPlan, *, expected_version: int) -> None:
+        statement = (
+            update(TrainingPlanModel)
+            .where(
+                TrainingPlanModel.id == plan.id.value,
+                TrainingPlanModel.user_id == plan.user_id.value,
+                TrainingPlanModel.version == expected_version,
+            )
+            .values(
+                status=plan.status.value,
+                current_revision=plan.current_revision,
+                current_revision_id=(
+                    plan.current_revision_id.value if plan.current_revision_id else None
+                ),
+                updated_at=plan.updated_at,
+                version=plan.version,
+            )
+            .returning(TrainingPlanModel.version)
+        )
+        if await self._session.scalar(statement) is None:
+            raise RevisionConflictError(expected_version)
+
+
+class SqlAlchemyTrainingPlanRevisionsRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get(
+        self, user_id: UserId, plan_id: EntityId, revision_number: int
+    ) -> TrainingPlanRevision | None:
+        statement = (
+            select(TrainingPlanRevisionModel)
+            .join(TrainingPlanModel, TrainingPlanModel.id == TrainingPlanRevisionModel.plan_id)
+            .where(
+                TrainingPlanRevisionModel.plan_id == plan_id.value,
+                TrainingPlanRevisionModel.revision_number == revision_number,
+                TrainingPlanModel.user_id == user_id.value,
+            )
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _training_plan_revision(model) if model else None
+
+    async def list(self, user_id: UserId, plan_id: EntityId) -> Sequence[TrainingPlanRevision]:
+        statement = (
+            select(TrainingPlanRevisionModel)
+            .join(TrainingPlanModel, TrainingPlanModel.id == TrainingPlanRevisionModel.plan_id)
+            .where(
+                TrainingPlanRevisionModel.plan_id == plan_id.value,
+                TrainingPlanModel.user_id == user_id.value,
+            )
+            .order_by(TrainingPlanRevisionModel.revision_number)
+        )
+        return [_training_plan_revision(model) for model in await self._session.scalars(statement)]
+
+    async def add(self, revision: TrainingPlanRevision) -> None:
+        self._session.add(
+            TrainingPlanRevisionModel(
+                id=revision.id.value,
+                plan_id=revision.plan_id.value,
+                revision_number=revision.revision_number,
+                previous_revision_id=(
+                    revision.previous_revision_id.value if revision.previous_revision_id else None
+                ),
+                document_json=revision.document.model_dump(mode="json"),
+                content_hash=revision.content_hash,
+                reason=revision.reason,
+                effective_from=revision.effective_from,
+                evidence_json=revision.evidence,
+                diff_json=revision.diff,
+                proposal_id=revision.proposal_id.value if revision.proposal_id else None,
+                created_by=revision.created_by,
+                created_at=revision.created_at,
+            )
+        )
+
+
+class SqlAlchemyPlanSessionBindingsRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_by_intent(
+        self, user_id: UserId, plan_id: EntityId, session_intent_id: EntityId
+    ) -> PlanSessionBinding | None:
+        statement = select(PlanSessionBindingModel).where(
+            PlanSessionBindingModel.user_id == user_id.value,
+            PlanSessionBindingModel.plan_id == plan_id.value,
+            PlanSessionBindingModel.session_intent_id == session_intent_id.value,
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _plan_session_binding(model) if model else None
+
+    async def get_by_workout(
+        self, user_id: UserId, workout_id: EntityId
+    ) -> PlanSessionBinding | None:
+        statement = select(PlanSessionBindingModel).where(
+            PlanSessionBindingModel.user_id == user_id.value,
+            PlanSessionBindingModel.workout_id == workout_id.value,
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _plan_session_binding(model) if model else None
+
+    async def list_for_plan(
+        self, user_id: UserId, plan_id: EntityId
+    ) -> Sequence[PlanSessionBinding]:
+        statement = (
+            select(PlanSessionBindingModel)
+            .where(
+                PlanSessionBindingModel.user_id == user_id.value,
+                PlanSessionBindingModel.plan_id == plan_id.value,
+            )
+            .order_by(PlanSessionBindingModel.week_number, PlanSessionBindingModel.created_at)
+        )
+        return [_plan_session_binding(model) for model in await self._session.scalars(statement)]
+
+    async def add(self, binding: PlanSessionBinding) -> None:
+        self._session.add(
+            PlanSessionBindingModel(
+                id=binding.id.value,
+                user_id=binding.user_id.value,
+                plan_id=binding.plan_id.value,
+                session_intent_id=binding.session_intent_id.value,
+                week_number=binding.week_number,
+                state=binding.state.value,
+                workout_id=binding.workout_id.value if binding.workout_id else None,
+                materialized_plan_revision=binding.materialized_plan_revision,
+                materialized_workout_hash=binding.materialized_workout_hash,
+                locked_reason=binding.locked_reason,
+                created_at=binding.created_at,
+                updated_at=binding.updated_at,
+                version=binding.version,
+            )
+        )
+
+    async def update(self, binding: PlanSessionBinding, *, expected_version: int) -> None:
+        statement = (
+            update(PlanSessionBindingModel)
+            .where(
+                PlanSessionBindingModel.id == binding.id.value,
+                PlanSessionBindingModel.user_id == binding.user_id.value,
+                PlanSessionBindingModel.version == expected_version,
+            )
+            .values(
+                state=binding.state.value,
+                workout_id=binding.workout_id.value if binding.workout_id else None,
+                materialized_plan_revision=binding.materialized_plan_revision,
+                materialized_workout_hash=binding.materialized_workout_hash,
+                locked_reason=binding.locked_reason,
+                updated_at=binding.updated_at,
+                version=binding.version,
+            )
+            .returning(PlanSessionBindingModel.version)
+        )
+        if await self._session.scalar(statement) is None:
+            raise RevisionConflictError(expected_version)
+
+
+class SqlAlchemyPlanReviewsRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get(self, user_id: UserId, review_id: EntityId) -> PlanReview | None:
+        statement = select(PlanReviewModel).where(
+            PlanReviewModel.id == review_id.value,
+            PlanReviewModel.user_id == user_id.value,
+        )
+        model = (await self._session.scalars(statement)).one_or_none()
+        return _plan_review(model) if model else None
+
+    async def list_for_plan(self, user_id: UserId, plan_id: EntityId) -> Sequence[PlanReview]:
+        statement = (
+            select(PlanReviewModel)
+            .where(
+                PlanReviewModel.user_id == user_id.value,
+                PlanReviewModel.plan_id == plan_id.value,
+            )
+            .order_by(PlanReviewModel.created_at.desc())
+        )
+        return [_plan_review(model) for model in await self._session.scalars(statement)]
+
+    async def add(self, review: PlanReview) -> PlanReview:
+        statement = insert(PlanReviewModel).values(
+            id=review.id.value,
+            user_id=review.user_id.value,
+            plan_id=review.plan_id.value,
+            plan_revision=review.plan_revision,
+            week_number=review.week_number,
+            evidence_snapshot_json=review.evidence_snapshot,
+            evidence_hash=review.evidence_hash,
+            confidence_cap=review.confidence_cap.value,
+            eligible=review.eligible,
+            eligibility_reason=review.eligibility_reason,
+            decision=review.decision.value if review.decision else None,
+            rationale=review.rationale,
+            recommendation_json=review.recommendation,
+            proposal_id=review.proposal_id.value if review.proposal_id else None,
+            created_at=review.created_at,
+        )
+        await self._session.execute(
+            statement.on_conflict_do_nothing(constraint="uq_plan_review_evidence")
+        )
+        existing = await self._session.scalar(
+            select(PlanReviewModel).where(
+                PlanReviewModel.plan_id == review.plan_id.value,
+                PlanReviewModel.plan_revision == review.plan_revision,
+                PlanReviewModel.week_number == review.week_number,
+                PlanReviewModel.evidence_hash == review.evidence_hash,
+            )
+        )
+        if existing is None:
+            raise RuntimeError("plan review conflict could not be resolved")
+        return _plan_review(existing)
+
+    async def set_recommendation(self, review: PlanReview) -> None:
+        if review.decision is None or review.proposal_id is None:
+            raise ValueError("a persisted plan recommendation requires a decision and proposal")
+        statement = (
+            update(PlanReviewModel)
+            .where(
+                PlanReviewModel.id == review.id.value,
+                PlanReviewModel.user_id == review.user_id.value,
+                PlanReviewModel.evidence_hash == review.evidence_hash,
+                PlanReviewModel.decision.is_(None),
+            )
+            .values(
+                decision=review.decision.value,
+                rationale=review.rationale,
+                recommendation_json=review.recommendation,
+                proposal_id=review.proposal_id.value,
+            )
+            .returning(PlanReviewModel.id)
+        )
+        if await self._session.scalar(statement) is None:
+            raise RevisionConflictError(review.plan_revision)
+
+
+class SqlAlchemyPlanNotesRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def list_for_plan(self, user_id: UserId, plan_id: EntityId) -> Sequence[PlanNote]:
+        statement = (
+            select(PlanNoteModel)
+            .where(
+                PlanNoteModel.user_id == user_id.value,
+                PlanNoteModel.plan_id == plan_id.value,
+            )
+            .order_by(PlanNoteModel.created_at)
+        )
+        return [_plan_note(model) for model in await self._session.scalars(statement)]
+
+    async def add(self, note: PlanNote) -> None:
+        self._session.add(
+            PlanNoteModel(
+                id=note.id.value,
+                user_id=note.user_id.value,
+                plan_id=note.plan_id.value,
+                scope_type=note.scope_type.value,
+                scope_ref=note.scope_ref,
+                category=note.category.value,
+                author_type=note.author_type.value,
+                text=note.text,
+                importance=note.importance.value,
+                affects_adaptation=note.affects_adaptation,
+                valid_from=note.valid_from,
+                valid_until=note.valid_until,
+                evidence_activity_refs_json=list(note.evidence_activity_refs),
+                created_at=note.created_at,
+            )
+        )
 
 
 class SqlAlchemyExternalWorkoutBindingsRepository:
@@ -3689,6 +4176,11 @@ class SqlAlchemyUnitOfWork:
         self.training_rule_sets = SqlAlchemyTrainingRuleSetsRepository(self._session)
         self.planning_runs = SqlAlchemyPlanningRunsRepository(self._session)
         self.training_decisions = SqlAlchemyTrainingDecisionsRepository(self._session)
+        self.training_plans = SqlAlchemyTrainingPlansRepository(self._session)
+        self.training_plan_revisions = SqlAlchemyTrainingPlanRevisionsRepository(self._session)
+        self.plan_session_bindings = SqlAlchemyPlanSessionBindingsRepository(self._session)
+        self.plan_reviews = SqlAlchemyPlanReviewsRepository(self._session)
+        self.plan_notes = SqlAlchemyPlanNotesRepository(self._session)
         self.external_workout_bindings = SqlAlchemyExternalWorkoutBindingsRepository(self._session)
         self.jobs = SqlAlchemyJobsRepository(self._session)
         self.notifications = SqlAlchemyNotificationsRepository(self._session)

@@ -578,6 +578,8 @@ class SessionFeedback:
     user_id: UserId
     activity_id: EntityId
     rpe: int | None
+    provider: str = ""
+    external_activity_id: str = ""
     technique_rating: int | None = None
     fatigue_rating: int | None = None
     enjoyment_rating: int | None = None
@@ -632,6 +634,8 @@ class SessionFeedback:
             user_id=self.user_id,
             activity_id=self.activity_id,
             rpe=rpe,
+            provider=self.provider,
+            external_activity_id=self.external_activity_id,
             technique_rating=technique_rating,
             fatigue_rating=fatigue_rating,
             enjoyment_rating=enjoyment_rating,

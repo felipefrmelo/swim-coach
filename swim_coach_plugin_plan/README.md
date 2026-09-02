@@ -3,7 +3,8 @@
 O Swim Coach é um treinador pessoal de natação integrado ao Garmin. O ChatGPT é
 a interface principal do usuário: por meio do plugin e do MCP remoto, ele revisa
 natações, acompanha metas, planeja e adapta semanas, salva e publica treinos,
-sincroniza o Garmin, registra feedback e exclui treinos planejados.
+sincroniza o Garmin, mantém ciclos adaptativos versionados, registra feedback e
+exclui treinos planejados.
 
 O Codex é usado para desenvolver, testar e manter o projeto. O site/PWA é um
 painel auxiliar, sem chat próprio, para calendário, edição visual, configuração,
@@ -18,7 +19,7 @@ mas a conversa nunca armazena o estado canônico do atleta ou dos treinos.
 ChatGPT (interface principal)
   └── plugin Swim Coach
       ├── oito Skills
-      └── MCP remoto com nove comandos
+      └── MCP remoto com dezessete comandos
           ├── domínio e serviços de aplicação
           ├── PostgreSQL + worker
           └── Garmin Connect
@@ -30,10 +31,9 @@ Site/PWA (painel auxiliar)
   └── contingência operacional
 ```
 
-O MCP expõe `get_coach_context`, `get_workouts`, `get_swims`, `save_workout`,
-`publish_workout`, `delete_workout`, `generate_week`, `sync_garmin` e
-`save_feedback`, todos sob o scope `coach`. Autenticação, ownership,
-idempotência, auditoria e reconciliação são aplicados pelo servidor.
+O MCP expõe comandos de contexto, ciclos de treinamento, treinos, atividades,
+Garmin e feedback sob o scope `coach`. Revisões de ciclo usam diff e hash com
+aprovação explícita; publicação Garmin continua separada e idempotente.
 
 ## Estrutura ativa
 
@@ -41,7 +41,7 @@ idempotência, auditoria e reconciliação são aplicados pelo servidor.
 |---|---|
 | `backend/` | API REST/MCP, domínio, persistência, worker e testes Python |
 | `apps/web/` | painel auxiliar PWA |
-| `plugins/swim-coach/` | plugin pessoal 2.1.0 e oito Skills ChatGPT-first |
+| `plugins/swim-coach/` | plugin pessoal 3.0.0 e oito Skills ChatGPT-first |
 | `contracts/` | schemas e contratos estruturados ativos |
 | `tests/` | testes E2E e avaliações atuais do plugin |
 | `ops/` | alertas operacionais |

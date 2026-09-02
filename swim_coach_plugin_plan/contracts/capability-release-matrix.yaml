@@ -16,6 +16,11 @@ plugin_releases:
     mode: direct-delete-everywhere
     purpose: immediate local removal with idempotent Garmin cleanup
     oauth_scopes: [coach]
+  - phase: P15
+    version: 3.0.0
+    mode: approval-gated-training-cycles
+    purpose: versioned rolling cycles with deterministic evidence and stable feedback identity
+    oauth_scopes: [coach]
 
 tools:
   - {name: get_coach_context, introduced: P13, release: 2.0.0, kind: read, external_effect: false}
@@ -27,6 +32,14 @@ tools:
   - {name: sync_garmin, introduced: P13, release: 2.0.0, kind: external-read, external_effect: true}
   - {name: save_feedback, introduced: P13, release: 2.0.0, kind: local-write, external_effect: false}
   - {name: delete_workout, introduced: P14, release: 2.1.0, kind: destructive-external-write, external_effect: true}
+  - {name: propose_training_plan, introduced: P15, release: 3.0.0, kind: local-write-proposal, external_effect: false}
+  - {name: get_training_plan, introduced: P15, release: 3.0.0, kind: read, external_effect: false}
+  - {name: review_training_plan, introduced: P15, release: 3.0.0, kind: local-write-snapshot, external_effect: false}
+  - {name: propose_plan_revision, introduced: P15, release: 3.0.0, kind: local-write-proposal, external_effect: false}
+  - {name: apply_plan_revision, introduced: P15, release: 3.0.0, kind: approved-local-write, external_effect: false}
+  - {name: add_plan_note, introduced: P15, release: 3.0.0, kind: local-write, external_effect: false}
+  - {name: set_training_plan_status, introduced: P15, release: 3.0.0, kind: local-write, external_effect: false}
+  - {name: skip_plan_session, introduced: P15, release: 3.0.0, kind: local-write, external_effect: false}
 
 skills:
   - name: review-latest-swim
@@ -54,9 +67,9 @@ skills:
     release: 2.0.0
     required_tools: [get_swims, save_feedback]
   - name: plan-swim-week
-    introduced: P13
-    release: 2.0.0
-    required_tools: [get_coach_context, get_workouts, get_swims, generate_week, publish_workout]
+    introduced: P15
+    release: 3.0.0
+    required_tools: [get_coach_context, get_workouts, get_swims, propose_training_plan, get_training_plan, review_training_plan, propose_plan_revision, apply_plan_revision, add_plan_note, set_training_plan_status, skip_plan_session, generate_week, publish_workout]
   - name: delete-workout
     introduced: P14
     release: 2.1.0

@@ -677,6 +677,8 @@ class ActivityDataService:
                     user_id=user_id,
                     activity_id=activity_id,
                     rpe=rpe,
+                    provider=activity.provider,
+                    external_activity_id=activity.external_activity_id,
                     technique_rating=technique_rating,
                     fatigue_rating=fatigue_rating,
                     enjoyment_rating=enjoyment_rating,

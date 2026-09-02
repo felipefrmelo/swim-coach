@@ -222,6 +222,12 @@ class GarminSyncService:
             )
             status, activity_id = await uow.activities.upsert(activity)
             await uow.flush()
+            await uow.activity_data.relink_feedback(
+                user_id,
+                self.PROVIDER,
+                item.external_id,
+                activity_id,
+            )
             await uow.activity_imports.add(
                 ActivityImport(
                     id=EntityId.new(),

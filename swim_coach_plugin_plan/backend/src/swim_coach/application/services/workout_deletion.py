@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 
 from swim_coach.application.ports.repositories import UnitOfWorkFactory
 from swim_coach.domain.operations import AuditEvent, Job, JobStatus, OutboxEvent
+from swim_coach.domain.planning import PlanSessionState
 from swim_coach.domain.shared.errors import DomainError, ResourceNotFoundError
 from swim_coach.domain.shared.types import JsonObject
 from swim_coach.domain.shared.value_objects import CorrelationId, EntityId, UserId
@@ -74,6 +75,16 @@ class WorkoutDeletionService:
             workout.updated_at = now
             workout.version += 1
             await uow.workouts.update(workout, expected_version=previous_version)
+            plan_binding = await uow.plan_session_bindings.get_by_workout(user_id, workout_id)
+            if plan_binding is not None:
+                binding_version = plan_binding.version
+                plan_binding.state = PlanSessionState.CANCELLED
+                plan_binding.locked_reason = "WORKOUT_DELETED"
+                plan_binding.updated_at = now
+                plan_binding.version += 1
+                await uow.plan_session_bindings.update(
+                    plan_binding, expected_version=binding_version
+                )
             job = Job(
                 id=EntityId.new(),
                 user_id=user_id,
@@ -91,6 +102,9 @@ class WorkoutDeletionService:
                 "workout_id": str(workout_id),
                 "job_id": str(stored.id),
                 "calendar_removed": calendar_removed,
+                "plan_session_intent_id": (
+                    str(plan_binding.session_intent_id) if plan_binding else None
+                ),
                 "replayed": replayed,
             }
             await uow.outbox.add(

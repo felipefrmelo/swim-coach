@@ -14,6 +14,7 @@ from swim_coach.application.services.mcp_write import McpWriteService
 from swim_coach.application.services.planning import PlanningService
 from swim_coach.application.services.privacy import PrivacyService
 from swim_coach.application.services.sessions import SessionService
+from swim_coach.application.services.training_cycles import TrainingCycleService
 from swim_coach.application.services.workout_deletion import WorkoutDeletionService
 from swim_coach.application.services.workouts import WorkoutService
 
@@ -32,6 +33,7 @@ __all__ = [
     "PlanningService",
     "PrivacyService",
     "SessionService",
+    "TrainingCycleService",
     "WorkoutDeletionService",
     "WorkoutService",
 ]

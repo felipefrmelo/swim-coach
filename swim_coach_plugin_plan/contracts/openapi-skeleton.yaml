@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Swim Coach API
-  version: 2.1.0
+  version: 3.0.0
 servers:
   - url: /api
 security:

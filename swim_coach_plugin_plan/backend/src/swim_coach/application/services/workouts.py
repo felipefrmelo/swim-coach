@@ -79,10 +79,11 @@ class WorkoutService:
         *,
         pool_id: EntityId,
         correlation_id: CorrelationId,
+        workout_id: EntityId | None = None,
     ) -> WorkoutDetail:
         validation = validate_workout(definition)
         workout = PlannedWorkout(
-            id=EntityId.new(),
+            id=workout_id or EntityId.new(),
             user_id=user_id,
             title=definition.title,
             purpose=definition.purpose,
@@ -90,6 +91,20 @@ class WorkoutService:
         )
         revision = self._new_revision(workout.id, 1, definition, validation.model_dump(mode="json"))
         async with self._uow_factory() as uow:
+            if workout_id is not None:
+                await uow.idempotency.lock("planned-workout-create", str(workout_id))
+                existing = await uow.workouts.get(user_id, workout_id)
+                if existing is not None:
+                    detail = await self._get_detail(uow, user_id, workout_id)
+                    if (
+                        detail.current_revision.content_hash != canonical_content_hash(definition)
+                        or existing.pool_id != pool_id
+                    ):
+                        raise DomainError(
+                            "IDEMPOTENCY_CONFLICT",
+                            "The stable workout identity already has different content.",
+                        )
+                    return detail
             await self._require_matching_pool(uow, user_id, pool_id, definition.pool_length_m)
             await uow.workouts.add(workout)
             await uow.flush()
