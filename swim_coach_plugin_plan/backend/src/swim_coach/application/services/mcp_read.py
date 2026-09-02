@@ -192,7 +192,12 @@ class McpReadService:
                 await uow.constraints.list(principal.user_id) if include_constraints else []
             )
         active_goal = next((item for item in goals if item.status is GoalStatus.ACTIVE), None)
-        default_pool_length = next((p.length.meters for p in pools if p.is_default), 20)
+        default_pool = next((p for p in pools if p.active and p.is_default), None)
+        pool_summary = (
+            f"the configured default pool is {default_pool.length.meters} m"
+            if default_pool is not None
+            else "no default pool is configured"
+        )
         return McpResult(
             request_id=request_id,
             status="OK",
@@ -216,9 +221,20 @@ class McpReadService:
                 "availability": [
                     {
                         "day_of_week": item.day_of_week,
+                        "weekday": (
+                            "MONDAY",
+                            "TUESDAY",
+                            "WEDNESDAY",
+                            "THURSDAY",
+                            "FRIDAY",
+                            "SATURDAY",
+                            "SUNDAY",
+                        )[item.day_of_week],
+                        "day_of_week_convention": "0=MONDAY",
                         "start_local_time": item.start_local_time.isoformat(timespec="minutes"),
                         "end_local_time": item.end_local_time.isoformat(timespec="minutes"),
                         "max_duration_minutes": item.max_duration_minutes,
+                        "pool_id": str(item.pool_id) if item.pool_id else None,
                     }
                     for item in availability[:14]
                 ],
@@ -236,8 +252,8 @@ class McpReadService:
                 ][:20],
             },
             human_summary=(
-                f"Training context uses a {default_pool_length} m "
-                f"pool and {me.profile.default_sessions_per_week} planned sessions per week."
+                f"Training context loaded: {pool_summary}; the athlete profile preference is "
+                f"{me.profile.default_sessions_per_week} sessions per week."
             ),
         )
 

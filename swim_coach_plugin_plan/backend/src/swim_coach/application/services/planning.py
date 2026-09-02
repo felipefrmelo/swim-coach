@@ -1,4 +1,8 @@
-"""Persist reproducible, explainable weekly plans as review-only proposals."""
+"""Legacy ruleset planner retained only to read and test historical P10 records.
+
+This module is intentionally absent from runtime composition and MCP registration. New
+training prescriptions must use ``TrainingCycleService`` with a coach-authored definition.
+"""
 
 from __future__ import annotations
 
@@ -27,14 +31,16 @@ from swim_coach.domain.planning import (
     TrainingDecisionRecord,
     TrainingRuleSet,
     canonical_json_hash,
-    generate_week,
 )
+from swim_coach.domain.planning.entities import generate_week
 from swim_coach.domain.shared.errors import DomainError, ResourceNotFoundError
 from swim_coach.domain.shared.types import JsonObject
 from swim_coach.domain.shared.value_objects import CorrelationId, EntityId, UserId
 
 
 class PlanningService:
+    """Deprecated ruleset generator; never compose this service in an application runtime."""
+
     ACTION_TYPE = "planning.week.v1"
     RULESET_NAME = "swim-coach-conservative-week"
     LEGACY_RULESET_VERSION = "1.0.0"

@@ -1,4 +1,4 @@
 interface:
   display_name: "Plan Swim Week"
-  short_description: "Generate and save an explainable swim week"
-  default_prompt: "Use $plan-swim-week to generate and save my next week of pool-swimming training."
+  short_description: "Author and adapt approved swim training"
+  default_prompt: "Use $plan-swim-week to prescribe and stage my next week of pool-swimming training."

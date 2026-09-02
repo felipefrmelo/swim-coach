@@ -19,7 +19,7 @@ plugin_releases:
   - phase: P15
     version: 3.0.0
     mode: approval-gated-training-cycles
-    purpose: versioned rolling cycles with deterministic evidence and stable feedback identity
+    purpose: coach-authored rolling cycles with deterministic validation, evidence, and stable feedback identity
     oauth_scopes: [coach]
 
 tools:
@@ -28,7 +28,7 @@ tools:
   - {name: get_swims, introduced: P13, release: 2.0.0, kind: read, external_effect: false}
   - {name: save_workout, introduced: P13, release: 2.0.0, kind: local-write, external_effect: false}
   - {name: publish_workout, introduced: P13, release: 2.0.0, kind: external-write-upsert, external_effect: true}
-  - {name: generate_week, introduced: P13, release: 2.0.0, kind: local-write, external_effect: false}
+  - {name: materialize_plan_week, introduced: P15, release: 3.0.0, kind: approved-local-write, external_effect: false}
   - {name: sync_garmin, introduced: P13, release: 2.0.0, kind: external-read, external_effect: true}
   - {name: save_feedback, introduced: P13, release: 2.0.0, kind: local-write, external_effect: false}
   - {name: delete_workout, introduced: P14, release: 2.1.0, kind: destructive-external-write, external_effect: true}
@@ -69,7 +69,7 @@ skills:
   - name: plan-swim-week
     introduced: P15
     release: 3.0.0
-    required_tools: [get_coach_context, get_workouts, get_swims, propose_training_plan, get_training_plan, review_training_plan, propose_plan_revision, apply_plan_revision, add_plan_note, set_training_plan_status, skip_plan_session, generate_week, publish_workout]
+    required_tools: [get_coach_context, get_workouts, get_swims, propose_training_plan, get_training_plan, review_training_plan, propose_plan_revision, apply_plan_revision, add_plan_note, set_training_plan_status, skip_plan_session, materialize_plan_week, publish_workout]
   - name: delete-workout
     introduced: P14
     release: 2.1.0

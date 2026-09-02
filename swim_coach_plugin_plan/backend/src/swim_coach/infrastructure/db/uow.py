@@ -86,9 +86,11 @@ from swim_coach.domain.planning import (
     PlanningRunStatus,
     PlanNote,
     PlanReview,
+    PlanRevisionKind,
     PlanSessionBinding,
     PlanSessionState,
     PlanStatus,
+    PrescriptionSource,
     TrainingDecisionRecord,
     TrainingPlan,
     TrainingPlanDocument,
@@ -581,6 +583,7 @@ def _training_plan(model: TrainingPlanModel) -> TrainingPlan:
         start_date=model.start_date,
         end_date=model.end_date,
         duration_weeks=model.duration_weeks,
+        prescription_source=PrescriptionSource(model.prescription_source),
         adaptation_mode=model.adaptation_mode,
         current_revision=model.current_revision,
         current_revision_id=(
@@ -603,6 +606,8 @@ def _training_plan_revision(model: TrainingPlanRevisionModel) -> TrainingPlanRev
         document=TrainingPlanDocument.model_validate(model.document_json),
         content_hash=model.content_hash,
         reason=model.reason,
+        revision_kind=PlanRevisionKind(model.revision_kind),
+        decision=PlanDecision(model.decision) if model.decision else None,
         effective_from=model.effective_from,
         evidence=_json(model.evidence_json),
         diff=_json(model.diff_json),
@@ -3056,6 +3061,7 @@ class SqlAlchemyTrainingPlansRepository:
                 start_date=plan.start_date,
                 end_date=plan.end_date,
                 duration_weeks=plan.duration_weeks,
+                prescription_source=plan.prescription_source.value,
                 adaptation_mode=plan.adaptation_mode,
                 current_revision=plan.current_revision,
                 current_revision_id=(
@@ -3077,6 +3083,7 @@ class SqlAlchemyTrainingPlansRepository:
             )
             .values(
                 status=plan.status.value,
+                prescription_source=plan.prescription_source.value,
                 current_revision=plan.current_revision,
                 current_revision_id=(
                     plan.current_revision_id.value if plan.current_revision_id else None
@@ -3130,9 +3137,11 @@ class SqlAlchemyTrainingPlanRevisionsRepository:
                 previous_revision_id=(
                     revision.previous_revision_id.value if revision.previous_revision_id else None
                 ),
-                document_json=revision.document.model_dump(mode="json"),
+                document_json=revision.document.as_json(),
                 content_hash=revision.content_hash,
                 reason=revision.reason,
+                revision_kind=revision.revision_kind.value,
+                decision=revision.decision.value if revision.decision else None,
                 effective_from=revision.effective_from,
                 evidence_json=revision.evidence,
                 diff_json=revision.diff,
@@ -3209,6 +3218,7 @@ class SqlAlchemyPlanSessionBindingsRepository:
                 PlanSessionBindingModel.version == expected_version,
             )
             .values(
+                week_number=binding.week_number,
                 state=binding.state.value,
                 workout_id=binding.workout_id.value if binding.workout_id else None,
                 materialized_plan_revision=binding.materialized_plan_revision,

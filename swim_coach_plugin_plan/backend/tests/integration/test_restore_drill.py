@@ -166,7 +166,7 @@ async def test_real_encrypted_restore_preserves_login_activity_workout_and_artif
             "activity": 1,
             "planned_workout": 1,
         }
-        assert revision == "000014"
+        assert revision == "000015"
         assert restored_manifest == manifest
         assert (restored_artifacts / "sanitized.fit").read_bytes() == (
             b"restore-drill-sanitized-artifact"

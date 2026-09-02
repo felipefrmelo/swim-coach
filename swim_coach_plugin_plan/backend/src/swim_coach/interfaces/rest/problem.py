@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from swim_coach.domain.shared.errors import DomainError
+from swim_coach.domain.shared.types import JsonObject
 from swim_coach.domain.shared.value_objects import CorrelationId
 
 
@@ -24,7 +25,7 @@ class ProblemDetail(BaseModel):
     code: str
     correlation_id: str
     retryable: bool = False
-    details: dict[str, str | int | bool] = Field(default_factory=dict)
+    details: JsonObject = Field(default_factory=dict)
 
 
 STATUS_BY_CODE = {
@@ -34,7 +35,11 @@ STATUS_BY_CODE = {
     "ACCOUNT_DISABLED": 403,
     "RESOURCE_NOT_FOUND": 404,
     "VALIDATION_FAILED": 422,
+    "PLAN_VALIDATION_FAILED": 422,
     "REVISION_CONFLICT": 409,
+    "PLAN_REVISION_CONFLICT": 409,
+    "PLAN_SESSION_LOCKED": 409,
+    "PLAN_STATE_CONFLICT": 409,
     "MATCH_CONFLICT": 409,
     "IDEMPOTENCY_CONFLICT": 409,
     "DATABASE_UNAVAILABLE": 503,
@@ -63,7 +68,7 @@ def problem_response(
     code: str,
     detail: str,
     status_code: int,
-    details: dict[str, str | int | bool] | None = None,
+    details: JsonObject | None = None,
 ) -> JSONResponse:
     cid = correlation_id(request)
     problem = ProblemDetail(

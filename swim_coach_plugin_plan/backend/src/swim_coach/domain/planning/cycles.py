@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from datetime import date, datetime
+from datetime import date, datetime, time
 from enum import StrEnum
 from typing import Literal, cast
 
@@ -14,6 +14,7 @@ from swim_coach.domain.planning.entities import canonical_json_hash
 from swim_coach.domain.shared.errors import DomainError, DomainValidationError
 from swim_coach.domain.shared.types import JsonObject
 from swim_coach.domain.shared.value_objects import EntityId, UserId
+from swim_coach.domain.workouts import CanonicalWorkout
 
 
 class PlanStatus(StrEnum):
@@ -44,6 +45,18 @@ class PlanDetailLevel(StrEnum):
     DETAILED = "DETAILED"
     OUTLINE = "OUTLINE"
     STRATEGIC = "STRATEGIC"
+
+
+class PrescriptionSource(StrEnum):
+    COACH_DEFINED = "COACH_DEFINED"
+    LEGACY_RULESET = "LEGACY_RULESET"
+
+
+class PlanRevisionKind(StrEnum):
+    CREATION = "CREATION"
+    ADAPTATION = "ADAPTATION"
+    MATERIALIZATION = "MATERIALIZATION"
+    LEGACY = "LEGACY"
 
 
 class PlanSessionState(StrEnum):
@@ -104,22 +117,48 @@ class PlanPhase(PlanDocumentModel):
 
 
 class PlanSessionIntent(PlanDocumentModel):
-    session_intent_id: str
+    session_intent_id: str | None = None
     session_number: int = Field(ge=1, le=14)
-    purpose: Literal["technique", "aerobic_endurance", "threshold_css", "recovery", "test"]
-    target_distance_m: int = Field(ge=200, le=10_000)
-    max_duration_minutes: int = Field(ge=20, le=240)
-    intensity: Literal["EASY", "MODERATE", "HARD", "TEST"]
+    purpose: Literal[
+        "TECHNIQUE",
+        "BASE",
+        "ENDURANCE",
+        "THRESHOLD",
+        "SPEED",
+        "RECOVERY",
+        "TEST",
+        "MIXED",
+        "technique",
+        "aerobic_endurance",
+        "threshold_css",
+        "recovery",
+        "test",
+    ]
+    objective: str | None = Field(default=None, max_length=1_000)
+    coach_rationale: str | None = Field(default=None, max_length=2_000)
+    coach_notes: str | None = Field(default=None, max_length=2_000)
+    target_distance_m: int | None = Field(default=None, ge=1, le=50_000)
+    planned_duration_minutes: int | None = Field(default=None, ge=1, le=240)
+    max_duration_minutes: int | None = Field(default=None, ge=1, le=240)
+    intensity: str | None = Field(default=None, min_length=1, max_length=80)
     scheduled_date: date | None = None
-    key_set: str = Field(min_length=1, max_length=500)
-    workout: JsonObject
+    scheduled_start_time: time | None = None
+    pool_id: str | None = None
+    key_set: str | None = Field(default=None, max_length=1_000)
+    workout: CanonicalWorkout | None = None
 
     @model_validator(mode="after")
     def validate_identity(self) -> PlanSessionIntent:
-        try:
-            EntityId.parse(self.session_intent_id)
-        except ValueError as exc:
-            raise ValueError("session_intent_id must be a UUID") from exc
+        if self.session_intent_id is not None:
+            try:
+                EntityId.parse(self.session_intent_id)
+            except ValueError as exc:
+                raise ValueError("session_intent_id must be a UUID") from exc
+        if self.pool_id is not None:
+            try:
+                EntityId.parse(self.pool_id)
+            except ValueError as exc:
+                raise ValueError("pool_id must be a UUID") from exc
         return self
 
 
@@ -127,67 +166,211 @@ class PlanWeek(PlanDocumentModel):
     week_number: int = Field(ge=1, le=52)
     focus: str = Field(min_length=1, max_length=500)
     detail_level: PlanDetailLevel
-    target_distance_min_m: int = Field(ge=0, le=100_000)
-    target_distance_max_m: int = Field(ge=0, le=100_000)
-    target_duration_min_minutes: int = Field(ge=0, le=10_000)
-    target_duration_max_minutes: int = Field(ge=0, le=10_000)
-    session_count: int = Field(ge=1, le=14)
-    load_target: str = Field(min_length=1, max_length=120)
+    coach_rationale: str | None = Field(default=None, max_length=2_000)
+    target_distance_min_m: int | None = Field(default=None, ge=0, le=100_000)
+    target_distance_max_m: int | None = Field(default=None, ge=0, le=100_000)
+    target_duration_min_minutes: int | None = Field(default=None, ge=0, le=10_000)
+    target_duration_max_minutes: int | None = Field(default=None, ge=0, le=10_000)
+    session_count: int | None = Field(default=None, ge=0, le=14)
+    load_target: str | None = Field(default=None, max_length=120)
     success_criteria: tuple[str, ...] = ()
     sessions: tuple[PlanSessionIntent, ...] = ()
 
     @model_validator(mode="after")
     def validate_targets(self) -> PlanWeek:
-        if self.target_distance_min_m > self.target_distance_max_m:
+        if (
+            self.target_distance_min_m is not None
+            and self.target_distance_max_m is not None
+            and self.target_distance_min_m > self.target_distance_max_m
+        ):
             raise ValueError("week distance range is invalid")
-        if self.target_duration_min_minutes > self.target_duration_max_minutes:
+        if (
+            self.target_duration_min_minutes is not None
+            and self.target_duration_max_minutes is not None
+            and self.target_duration_min_minutes > self.target_duration_max_minutes
+        ):
             raise ValueError("week duration range is invalid")
-        if self.detail_level is PlanDetailLevel.DETAILED:
-            if len(self.sessions) != self.session_count:
-                raise ValueError("a detailed week must contain all intended sessions")
-        elif self.sessions:
-            raise ValueError("only a detailed week may contain concrete session intents")
+        if (
+            self.session_count is not None
+            and self.sessions
+            and len(self.sessions) != self.session_count
+        ):
+            raise ValueError("session_count must match the supplied sessions")
         return self
 
 
 class TrainingPlanDocument(PlanDocumentModel):
-    schema_version: Literal["1.0"] = "1.0"
+    schema_version: Literal["1.0", "2.0"] = "2.0"
+    goal_id: str | None = None
+    title: str | None = Field(default=None, max_length=160)
+    start_date: date | None = None
+    timezone: str | None = Field(default=None, min_length=1, max_length=100)
+    prescription_source: PrescriptionSource | None = None
     strategy_summary: str = Field(min_length=1, max_length=4_000)
+    review_frequency: str | None = Field(default=None, max_length=120)
     duration_weeks: int = Field(ge=4, le=16)
-    baseline_snapshot: JsonObject
-    baseline_confidence: EvidenceConfidence
-    phases: tuple[PlanPhase, ...]
+    baseline_snapshot: JsonObject = Field(default_factory=dict)
+    baseline_confidence: EvidenceConfidence = EvidenceConfidence.LOW
+    phases: tuple[PlanPhase, ...] = ()
     weeks: tuple[PlanWeek, ...]
-    ruleset_version: str = Field(min_length=1, max_length=40)
-    ruleset_hash: str = Field(min_length=64, max_length=64)
+    ruleset_version: str | None = Field(default=None, min_length=1, max_length=40)
+    ruleset_hash: str | None = Field(default=None, min_length=64, max_length=64)
 
     @model_validator(mode="after")
     def validate_structure(self) -> TrainingPlanDocument:
         week_numbers = [item.week_number for item in self.weeks]
         if week_numbers != list(range(1, self.duration_weeks + 1)):
             raise ValueError("plan weeks must be contiguous and cover the duration")
-        if not self.phases:
-            raise ValueError("plan requires at least one phase")
-        if self.phases[0].start_week != 1 or self.phases[-1].end_week != self.duration_weeks:
-            raise ValueError("plan phases must cover the full duration")
-        previous_end = 0
-        for phase in self.phases:
-            if phase.start_week != previous_end + 1:
-                raise ValueError("plan phases must be contiguous")
-            previous_end = phase.end_week
-        session_ids = [item.session_intent_id for week in self.weeks for item in week.sessions]
+        if self.phases:
+            if self.phases[0].start_week != 1 or self.phases[-1].end_week != self.duration_weeks:
+                raise ValueError("plan phases must cover the full duration")
+            previous_end = 0
+            for phase in self.phases:
+                if phase.start_week != previous_end + 1:
+                    raise ValueError("plan phases must be contiguous")
+                previous_end = phase.end_week
+        session_ids = [
+            item.session_intent_id
+            for week in self.weeks
+            for item in week.sessions
+            if item.session_intent_id is not None
+        ]
         if len(session_ids) != len(set(session_ids)):
             raise ValueError("session intent IDs must be unique within a revision")
-        detailed = [
-            item.week_number for item in self.weeks if item.detail_level is PlanDetailLevel.DETAILED
-        ]
-        if len(detailed) > 1:
-            raise ValueError("only one week may be detailed in the rolling horizon")
+        if self.schema_version == "2.0":
+            if self.prescription_source is not PrescriptionSource.COACH_DEFINED:
+                raise ValueError("new plan definitions must be coach-defined")
+            if self.goal_id is None or self.title is None or self.start_date is None:
+                raise ValueError("coach-defined plans require goal_id, title and start_date")
+            try:
+                EntityId.parse(self.goal_id)
+            except ValueError as exc:
+                raise ValueError("goal_id must be a UUID") from exc
+            if self.ruleset_version is not None or self.ruleset_hash is not None:
+                raise ValueError("coach-defined plans cannot include generation ruleset metadata")
+            for week in self.weeks:
+                if week.detail_level is PlanDetailLevel.DETAILED and not week.sessions:
+                    raise ValueError("a detailed week requires coach-authored sessions")
+                if week.detail_level is not PlanDetailLevel.DETAILED and any(
+                    session.workout is not None for session in week.sessions
+                ):
+                    raise ValueError(
+                        "outline and strategic sessions cannot contain a materialized workout"
+                    )
+                session_numbers = [item.session_number for item in week.sessions]
+                if len(session_numbers) != len(set(session_numbers)):
+                    raise ValueError("session numbers must be unique within a week")
+                for session in week.sessions:
+                    if session.purpose != session.purpose.upper():
+                        raise ValueError("coach-defined session purposes must use canonical values")
+                    if session.max_duration_minutes is not None:
+                        raise ValueError(
+                            "coach-defined sessions use planned_duration_minutes, "
+                            "not legacy max_duration_minutes"
+                        )
+                    if week.detail_level is PlanDetailLevel.DETAILED and (
+                        session.scheduled_date is None
+                        or session.scheduled_start_time is None
+                        or session.planned_duration_minutes is None
+                        or session.target_distance_m is None
+                        or session.workout is None
+                    ):
+                        raise ValueError(
+                            "a detailed session requires schedule, duration, distance and workout"
+                        )
+        elif self.prescription_source is not PrescriptionSource.LEGACY_RULESET:
+            object.__setattr__(self, "prescription_source", PrescriptionSource.LEGACY_RULESET)
         return self
 
     @property
     def content_hash(self) -> str:
-        return canonical_json_hash(self.model_dump(mode="json"))
+        if self.schema_version == "1.0":
+            return canonical_json_hash(self._legacy_hash_payload())
+        return canonical_json_hash(self.as_json())
+
+    def as_json(self) -> JsonObject:
+        """Serialize a plan while keeping generation metadata exclusive to legacy documents."""
+
+        excluded = {"ruleset_version", "ruleset_hash"} if self.schema_version == "2.0" else set()
+        return cast(JsonObject, self.model_dump(mode="json", exclude=excluded))
+
+    def _legacy_hash_payload(self) -> JsonObject:
+        return cast(
+            JsonObject,
+            {
+                "schema_version": "1.0",
+                "strategy_summary": self.strategy_summary,
+                "duration_weeks": self.duration_weeks,
+                "baseline_snapshot": self.baseline_snapshot,
+                "baseline_confidence": self.baseline_confidence.value,
+                "phases": [item.model_dump(mode="json") for item in self.phases],
+                "weeks": [
+                    {
+                        "week_number": week.week_number,
+                        "focus": week.focus,
+                        "detail_level": week.detail_level.value,
+                        "target_distance_min_m": week.target_distance_min_m,
+                        "target_distance_max_m": week.target_distance_max_m,
+                        "target_duration_min_minutes": week.target_duration_min_minutes,
+                        "target_duration_max_minutes": week.target_duration_max_minutes,
+                        "session_count": week.session_count,
+                        "load_target": week.load_target,
+                        "success_criteria": list(week.success_criteria),
+                        "sessions": [
+                            {
+                                "session_intent_id": session.session_intent_id,
+                                "session_number": session.session_number,
+                                "purpose": session.purpose,
+                                "target_distance_m": session.target_distance_m,
+                                "max_duration_minutes": session.max_duration_minutes,
+                                "intensity": session.intensity,
+                                "scheduled_date": (
+                                    session.scheduled_date.isoformat()
+                                    if session.scheduled_date
+                                    else None
+                                ),
+                                "key_set": session.key_set,
+                                "workout": (
+                                    session.workout.model_dump(mode="json")
+                                    if session.workout is not None
+                                    else None
+                                ),
+                            }
+                            for session in week.sessions
+                        ],
+                    }
+                    for week in self.weeks
+                ],
+                "ruleset_version": self.ruleset_version,
+                "ruleset_hash": self.ruleset_hash,
+            },
+        )
+
+
+class TrainingPlanRevisionDefinition(PlanDocumentModel):
+    schema_version: Literal["1.0"] = "1.0"
+    kind: Literal["ADAPTATION", "MATERIALIZATION"]
+    review_id: str | None = None
+    decision: PlanDecision | None = None
+    rationale: str = Field(min_length=1, max_length=2_000)
+    definition: TrainingPlanDocument
+
+    @model_validator(mode="after")
+    def validate_revision_intent(self) -> TrainingPlanRevisionDefinition:
+        if self.definition.schema_version != "2.0":
+            raise ValueError("revision definitions must contain a coach-defined schema 2.0 plan")
+        if self.kind == "ADAPTATION":
+            if self.review_id is None or self.decision is None:
+                raise ValueError("adaptive revisions require review_id and decision")
+            try:
+                EntityId.parse(self.review_id)
+            except ValueError as exc:
+                raise ValueError("review_id must be a UUID") from exc
+        elif self.review_id is not None or self.decision is not None:
+            raise ValueError(
+                "materialization revisions cannot include review or adaptation decision"
+            )
+        return self
 
 
 @dataclass(slots=True)
@@ -199,6 +382,7 @@ class TrainingPlan:
     start_date: date
     end_date: date
     duration_weeks: int
+    prescription_source: PrescriptionSource = PrescriptionSource.COACH_DEFINED
     status: PlanStatus = PlanStatus.DRAFT
     adaptation_mode: str = "MANUAL_APPROVAL"
     current_revision: int = 0
@@ -256,6 +440,8 @@ class TrainingPlanRevision:
     document: TrainingPlanDocument
     content_hash: str
     reason: str
+    revision_kind: PlanRevisionKind = PlanRevisionKind.CREATION
+    decision: PlanDecision | None = None
     previous_revision_id: EntityId | None = None
     effective_from: date | None = None
     evidence: JsonObject = field(default_factory=dict)
@@ -419,5 +605,9 @@ def plan_document_diff(
             "changed_weeks": changed_weeks,
             "removed_weeks": removed,
             "strategy_changed": before.strategy_summary != after.strategy_summary,
+            "review_frequency_changed": before.review_frequency != after.review_frequency,
+            "phases_changed": before.phases != after.phases,
+            "session_count_before": sum(len(item.sessions) for item in before.weeks),
+            "session_count_after": sum(len(item.sessions) for item in after.weeks),
         },
     )

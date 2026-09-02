@@ -5,12 +5,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from typing import Any, cast
+from typing import cast
 from uuid import uuid5
 from zoneinfo import ZoneInfo
 
 from swim_coach.application.ports.repositories import UnitOfWorkFactory
-from swim_coach.application.services.planning import PlanningService
+from swim_coach.application.services.training_plan_validator import (
+    TrainingPlanValidationContext,
+    TrainingPlanValidator,
+)
 from swim_coach.application.services.workouts import WorkoutService
 from swim_coach.domain.actions import ActionApproval, ActionDecision, ActionProposal
 from swim_coach.domain.goals import GoalStatus
@@ -23,18 +26,19 @@ from swim_coach.domain.planning import (
     NoteScope,
     PlanDecision,
     PlanDetailLevel,
-    PlanningPreferences,
     PlanNote,
-    PlanPhase,
     PlanReview,
+    PlanRevisionKind,
     PlanSessionBinding,
     PlanSessionIntent,
     PlanSessionState,
     PlanStatus,
     PlanWeek,
+    PrescriptionSource,
     TrainingPlan,
     TrainingPlanDocument,
     TrainingPlanRevision,
+    TrainingPlanRevisionDefinition,
     canonical_json_hash,
     plan_document_diff,
 )
@@ -43,8 +47,8 @@ from swim_coach.domain.shared.types import JsonObject
 from swim_coach.domain.shared.value_objects import CorrelationId, EntityId, UserId
 from swim_coach.domain.workouts import (
     CanonicalWorkout,
+    PlannedWorkoutStatus,
     canonical_content_hash,
-    validate_workout,
 )
 
 
@@ -69,7 +73,13 @@ class PlanDetail:
 class AppliedPlanRevision:
     plan: TrainingPlan
     revision: TrainingPlanRevision
-    materialization_job_id: EntityId | None
+    materialization_job_ids: tuple[EntityId, ...] = ()
+    superseded_session_ids: tuple[EntityId, ...] = ()
+    locally_unscheduled_workout_ids: tuple[EntityId, ...] = ()
+
+    @property
+    def materialization_job_id(self) -> EntityId | None:
+        return self.materialization_job_ids[0] if self.materialization_job_ids else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,29 +100,29 @@ class TrainingCycleService:
         self,
         *,
         uow_factory: UnitOfWorkFactory,
-        planning: PlanningService,
         workouts: WorkoutService,
+        validator: TrainingPlanValidator | None = None,
     ) -> None:
         self._uow_factory = uow_factory
-        self._planning = planning
         self._workouts = workouts
+        self._validator = validator or TrainingPlanValidator()
 
     async def propose_plan(
         self,
         user_id: UserId,
         *,
         actor_id: str,
-        goal_id: EntityId | None,
-        title: str | None,
-        start_date: date,
-        duration_weeks: int,
-        strategy_summary: str | None,
+        definition: TrainingPlanDocument,
         correlation_id: CorrelationId,
     ) -> PlanProposalResult:
-        if start_date.weekday() != 0:
-            raise DomainError("VALIDATION_FAILED", "Plan start_date must be a Monday.")
-        if not 4 <= duration_weeks <= 16:
-            raise DomainError("VALIDATION_FAILED", "Plan duration must be between 4 and 16 weeks.")
+        if definition.schema_version != "2.0":
+            raise DomainError(
+                "LEGACY_RULESET_READ_ONLY",
+                "New training plans require a coach-defined schema 2.0 definition.",
+            )
+        if definition.goal_id is None or definition.start_date is None or definition.title is None:
+            raise DomainError("PLAN_VALIDATION_FAILED", "The plan definition is incomplete.")
+        goal_id = EntityId.parse(definition.goal_id)
         async with self._uow_factory() as uow:
             if await uow.training_plans.get_live(user_id) is not None:
                 raise DomainError(
@@ -120,39 +130,34 @@ class TrainingCycleService:
                     "Pause, complete, or cancel the current plan before starting another cycle.",
                 )
             goals = await uow.goals.list(user_id)
-            selected_goal = (
-                next((item for item in goals if item.id == goal_id), None)
-                if goal_id is not None
-                else next((item for item in goals if item.status is GoalStatus.ACTIVE), None)
-            )
+            selected_goal = next((item for item in goals if item.id == goal_id), None)
+            user = await uow.users.get(user_id)
+            pools = tuple(await uow.pools.list(user_id))
+            availability = tuple(await uow.availability.list(user_id))
         if selected_goal is None or selected_goal.status is not GoalStatus.ACTIVE:
             raise DomainError("GOAL_REQUIRED", "Choose an active goal before creating a plan.")
-
-        run, _, _ = await self._planning.propose_week(
-            user_id,
-            actor_id=actor_id,
-            week_start=start_date,
-            preferences=PlanningPreferences(),
-            user_notes_present=False,
-            correlation_id=correlation_id,
-            create_proposal=False,
+        if user is None:
+            raise ResourceNotFoundError("user")
+        document = self._normalize_definition(
+            definition,
+            timezone=user.timezone,
         )
-        document = self._initial_document(
-            run.input_snapshot,
-            run.output_plan,
-            duration_weeks=duration_weeks,
-            strategy_summary=strategy_summary,
+        if document.title is None or document.start_date is None:
+            raise DomainError("PLAN_VALIDATION_FAILED", "The plan definition is incomplete.")
+        self._validator.validate(
+            document,
+            TrainingPlanValidationContext(user.timezone, pools, availability),
         )
-        self._validate_document(start_date, document)
         now = datetime.now(UTC).replace(microsecond=0)
         plan = TrainingPlan(
             id=EntityId.new(),
             user_id=user_id,
             goal_id=selected_goal.id,
-            title=(title or f"Ciclo para {selected_goal.title}").strip(),
-            start_date=start_date,
-            end_date=start_date + timedelta(days=duration_weeks * 7 - 1),
-            duration_weeks=duration_weeks,
+            title=document.title,
+            start_date=document.start_date,
+            end_date=document.start_date + timedelta(days=document.duration_weeks * 7 - 1),
+            duration_weeks=document.duration_weeks,
+            prescription_source=PrescriptionSource.COACH_DEFINED,
             created_at=now,
             updated_at=now,
         )
@@ -168,9 +173,10 @@ class TrainingCycleService:
                 JsonObject,
                 {
                     "expected_revision": 0,
-                    "document": document.model_dump(mode="json"),
+                    "document": document.as_json(),
                     "reason": "Criação do ciclo",
-                    "evidence": document.baseline_snapshot,
+                    "evidence": {},
+                    "revision_kind": PlanRevisionKind.CREATION.value,
                     "decision": None,
                 },
             ),
@@ -181,7 +187,7 @@ class TrainingCycleService:
                     "before_revision": 0,
                     "after_revision": 1,
                     "external_effects": [],
-                    "approval_effect": "CREATE_PLAN_AND_QUEUE_LOCAL_MATERIALIZATION",
+                    "approval_effect": "CREATE_PLAN_AND_MATERIALIZE_DETAILED_SESSIONS_LOCALLY",
                 },
             ),
             expires_at=now + timedelta(hours=24),
@@ -242,7 +248,16 @@ class TrainingCycleService:
                 "PLAN_WEEK_NOT_DETAILED",
                 "Only the current detailed week can be reviewed for adaptation.",
             )
-        week_bindings = [item for item in detail.bindings if item.week_number == week_number]
+        current_week_intents = {
+            item.session_intent_id for item in week.sessions if item.session_intent_id is not None
+        }
+        week_bindings = [
+            item
+            for item in detail.bindings
+            if item.week_number == week_number
+            and str(item.session_intent_id) in current_week_intents
+            and item.state is not PlanSessionState.SUPERSEDED
+        ]
         now = datetime.now(UTC)
         async with self._uow_factory() as uow:
             user = await uow.users.get(user_id)
@@ -297,12 +312,30 @@ class TrainingCycleService:
                         "activity_ref": f"{activity.provider}:{activity.external_activity_id}",
                         "workout_id": str(binding.workout_id),
                         "distance_m": activity.distance.meters,
-                        "data_quality": quality,
+                        "data_quality": (
+                            raw_quality
+                            if isinstance(raw_quality, dict)
+                            else {"level": quality, "reasons": []}
+                        ),
                         "metrics": {
                             "distance_adherence_ratio": metrics.get("distance_adherence_ratio"),
+                            "planned_vs_actual": metrics.get("planned_vs_actual"),
+                            "durations": metrics.get("durations"),
+                            "paces": metrics.get("paces"),
+                            "contextual_paces": metrics.get("contextual_paces"),
                             "continuity": metrics.get("continuity"),
                             "sets": raw_sets if isinstance(raw_sets, list) else [],
+                            "consistency_cv": metrics.get("consistency_cv"),
+                            "fade_percent": metrics.get("fade_percent"),
+                            "total_rest_seconds": metrics.get("total_rest_seconds"),
+                            "stroke_efficiency": metrics.get("stroke_efficiency"),
+                            "speed_endurance": metrics.get("speed_endurance"),
+                            "goal_readiness": metrics.get("goal_readiness"),
+                            "longest_distance_below_goal_pace": metrics.get(
+                                "longest_distance_below_goal_pace"
+                            ),
                             "session_evaluation": metrics.get("session_evaluation"),
+                            "srpe": metrics.get("srpe"),
                         },
                         "feedback": (
                             {
@@ -354,13 +387,10 @@ class TrainingCycleService:
             PlanSessionState.SKIPPED,
             PlanSessionState.CANCELLED,
         }
-        resolved = (
-            all(
-                item.state in terminal_states or item.session_intent_id in completed_ids
-                for item in week_bindings
-            )
-            and len(week_bindings) >= week.session_count
-        )
+        resolved = all(
+            item.state in terminal_states or item.session_intent_id in completed_ids
+            for item in week_bindings
+        ) and len(week_bindings) >= (week.session_count or len(week.sessions))
         week_end = plan.start_date + timedelta(days=week_number * 7 - 1)
         eligible = local_today > week_end or resolved
         reason = (
@@ -376,7 +406,7 @@ class TrainingCycleService:
             confidence = EvidenceConfidence.HIGH
         else:
             confidence = EvidenceConfidence.MEDIUM
-        planned_distance = sum(item.target_distance_m for item in week.sessions)
+        planned_distance = sum(item.target_distance_m or 0 for item in week.sessions)
         evidence = cast(
             JsonObject,
             {
@@ -384,7 +414,7 @@ class TrainingCycleService:
                 "week_number": week_number,
                 "as_of_local_date": local_today.isoformat(),
                 "eligibility_reason": reason,
-                "planned_sessions": week.session_count,
+                "planned_sessions": week.session_count or len(week.sessions),
                 "completed_sessions": len(completed_ids),
                 "skipped_sessions": sum(
                     item.state is PlanSessionState.SKIPPED for item in week_bindings
@@ -418,25 +448,6 @@ class TrainingCycleService:
             eligibility_reason=reason,
         )
         async with self._uow_factory() as uow:
-            for binding in week_bindings:
-                if (
-                    binding.session_intent_id not in completed_ids
-                    or binding.state is PlanSessionState.COMPLETED
-                ):
-                    continue
-                current_binding = await uow.plan_session_bindings.get_by_intent(
-                    user_id, plan.id, binding.session_intent_id
-                )
-                if current_binding is None:
-                    continue
-                previous_version = current_binding.version
-                current_binding.state = PlanSessionState.COMPLETED
-                current_binding.locked_reason = "ACTIVITY_MATCHED"
-                current_binding.updated_at = now
-                current_binding.version += 1
-                await uow.plan_session_bindings.update(
-                    current_binding, expected_version=previous_version
-                )
             stored = await uow.plan_reviews.add(review)
             await uow.audit.add(
                 AuditEvent(
@@ -465,10 +476,8 @@ class TrainingCycleService:
         *,
         actor_id: str,
         plan_id: EntityId,
-        review_id: EntityId,
         expected_revision: int,
-        decision: PlanDecision,
-        rationale: str,
+        revision_definition: TrainingPlanRevisionDefinition,
         correlation_id: CorrelationId,
     ) -> PlanProposalResult:
         detail = await self.get_plan(user_id, plan_id)
@@ -478,35 +487,75 @@ class TrainingCycleService:
             raise DomainError("PLAN_REVISION_CONFLICT", "The plan revision changed.")
         if plan.status is not PlanStatus.ACTIVE:
             raise DomainError("PLAN_NOT_ACTIVE", "Only an active plan can be adapted.")
+        review: PlanReview | None = None
+        reviewed_week: int | None = None
         async with self._uow_factory() as uow:
-            review = await uow.plan_reviews.get(user_id, review_id)
-        if review is None or review.plan_id != plan.id or review.plan_revision != expected_revision:
-            raise ResourceNotFoundError("plan_review")
-        if not review.eligible:
-            raise DomainError("PLAN_REVIEW_NOT_ELIGIBLE", "The plan week is still open.")
-        self._validate_decision(review, decision)
-        candidate = await self._roll_document(
-            user_id,
-            actor_id=actor_id,
-            plan=plan,
-            current=current.document,
-            reviewed_week=review.week_number,
-            decision=decision,
-            correlation_id=correlation_id,
+            user = await uow.users.get(user_id)
+            pools = tuple(await uow.pools.list(user_id))
+            availability = tuple(await uow.availability.list(user_id))
+            if revision_definition.review_id is not None:
+                review = await uow.plan_reviews.get(
+                    user_id, EntityId.parse(revision_definition.review_id)
+                )
+            immutable_ids: set[str] = set()
+            for binding in detail.bindings:
+                if binding.workout_id is None:
+                    continue
+                if await uow.activity_data.get_match_by_workout(user_id, binding.workout_id):
+                    immutable_ids.add(str(binding.session_intent_id))
+        if user is None:
+            raise ResourceNotFoundError("user")
+        if revision_definition.kind == PlanRevisionKind.ADAPTATION.value:
+            if (
+                review is None
+                or review.plan_id != plan.id
+                or review.plan_revision != expected_revision
+            ):
+                raise ResourceNotFoundError("plan_review")
+            if not review.eligible:
+                raise DomainError("PLAN_REVIEW_NOT_ELIGIBLE", "The plan week is still open.")
+            reviewed_week = review.week_number
+        candidate = self._normalize_definition(
+            revision_definition.definition,
+            timezone=user.timezone,
         )
-        self._validate_candidate(
-            current.document,
+        identity_issues: list[JsonObject] = []
+        for field_name, value, expected in (
+            ("goal_id", candidate.goal_id, str(plan.goal_id)),
+            ("title", candidate.title, plan.title),
+            ("start_date", candidate.start_date, plan.start_date),
+            ("duration_weeks", candidate.duration_weeks, plan.duration_weeks),
+            ("timezone", candidate.timezone, user.timezone),
+        ):
+            if value != expected:
+                identity_issues.append(
+                    {
+                        "code": "PLAN_METADATA_IMMUTABLE",
+                        "path": f"definition.{field_name}",
+                        "message": "Plan identity metadata cannot change in a revision.",
+                    }
+                )
+        if identity_issues:
+            raise DomainError(
+                "PLAN_VALIDATION_FAILED",
+                "The coach-authored training plan is invalid.",
+                details=cast(JsonObject, {"issues": identity_issues}),
+            )
+        local_today = datetime.now(UTC).astimezone(ZoneInfo(user.timezone)).date()
+        self._validator.validate(
             candidate,
-            reviewed_week=review.week_number,
+            TrainingPlanValidationContext(user.timezone, pools, availability),
+            previous=current.document,
             bindings=detail.bindings,
+            immutable_session_ids=frozenset(immutable_ids),
+            reviewed_week=reviewed_week,
+            revision_kind=revision_definition.kind,
+            local_today=local_today,
         )
-        self._validate_document(plan.start_date, candidate)
         diff = plan_document_diff(current.document, candidate)
         status_after = (
             PlanStatus.PAUSED
-            if decision is PlanDecision.PAUSE
-            else PlanStatus.COMPLETED
-            if review.week_number == plan.duration_weeks
+            if revision_definition.decision is PlanDecision.PAUSE
             else PlanStatus.ACTIVE
         )
         now = datetime.now(UTC).replace(microsecond=0)
@@ -521,12 +570,17 @@ class TrainingCycleService:
                 JsonObject,
                 {
                     "expected_revision": expected_revision,
-                    "document": candidate.model_dump(mode="json"),
-                    "reason": rationale.strip(),
-                    "evidence": review.evidence_snapshot,
-                    "review_id": str(review.id),
-                    "decision": decision.value,
-                    "confidence": review.confidence_cap.value,
+                    "document": candidate.as_json(),
+                    "reason": revision_definition.rationale.strip(),
+                    "evidence": review.evidence_snapshot if review is not None else {},
+                    "review_id": str(review.id) if review is not None else None,
+                    "decision": (
+                        revision_definition.decision.value
+                        if revision_definition.decision is not None
+                        else None
+                    ),
+                    "confidence": review.confidence_cap.value if review is not None else None,
+                    "revision_kind": revision_definition.kind,
                 },
             ),
             impact=cast(
@@ -536,29 +590,20 @@ class TrainingCycleService:
                     "before_revision": expected_revision,
                     "after_revision": expected_revision + 1,
                     "external_effects": [],
-                    "approval_effect": "REVISE_PLAN_AND_QUEUE_LOCAL_MATERIALIZATION",
+                    "approval_effect": "APPLY_EXACT_COACH_DEFINED_REVISION",
                     "plan_status_after": status_after.value,
                 },
             ),
             expires_at=now + timedelta(hours=24),
             created_at=now,
         )
-        recommendation = review.with_recommendation(
-            decision=decision,
-            rationale=rationale,
-            recommendation=cast(
-                JsonObject,
-                {
-                    "confidence": review.confidence_cap.value,
-                    "diff": diff,
-                    "impact": proposal.impact,
-                },
-            ),
-            proposal_id=proposal.id,
-        )
         async with self._uow_factory() as uow:
+            existing_proposal = await uow.action_proposals.get_by_hash(
+                user_id, proposal.action_hash
+            )
+            if existing_proposal is not None:
+                return PlanProposalResult(plan, existing_proposal, candidate)
             await uow.action_proposals.add(proposal)
-            await uow.plan_reviews.set_recommendation(recommendation)
             await uow.audit.add(
                 AuditEvent(
                     id=EntityId.new(),
@@ -572,7 +617,12 @@ class TrainingCycleService:
                     before={"revision": expected_revision},
                     after={
                         "proposal_id": str(proposal.id),
-                        "decision": decision.value,
+                        "decision": (
+                            revision_definition.decision.value
+                            if revision_definition.decision is not None
+                            else None
+                        ),
+                        "revision_kind": revision_definition.kind,
                         "action_hash": proposal.action_hash,
                     },
                 )
@@ -625,7 +675,12 @@ class TrainingCycleService:
             if not isinstance(raw_document, dict):
                 raise DomainError("ACTION_TAMPERED", "The plan proposal is incomplete.")
             document = TrainingPlanDocument.model_validate(raw_document)
-            self._validate_document(plan.start_date, document)
+            if document.schema_version != "2.0":
+                raise DomainError(
+                    "LEGACY_RULESET_READ_ONLY",
+                    "Legacy ruleset proposals cannot be applied after coach-defined "
+                    "planning is enabled.",
+                )
             existing_revision = (
                 await uow.training_plan_revisions.get(user_id, plan.id, expected_revision)
                 if expected_revision > 0
@@ -633,6 +688,27 @@ class TrainingCycleService:
             )
             if expected_revision > 0 and existing_revision is None:
                 raise DomainError("PLAN_REVISION_CONFLICT", "The current plan revision is missing.")
+            user = await uow.users.get(user_id)
+            if user is None:
+                raise ResourceNotFoundError("user")
+            pools = tuple(await uow.pools.list(user_id))
+            availability = tuple(await uow.availability.list(user_id))
+            bindings = tuple(await uow.plan_session_bindings.list_for_plan(user_id, plan.id))
+            immutable_ids: set[str] = set()
+            for binding in bindings:
+                if binding.workout_id is not None and await uow.activity_data.get_match_by_workout(
+                    user_id, binding.workout_id
+                ):
+                    immutable_ids.add(str(binding.session_intent_id))
+            self._validator.validate(
+                document,
+                TrainingPlanValidationContext(user.timezone, pools, availability),
+                previous=existing_revision.document if existing_revision is not None else None,
+                bindings=bindings,
+                immutable_session_ids=frozenset(immutable_ids),
+                revision_kind=str(proposal.payload.get("revision_kind") or "CREATION"),
+                local_today=now.astimezone(ZoneInfo(user.timezone)).date(),
+            )
             expected_plan_version = plan.version
             expected_proposal_version = proposal.version
             proposal.approve(action_hash=approval_hash, now=now)
@@ -657,6 +733,14 @@ class TrainingCycleService:
                 document=document,
                 content_hash=document.content_hash,
                 reason=str(proposal.payload.get("reason") or "Revisão aprovada"),
+                revision_kind=PlanRevisionKind(
+                    str(proposal.payload.get("revision_kind") or PlanRevisionKind.CREATION.value)
+                ),
+                decision=(
+                    PlanDecision(str(proposal.payload["decision"]))
+                    if proposal.payload.get("decision") is not None
+                    else None
+                ),
                 effective_from=self._detailed_week_start(plan, document),
                 evidence=cast(JsonObject, proposal.payload.get("evidence") or {}),
                 diff=cast(JsonObject, proposal.impact.get("diff") or {}),
@@ -667,14 +751,19 @@ class TrainingCycleService:
             await uow.training_plan_revisions.add(revision)
             await uow.flush()
             plan.apply_revision(revision, now)
+            plan.prescription_source = PrescriptionSource.COACH_DEFINED
             if proposal.payload.get("decision") == PlanDecision.PAUSE.value:
                 plan.set_status(PlanStatus.PAUSED, now)
-            elif not any(item.detail_level is PlanDetailLevel.DETAILED for item in document.weeks):
-                plan.set_status(PlanStatus.COMPLETED, now)
             await uow.training_plans.update(plan, expected_version=expected_plan_version)
+            supplied_intents: dict[EntityId, int] = {}
+            superseded_session_ids: list[str] = []
+            locally_unscheduled_workout_ids: list[str] = []
             for week in document.weeks:
                 for session in week.sessions:
+                    if session.session_intent_id is None:
+                        raise DomainError("ACTION_TAMPERED", "A plan session identity is missing.")
                     intent_id = EntityId.parse(session.session_intent_id)
+                    supplied_intents[intent_id] = week.week_number
                     existing_binding = await uow.plan_session_bindings.get_by_intent(
                         user_id, plan.id, intent_id
                     )
@@ -690,37 +779,117 @@ class TrainingCycleService:
                                 updated_at=now,
                             )
                         )
-            job: Job | None = None
-            detailed_week = next(
-                (item for item in document.weeks if item.detail_level is PlanDetailLevel.DETAILED),
-                None,
-            )
-            if detailed_week is not None and plan.status is PlanStatus.ACTIVE:
-                job = await uow.jobs.add_idempotent(
-                    Job(
-                        id=EntityId.new(),
-                        user_id=user_id,
-                        job_type=self.MATERIALIZE_JOB_TYPE,
-                        payload={
-                            "plan_id": str(plan.id),
-                            "revision": revision.revision_number,
-                            "week_number": detailed_week.week_number,
-                        },
-                        idempotency_key=(
-                            f"plan-materialize:{plan.id}:{revision.revision_number}:"
-                            f"{detailed_week.week_number}"
-                        ),
-                        max_attempts=3,
+                    elif (
+                        existing_binding.week_number != week.week_number
+                        or existing_binding.state is PlanSessionState.SUPERSEDED
+                    ):
+                        previous_binding_version = existing_binding.version
+                        existing_binding.week_number = week.week_number
+                        if existing_binding.state is PlanSessionState.SUPERSEDED:
+                            existing_binding.state = (
+                                PlanSessionState.MATERIALIZED
+                                if existing_binding.workout_id is not None
+                                else PlanSessionState.PLANNED
+                            )
+                        existing_binding.updated_at = now
+                        existing_binding.version += 1
+                        await uow.plan_session_bindings.update(
+                            existing_binding,
+                            expected_version=previous_binding_version,
+                        )
+            for existing_binding in bindings:
+                if (
+                    existing_binding.session_intent_id in supplied_intents
+                    or existing_binding.locked
+                    or existing_binding.state is PlanSessionState.SUPERSEDED
+                ):
+                    continue
+                if (
+                    existing_binding.workout_id is not None
+                    and await uow.activity_data.get_match_by_workout(
+                        user_id, existing_binding.workout_id
                     )
+                    is not None
+                ):
+                    raise DomainError(
+                        "PLAN_SESSION_LOCKED",
+                        "An activity-linked session cannot be removed from the plan.",
+                    )
+                previous_binding_version = existing_binding.version
+                existing_binding.state = PlanSessionState.SUPERSEDED
+                existing_binding.updated_at = now
+                existing_binding.version += 1
+                await uow.plan_session_bindings.update(
+                    existing_binding,
+                    expected_version=previous_binding_version,
                 )
+                superseded_session_ids.append(str(existing_binding.session_intent_id))
+                if existing_binding.workout_id is not None:
+                    workout = await uow.workouts.get(user_id, existing_binding.workout_id)
+                    schedule_removed = await uow.workout_schedules.delete(
+                        user_id, existing_binding.workout_id
+                    )
+                    if workout is not None and schedule_removed:
+                        previous_workout_version = workout.version
+                        workout.schedule = None
+                        if workout.status is PlannedWorkoutStatus.SCHEDULED:
+                            workout.status = PlannedWorkoutStatus.APPROVED
+                        workout.updated_at = now
+                        workout.version += 1
+                        await uow.workouts.update(
+                            workout,
+                            expected_version=previous_workout_version,
+                        )
+                        locally_unscheduled_workout_ids.append(str(workout.id))
+            jobs: list[Job] = []
+            if plan.status is PlanStatus.ACTIVE:
+                materializable_week_numbers = {
+                    week.week_number
+                    for week in document.weeks
+                    if week.detail_level is PlanDetailLevel.DETAILED
+                    and (
+                        existing_revision is None
+                        or existing_revision.document.weeks[week.week_number - 1] != week
+                    )
+                }
+                for detailed_week in (
+                    item
+                    for item in document.weeks
+                    if item.week_number in materializable_week_numbers
+                ):
+                    jobs.append(
+                        await uow.jobs.add_idempotent(
+                            Job(
+                                id=EntityId.new(),
+                                user_id=user_id,
+                                job_type=self.MATERIALIZE_JOB_TYPE,
+                                payload={
+                                    "plan_id": str(plan.id),
+                                    "revision": revision.revision_number,
+                                    "week_number": detailed_week.week_number,
+                                },
+                                idempotency_key=(
+                                    f"plan-materialize:{plan.id}:{revision.revision_number}:"
+                                    f"{detailed_week.week_number}"
+                                ),
+                                max_attempts=3,
+                            )
+                        )
+                    )
             proposal.succeed(now)
             await uow.action_proposals.update(proposal, expected_version=expected_proposal_version)
-            event_payload: JsonObject = {
-                "plan_id": str(plan.id),
-                "revision": revision.revision_number,
-                "proposal_id": str(proposal.id),
-                "materialization_job_id": str(job.id) if job else None,
-            }
+            event_payload = cast(
+                JsonObject,
+                {
+                    "plan_id": str(plan.id),
+                    "revision": revision.revision_number,
+                    "proposal_id": str(proposal.id),
+                    "materialization_job_ids": [str(job.id) for job in jobs],
+                    "superseded_session_ids": superseded_session_ids,
+                    "locally_unscheduled_workout_ids": locally_unscheduled_workout_ids,
+                    "garmin_changed": False,
+                },
+            )
             await uow.outbox.add(
                 OutboxEvent(
                     id=EntityId.new(),
@@ -747,7 +916,13 @@ class TrainingCycleService:
                 )
             )
             await uow.commit()
-        return AppliedPlanRevision(plan, revision, job.id if job else None)
+        return AppliedPlanRevision(
+            plan,
+            revision,
+            tuple(job.id for job in jobs),
+            tuple(EntityId.parse(item) for item in superseded_session_ids),
+            tuple(EntityId.parse(item) for item in locally_unscheduled_workout_ids),
+        )
 
     async def materialize_week(
         self,
@@ -775,19 +950,23 @@ class TrainingCycleService:
             pools = await uow.pools.list(user_id)
         if user is None:
             raise ResourceNotFoundError("user")
-        pool = next(
-            (item for item in pools if item.active and item.is_default),
-            next((item for item in pools if item.active), None),
-        )
-        if pool is None:
+        active_pools = {str(item.id): item for item in pools if item.active}
+        if not active_pools:
             raise DomainError("POOL_REQUIRED", "Configure an active pool before materializing.")
 
         created: list[EntityId] = []
         skipped: list[EntityId] = []
         replayed = True
         for intent in week.sessions:
+            if intent.session_intent_id is None:
+                raise DomainError("INTERNAL_ERROR", "The plan session identity is missing.")
             intent_id = EntityId.parse(intent.session_intent_id)
+            if intent.workout is None:
+                raise DomainError("INTERNAL_ERROR", "A detailed plan session has no workout.")
             definition = CanonicalWorkout.model_validate(intent.workout)
+            pool = active_pools.get(intent.pool_id or "")
+            if pool is None:
+                raise DomainError("POOL_REQUIRED", "The plan session pool is not active.")
             if definition.pool_length_m != pool.length.meters:
                 raise DomainError("POOL_MISMATCH", "The plan workout uses another pool length.")
             async with self._uow_factory() as uow:
@@ -797,6 +976,14 @@ class TrainingCycleService:
             if binding.locked:
                 skipped.append(intent_id)
                 continue
+            if binding.workout_id is not None:
+                async with self._uow_factory() as uow:
+                    activity_match = await uow.activity_data.get_match_by_workout(
+                        user_id, binding.workout_id
+                    )
+                if activity_match is not None:
+                    skipped.append(intent_id)
+                    continue
             content_hash = canonical_content_hash(definition)
             workout_id = binding.workout_id
             if workout_id is None:
@@ -854,7 +1041,11 @@ class TrainingCycleService:
                 raise DomainError("INTERNAL_ERROR", "A detailed plan session has no date.")
             if (
                 workout.schedule is not None
-                and workout.schedule.scheduled_date != intent.scheduled_date
+                and (
+                    workout.schedule.scheduled_date != intent.scheduled_date
+                    or workout.schedule.scheduled_start_time != intent.scheduled_start_time
+                    or workout.schedule.pool_id != pool.id
+                )
                 and binding.materialized_plan_revision == expected_revision
             ):
                 async with self._uow_factory() as uow:
@@ -870,13 +1061,17 @@ class TrainingCycleService:
                         await uow.commit()
                 skipped.append(intent_id)
                 continue
-            if workout.schedule is None or workout.schedule.scheduled_date != intent.scheduled_date:
+            if workout.schedule is None or (
+                workout.schedule.scheduled_date != intent.scheduled_date
+                or workout.schedule.scheduled_start_time != intent.scheduled_start_time
+                or workout.schedule.pool_id != pool.id
+            ):
                 replayed = False
                 workout = await self._workouts.schedule(
                     user_id,
                     workout.workout.id,
                     scheduled_date=intent.scheduled_date,
-                    scheduled_start_time=None,
+                    scheduled_start_time=intent.scheduled_start_time,
                     timezone=user.timezone,
                     pool_id=pool.id,
                     expected_version=workout.workout.version,
@@ -1064,371 +1259,30 @@ class TrainingCycleService:
         return binding
 
     @staticmethod
-    def _initial_document(
-        input_snapshot: JsonObject,
-        output_plan: JsonObject,
+    def _normalize_definition(
+        definition: TrainingPlanDocument,
         *,
-        duration_weeks: int,
-        strategy_summary: str | None,
+        timezone: str,
     ) -> TrainingPlanDocument:
-        raw_context = input_snapshot.get("context")
-        context = raw_context if isinstance(raw_context, dict) else {}
-        sessions = TrainingCycleService._session_intents(output_plan)
-        first_volume = TrainingCycleService._integer(
-            output_plan.get("target_volume_m"),
-            sum(item.target_distance_m for item in sessions),
-        )
         weeks: list[PlanWeek] = []
-        projected = first_volume
-        projected_duration = sum(item.max_duration_minutes for item in sessions)
-        phases = TrainingCycleService._phases(duration_weeks)
-        for number in range(1, duration_weeks + 1):
-            phase = next(item for item in phases if item.start_week <= number <= item.end_week)
-            if number == 1:
-                detail = PlanDetailLevel.DETAILED
-                week_sessions = sessions
-                session_count = len(sessions)
-            elif number == 2:
-                detail = PlanDetailLevel.OUTLINE
-                week_sessions = ()
-                session_count = len(sessions)
-                projected = int(projected * 1.05)
-            else:
-                detail = PlanDetailLevel.STRATEGIC
-                week_sessions = ()
-                session_count = len(sessions)
-                projected = int(projected * (0.82 if number % 4 == 0 else 1.05))
-            pool_length = TrainingCycleService._integer(context.get("pool_length_m"), 20)
-            projected -= projected % pool_length
-            weeks.append(
-                PlanWeek(
-                    week_number=number,
-                    focus=phase.focus,
-                    detail_level=detail,
-                    target_distance_min_m=max(
-                        pool_length,
-                        int(projected * 0.92) // pool_length * pool_length,
-                    ),
-                    target_distance_max_m=max(pool_length, projected),
-                    target_duration_min_minutes=session_count * 20,
-                    target_duration_max_minutes=projected_duration,
-                    session_count=session_count,
-                    load_target="RECOVERY" if number % 4 == 0 else "BUILD",
-                    success_criteria=phase.success_criteria,
-                    sessions=week_sessions,
-                )
-            )
-        recent_weeks = context.get("recent_weeks")
-        confidence = (
-            EvidenceConfidence.MEDIUM
-            if isinstance(recent_weeks, list) and recent_weeks
-            else EvidenceConfidence.LOW
-        )
-        return TrainingPlanDocument(
-            strategy_summary=(
-                strategy_summary.strip()
-                if strategy_summary and strategy_summary.strip()
-                else (
-                    "Ciclo em horizonte móvel: consolidar técnica e endurance antes de "
-                    "testar a meta."
-                )
-            ),
-            duration_weeks=duration_weeks,
-            baseline_snapshot=cast(
-                JsonObject,
-                {
-                    "goal": {
-                        "id": context.get("goal_id"),
-                        "title": context.get("goal_title"),
-                        "target_distance_m": context.get("target_distance_m"),
-                        "target_pace_seconds_per_100m": context.get("target_pace_seconds_per_100m"),
-                    },
-                    "recent_weeks": recent_weeks if isinstance(recent_weeks, list) else [],
-                    "feedback": context.get("recent_feedback") or [],
-                    "pool_length_m": context.get("pool_length_m"),
-                },
-            ),
-            baseline_confidence=confidence,
-            phases=phases,
-            weeks=tuple(weeks),
-            ruleset_version=str(output_plan.get("ruleset_version") or "unknown"),
-            ruleset_hash=str(output_plan.get("ruleset_hash") or "0" * 64),
-        )
-
-    @staticmethod
-    def _phases(duration: int) -> tuple[PlanPhase, ...]:
-        ranges: tuple[tuple[str, int, int, str], ...]
-        if duration == 8:
-            ranges = (
-                ("Baseline e técnica", 1, 2, "Técnica e consistência em 80-120 m"),
-                ("Base", 3, 4, "Blocos de 120-200 m e primeiro checkpoint"),
-                ("Endurance", 5, 6, "Séries de 200-400 m e continuidade"),
-                ("Específica", 7, 7, "Trabalho específico conforme as evidências"),
-                ("Checkpoint", 8, 8, "Teste de prontidão ou meta"),
-            )
-        else:
-            first = max(1, duration // 4)
-            second = max(first + 1, duration // 2)
-            third = max(second + 1, duration - 1)
-            ranges = (
-                ("Baseline e técnica", 1, first, "Técnica e consistência"),
-                ("Base", first + 1, second, "Construção de volume sustentável"),
-                ("Endurance", second + 1, third, "Endurance e especificidade"),
-                ("Checkpoint", third + 1, duration, "Teste de prontidão ou meta"),
-            )
-        return tuple(
-            PlanPhase(
-                name=name,
-                start_week=start,
-                end_week=end,
-                focus=focus,
-                objectives=(focus,),
-                success_criteria=("Concluir o estímulo com técnica e esforço controlados",),
-            )
-            for name, start, end, focus in ranges
-            if start <= end
-        )
-
-    @staticmethod
-    def _session_intents(output_plan: JsonObject) -> tuple[PlanSessionIntent, ...]:
-        raw_sessions = output_plan.get("sessions")
-        if not isinstance(raw_sessions, list) or not raw_sessions:
-            raise DomainError("INTERNAL_ERROR", "Generated week has no sessions.")
-        intents: list[PlanSessionIntent] = []
-        intensity_by_type = {
-            "technique": "EASY",
-            "aerobic_endurance": "MODERATE",
-            "threshold_css": "HARD",
-            "recovery": "EASY",
-            "test": "TEST",
-        }
-        for index, raw in enumerate(raw_sessions, start=1):
-            if not isinstance(raw, dict) or not isinstance(raw.get("workout"), dict):
-                raise DomainError("INTERNAL_ERROR", "Generated plan session is invalid.")
-            purpose = str(raw.get("session_type"))
-            intents.append(
-                PlanSessionIntent(
-                    session_intent_id=str(EntityId.new()),
-                    session_number=index,
-                    purpose=cast(Any, purpose),
-                    target_distance_m=TrainingCycleService._integer(raw.get("distance_m"), 0),
-                    max_duration_minutes=TrainingCycleService._integer(
-                        raw.get("max_duration_minutes"), 45
-                    ),
-                    intensity=cast(Any, intensity_by_type.get(purpose, "MODERATE")),
-                    scheduled_date=date.fromisoformat(str(raw.get("date"))),
-                    key_set=f"Sessão {purpose.replace('_', ' ')} gerada pelo ruleset",
-                    workout=cast(JsonObject, raw["workout"]),
-                )
-            )
-        return tuple(intents)
-
-    async def _roll_document(
-        self,
-        user_id: UserId,
-        *,
-        actor_id: str,
-        plan: TrainingPlan,
-        current: TrainingPlanDocument,
-        reviewed_week: int,
-        decision: PlanDecision,
-        correlation_id: CorrelationId,
-    ) -> TrainingPlanDocument:
-        next_week = reviewed_week + 1
-        if next_week > plan.duration_weeks:
-            return current.model_copy(
-                update={
-                    "weeks": tuple(
-                        week.model_copy(
-                            update={"detail_level": PlanDetailLevel.STRATEGIC, "sessions": ()}
-                        )
-                        if week.detail_level is PlanDetailLevel.DETAILED
-                        else week
-                        for week in current.weeks
-                    )
-                }
-            )
-        preferences = PlanningPreferences(
-            focus=(
-                "TECHNIQUE"
-                if decision in {PlanDecision.RECOVERY, PlanDecision.REGRESS}
-                else "GOAL_PACE"
-                if decision in {PlanDecision.PROGRESS, PlanDecision.RETEST}
-                else "BALANCED"
-            ),
-            avoid_high_intensity=decision
-            in {
-                PlanDecision.RECOVERY,
-                PlanDecision.REGRESS,
-                PlanDecision.HOLD,
-                PlanDecision.PAUSE,
-            },
-        )
-        week_start = plan.start_date + timedelta(days=(next_week - 1) * 7)
-        run, _, _ = await self._planning.propose_week(
-            user_id,
-            actor_id=actor_id,
-            week_start=week_start,
-            preferences=preferences,
-            user_notes_present=False,
-            correlation_id=correlation_id,
-            create_proposal=False,
-        )
-        intents = self._session_intents(run.output_plan)
-        generated_volume = self._integer(run.output_plan.get("target_volume_m"), 0)
-        raw_pool_length = intents[0].workout.get("pool_length_m") if intents else None
-        pool_length = self._integer(
-            raw_pool_length,
-            self._integer(current.baseline_snapshot.get("pool_length_m"), 20),
-        )
-        weeks: list[PlanWeek] = []
-        for week in current.weeks:
-            if week.week_number <= reviewed_week:
-                weeks.append(
-                    week.model_copy(
-                        update={"detail_level": PlanDetailLevel.STRATEGIC, "sessions": ()}
-                    )
-                )
-            elif week.week_number == next_week:
-                weeks.append(
-                    week.model_copy(
+        for week in definition.weeks:
+            sessions: list[PlanSessionIntent] = []
+            for session in week.sessions:
+                sessions.append(
+                    session.model_copy(
                         update={
-                            "detail_level": PlanDetailLevel.DETAILED,
-                            "target_distance_min_m": (
-                                int(generated_volume * 0.92) // pool_length * pool_length
-                            ),
-                            "target_distance_max_m": generated_volume,
-                            "target_duration_min_minutes": len(intents) * 20,
-                            "target_duration_max_minutes": sum(
-                                item.max_duration_minutes for item in intents
-                            ),
-                            "session_count": len(intents),
-                            "sessions": intents,
+                            "session_intent_id": session.session_intent_id or str(EntityId.new()),
                         }
                     )
                 )
-            elif week.week_number == next_week + 1:
-                weeks.append(
-                    week.model_copy(
-                        update={"detail_level": PlanDetailLevel.OUTLINE, "sessions": ()}
-                    )
-                )
-            else:
-                weeks.append(
-                    week.model_copy(
-                        update={"detail_level": PlanDetailLevel.STRATEGIC, "sessions": ()}
-                    )
-                )
-        return current.model_copy(
+            weeks.append(week.model_copy(update={"sessions": tuple(sessions)}))
+        normalized = definition.model_copy(
             update={
+                "timezone": definition.timezone or timezone,
                 "weeks": tuple(weeks),
-                "ruleset_version": str(
-                    run.output_plan.get("ruleset_version") or current.ruleset_version
-                ),
-                "ruleset_hash": str(run.output_plan.get("ruleset_hash") or current.ruleset_hash),
             }
         )
-
-    @staticmethod
-    def _validate_document(start_date: date, document: TrainingPlanDocument) -> None:
-        pool_lengths: set[int] = set()
-        for week in document.weeks:
-            if week.detail_level is not PlanDetailLevel.DETAILED:
-                continue
-            week_start = start_date + timedelta(days=(week.week_number - 1) * 7)
-            week_end = week_start + timedelta(days=6)
-            for intent in week.sessions:
-                if (
-                    intent.scheduled_date is None
-                    or not week_start <= intent.scheduled_date <= week_end
-                ):
-                    raise DomainError(
-                        "PLAN_VALIDATION_FAILED",
-                        "A detailed session must be scheduled inside its plan week.",
-                    )
-                definition = CanonicalWorkout.model_validate(intent.workout)
-                validation = validate_workout(definition)
-                if not validation.valid:
-                    raise DomainError(
-                        "PLAN_VALIDATION_FAILED",
-                        "A detailed session contains an invalid canonical workout.",
-                        details={"error_codes": ",".join(item.code for item in validation.errors)},
-                    )
-                if validation.totals.distance_m != intent.target_distance_m:
-                    raise DomainError(
-                        "PLAN_VALIDATION_FAILED",
-                        "Session intent distance does not match its canonical workout.",
-                    )
-                pool_lengths.add(definition.pool_length_m)
-        if len(pool_lengths) > 1:
-            raise DomainError(
-                "PLAN_VALIDATION_FAILED",
-                "Detailed sessions in one plan revision must use the same pool length.",
-            )
-
-    @staticmethod
-    def _validate_decision(review: PlanReview, decision: PlanDecision) -> None:
-        evidence = review.evidence_snapshot
-        pain = evidence.get("pain_signals")
-        notes = evidence.get("notes")
-        pain_note_present = isinstance(notes, list) and any(
-            isinstance(item, dict)
-            and item.get("category") == NoteCategory.PAIN.value
-            and item.get("importance") in {NoteImportance.MEDIUM.value, NoteImportance.HIGH.value}
-            for item in notes
-        )
-        comparable = evidence.get("comparable_evidence_count")
-        if decision is PlanDecision.PROGRESS:
-            if (isinstance(pain, list) and pain) or pain_note_present:
-                raise DomainError(
-                    "PLAN_PROGRESS_BLOCKED_BY_PAIN", "Pain evidence blocks progression."
-                )
-            if review.confidence_cap is EvidenceConfidence.LOW:
-                raise DomainError(
-                    "PLAN_PROGRESS_LOW_CONFIDENCE", "Low-quality evidence cannot progress the plan."
-                )
-            if not isinstance(comparable, int) or comparable < 2:
-                raise DomainError(
-                    "PLAN_PROGRESS_EVIDENCE_REQUIRED",
-                    "Progression requires at least two comparable evidence samples.",
-                )
-
-    @staticmethod
-    def _validate_candidate(
-        before: TrainingPlanDocument,
-        after: TrainingPlanDocument,
-        *,
-        reviewed_week: int,
-        bindings: tuple[PlanSessionBinding, ...],
-    ) -> None:
-        if before.duration_weeks != after.duration_weeks:
-            raise DomainError("PLAN_VALIDATION_FAILED", "A revision cannot change cycle duration.")
-        for week_number in range(1, reviewed_week + 1):
-            before_week = before.weeks[week_number - 1]
-            after_week = after.weeks[week_number - 1]
-            # Rolling may compact an old detailed week but cannot rewrite its prescription.
-            if (
-                before_week.detail_level is not PlanDetailLevel.DETAILED
-                and before_week != after_week
-            ):
-                raise DomainError("PLAN_PAST_WEEK_IMMUTABLE", "Past plan weeks cannot change.")
-        locked_ids = {str(item.session_intent_id) for item in bindings if item.locked}
-        after_ids = {item.session_intent_id for week in after.weeks for item in week.sessions}
-        if locked_ids & after_ids:
-            # The session remains represented by its binding; it must not be rematerialized.
-            raise DomainError("PLAN_SESSION_LOCKED", "A locked session cannot be revised.")
-        detailed = next(
-            (item for item in after.weeks if item.detail_level is PlanDetailLevel.DETAILED), None
-        )
-        if detailed is not None:
-            previous = before.weeks[detailed.week_number - 1]
-            if previous.target_distance_max_m:
-                limit = int(previous.target_distance_max_m * 1.08)
-                if detailed.target_distance_max_m > limit:
-                    raise DomainError(
-                        "PLAN_VOLUME_LIMIT_EXCEEDED",
-                        "The proposed week exceeds the configured volume progression limit.",
-                    )
+        return TrainingPlanDocument.model_validate(normalized.as_json())
 
     @staticmethod
     def _detailed_week_start(plan: TrainingPlan, document: TrainingPlanDocument) -> date | None:
@@ -1440,14 +1294,3 @@ class TrainingCycleService:
             if detailed is not None
             else None
         )
-
-    @staticmethod
-    def _integer(value: object, default: int) -> int:
-        if isinstance(value, bool):
-            return default
-        if isinstance(value, (int, float, str)):
-            try:
-                return int(value)
-            except ValueError:
-                return default
-        return default

@@ -9,28 +9,24 @@ result_envelope: ./tool-result-envelope-v2.schema.json
 tools:
   - name: get_coach_context
     title: Get swim coach context
-    description: Return the athlete profile, active goal, pool, availability, Garmin health, progress, and current training summary.
+    description: Return profile, timezone, goal, pools, explicit availability, constraints, recent deterministic training evidence, active plan, notes, Garmin health, and capabilities before prescribing.
     scopes: [coach]
     annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
     input: {type: object, additionalProperties: false, properties: {include_constraints: {type: boolean, default: true}}}
   - name: propose_training_plan
-    title: Propose a training cycle
-    description: Create an approval-gated rolling training-cycle proposal without changing workouts or Garmin.
+    title: Validate a coach-authored training cycle
+    description: Validate and stage a complete coach-authored training plan definition. This tool never generates or changes training content.
     scopes: [coach]
     annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
     input:
       type: object
       additionalProperties: false
-      required: [start_date]
+      required: [definition]
       properties:
-        start_date: {type: string, format: date}
-        duration_weeks: {type: integer, minimum: 4, maximum: 16, default: 8}
-        goal_id: {type: [string, "null"], format: uuid}
-        title: {type: [string, "null"], maxLength: 160}
-        strategy_summary: {type: [string, "null"], maxLength: 4000}
+        definition: {$ref: ./training-plan-definition.schema.json}
   - name: get_training_plan
     title: Get a training cycle
-    description: Return the live or selected cycle, current revision, bindings, reviews, and notes.
+    description: Return the live or selected cycle, coach rationale, immutable revision history, session bindings, materialized workout definitions, reviews, and notes.
     scopes: [coach]
     annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
     input:
@@ -40,7 +36,7 @@ tools:
         plan_id: {type: [string, "null"], format: uuid}
   - name: review_training_plan
     title: Review one plan week
-    description: Create a deterministic evidence snapshot for an ended or fully resolved plan week without changing the plan.
+    description: Return deterministic evidence for coach review. This tool never changes the plan or chooses a decision.
     scopes: [coach]
     annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
     input:
@@ -51,23 +47,21 @@ tools:
         plan_id: {type: string, format: uuid}
         week_number: {type: integer, minimum: 1, maximum: 16}
   - name: propose_plan_revision
-    title: Propose an adaptive plan revision
-    description: Turn one eligible review into a validated exact-hash revision proposal.
+    title: Validate a coach-authored plan revision
+    description: Validate and stage a coach-authored revision. This tool never chooses the adaptation decision or changes its prescription.
     scopes: [coach]
     annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
     input:
       type: object
       additionalProperties: false
-      required: [plan_id, review_id, expected_revision, decision, rationale]
+      required: [plan_id, expected_revision, revision_definition]
       properties:
         plan_id: {type: string, format: uuid}
-        review_id: {type: string, format: uuid}
         expected_revision: {type: integer, minimum: 1}
-        decision: {type: string, enum: [PROGRESS, HOLD, REGRESS, RECOVERY, RETEST, RESCHEDULE, PAUSE]}
-        rationale: {type: string, minLength: 1, maxLength: 2000}
+        revision_definition: {$ref: ./training-plan-revision-definition.schema.json}
   - name: apply_plan_revision
     title: Apply an approved plan revision
-    description: Apply one exact proposed revision with optimistic concurrency and queue local materialization without changing Garmin.
+    description: Apply one exact proposed revision with optimistic concurrency, queue changed DETAILED weeks, and locally unschedule explicitly removed future sessions without changing Garmin.
     scopes: [coach]
     annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
     input:
@@ -192,19 +186,19 @@ tools:
       required: [workout_id]
       properties:
         workout_id: {type: string, format: uuid}
-  - name: generate_week
-    title: Generate and save a swim week
-    description: Generate a deterministic week from current data and save its sessions directly to the local calendar.
+  - name: materialize_plan_week
+    title: Materialize an approved plan week
+    description: Idempotently create local workouts from an approved DETAILED week without generating content or publishing to Garmin.
     scopes: [coach]
     annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
     input:
       type: object
       additionalProperties: false
-      required: [plan_id, week_number, week_start]
+      required: [plan_id, expected_revision, week_number]
       properties:
         plan_id: {type: string, format: uuid}
+        expected_revision: {type: integer, minimum: 1}
         week_number: {type: integer, minimum: 1, maximum: 16}
-        week_start: {type: string, format: date}
   - name: sync_garmin
     title: Sync Garmin activities
     description: Queue an idempotent Garmin activity sync and return its current job state.

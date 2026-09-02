@@ -35,6 +35,12 @@ O MCP expõe comandos de contexto, ciclos de treinamento, treinos, atividades,
 Garmin e feedback sob o scope `coach`. Revisões de ciclo usam diff e hash com
 aprovação explícita; publicação Garmin continua separada e idempotente.
 
+O ChatGPT é o treinador e fornece toda a prescrição estruturada. O backend calcula
+evidências, valida fatos objetivos, versiona, persiste e materializa exatamente o
+documento aprovado; ele não escolhe fases, sessões, volumes, ritmos, sets ou
+progressões. O gerador por ruleset P10 permanece apenas para leitura/replay
+histórico e não é composto no runtime, no worker, na automação ou no MCP.
+
 ## Estrutura ativa
 
 | Caminho | Finalidade |

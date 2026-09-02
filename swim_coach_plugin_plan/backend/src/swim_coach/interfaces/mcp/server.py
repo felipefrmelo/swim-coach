@@ -11,6 +11,7 @@ from time import perf_counter
 from typing import Annotated, Any, Literal, cast
 from urllib.parse import urlsplit
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.provider import TokenVerifier
@@ -39,8 +40,6 @@ from swim_coach.application.services.mcp_read import (
     McpWarning,
 )
 from swim_coach.application.services.mcp_write import (
-    MCP_PLANNING_TOOL_SCOPES,
-    MCP_PLANNING_TOOLS,
     MCP_WRITE_TOOL_SCOPES,
     McpWriteService,
 )
@@ -49,11 +48,12 @@ from swim_coach.domain.planning import (
     NoteCategory,
     NoteImportance,
     NoteScope,
-    PlanDecision,
-    PlanningPreferences,
     PlanStatus,
+    TrainingPlanDocument,
+    TrainingPlanRevisionDefinition,
 )
 from swim_coach.domain.shared.errors import DomainError
+from swim_coach.domain.shared.types import JsonObject
 from swim_coach.domain.shared.value_objects import CorrelationId, EntityId
 from swim_coach.domain.workouts import CanonicalWorkout
 from swim_coach.interfaces.mcp.ui import (
@@ -451,23 +451,6 @@ def create_mcp_server(
                 result.human_summary = (
                     "Swim Coach exposes authenticated reads, controlled writes, and optional "
                     "portable MCP Apps cards. Every workflow remains complete without UI."
-                )
-            if write_service is not None and getattr(write_service, "planning_enabled", False):
-                result.data["server_version"] = "0.4.0-adaptive-planning"
-                result.data["phase"] = "P10"
-                result.data["release_mode"] = "controlled-write-optional-ui-planning"
-                result.data["available_tools"] = [
-                    *result.data["available_tools"],
-                    *MCP_PLANNING_TOOLS,
-                ]
-                result.data["required_scopes"] = [
-                    *result.data["required_scopes"],
-                    "planning:write",
-                ]
-                result.data["adaptive_planning_enabled"] = True
-                result.human_summary = (
-                    "Swim Coach adds reproducible, explainable weekly plan proposals. "
-                    "Planning never approves, applies, schedules, or publishes automatically."
                 )
             return result
 
@@ -879,47 +862,6 @@ def _register_write_tools(
                 correlation_id=correlation_id,
             ),
         )
-
-    if getattr(write_service, "planning_enabled", False):
-
-        @server.tool(
-            name="propose_week_plan",
-            title="Propose a weekly swim plan",
-            description=(
-                "Generate and persist a reproducible weekly plan proposal from owned context "
-                "and versioned conservative rules; never approves, applies, or publishes it."
-            ),
-            annotations=LOCAL_WRITE,
-            structured_output=True,
-        )
-        async def propose_week_plan(
-            week_start: LocalDate,
-            ctx: Context[Any, Any, Any],
-            constraints: PlanningPreferences | None = None,
-            user_notes: Annotated[str | None, Field(max_length=1000)] = None,
-        ) -> McpResult:
-            structured_constraints = (
-                constraints.model_dump(mode="json", exclude_none=True) if constraints else {}
-            )
-            args = {
-                "week_start": week_start.isoformat(),
-                "constraints": structured_constraints,
-                "user_notes": user_notes,
-            }
-            return await execute(
-                "propose_week_plan",
-                ctx,
-                frozenset({"planning:write", "proposals:write"}),
-                args,
-                lambda principal, request_id, correlation_id: write_service.propose_week_plan(
-                    principal,
-                    request_id,
-                    week_start=week_start,
-                    constraints=structured_constraints,
-                    user_notes=user_notes,
-                    correlation_id=correlation_id,
-                ),
-            )
 
     @server.tool(
         name="propose_workout_change",
@@ -1397,7 +1339,8 @@ def _register_v2_tools(
         name="get_coach_context",
         title="Get swim coach context",
         description=(
-            "Return profile, goal, pool, availability, Garmin health, progress, and summary."
+            "Return profile, timezone, goal, pools, explicit availability, constraints, "
+            "recent deterministic training evidence, active plan, notes, and capabilities."
         ),
         annotations=READ_ONLY,
         structured_output=True,
@@ -1412,6 +1355,20 @@ def _register_v2_tools(
                 principal, request_id, include_constraints=include_constraints
             )
             sync = await read_service.get_sync_status(principal, request_id)
+            recent = await read_service.list_recent_swims(
+                principal,
+                request_id,
+                limit=5,
+                before=None,
+                include_analysis_summary=True,
+            )
+            profile_data = training.data.get("profile")
+            timezone_name = (
+                str(profile_data.get("timezone"))
+                if isinstance(profile_data, dict) and profile_data.get("timezone")
+                else "UTC"
+            )
+            local_today = datetime.now(ZoneInfo(timezone_name)).date()
             try:
                 progress = await read_service.get_goal_progress(principal, request_id, goal_id=None)
                 progress_data: dict[str, Any] | None = progress.data
@@ -1430,6 +1387,31 @@ def _register_v2_tools(
                     "end_date": plan_detail.plan.end_date.isoformat(),
                     "duration_weeks": plan_detail.plan.duration_weeks,
                     "current_revision": plan_detail.plan.current_revision,
+                    "prescription_source": plan_detail.plan.prescription_source.value,
+                    "definition": (
+                        plan_detail.revision.document.as_json() if plan_detail.revision else None
+                    ),
+                    "notes": [
+                        {
+                            "scope_type": item.scope_type.value,
+                            "scope_ref": item.scope_ref,
+                            "category": item.category.value,
+                            "author_type": item.author_type.value,
+                            "importance": item.importance.value,
+                            "text": item.text,
+                            "valid_from": (
+                                item.valid_from.isoformat() if item.valid_from else None
+                            ),
+                            "valid_until": (
+                                item.valid_until.isoformat() if item.valid_until else None
+                            ),
+                            "evidence_activity_refs": list(item.evidence_activity_refs),
+                        }
+                        for item in plan_detail.notes
+                        if item.affects_adaptation
+                        and (item.valid_from is None or item.valid_from <= local_today)
+                        and (item.valid_until is None or item.valid_until >= local_today)
+                    ][-20:],
                 }
             except DomainError as error:
                 if error.code != "RESOURCE_NOT_FOUND":
@@ -1440,6 +1422,7 @@ def _register_v2_tools(
                 status="OK",
                 data={
                     "training": training.data,
+                    "recent_training_evidence": recent.data,
                     "goal_progress": progress_data,
                     "garmin": sync.data,
                     "active_plan": active_plan,
@@ -1447,7 +1430,7 @@ def _register_v2_tools(
                         "save_workout": True,
                         "training_cycles": coach_service.planning_enabled,
                         "plan_revision_approval_required": True,
-                        "generate_week": coach_service.planning_enabled,
+                        "materialize_plan_week": coach_service.planning_enabled,
                         "publish_workout": coach_service.garmin_write_enabled,
                         "delete_workout": True,
                     },
@@ -1463,29 +1446,19 @@ def _register_v2_tools(
 
     @server.tool(
         name="propose_training_plan",
-        title="Propose a training cycle",
+        title="Validate a coach-authored training cycle",
         description=(
-            "Create an approval-gated rolling training-cycle proposal. No workout or Garmin "
-            "state changes until the exact proposal hash is applied."
+            "Validate and stage a complete coach-authored training plan definition. "
+            "This tool never generates or changes training content."
         ),
         annotations=LOCAL_WRITE,
         structured_output=True,
     )
     async def propose_training_plan(
         ctx: Context[Any, Any, Any],
-        start_date: LocalDate,
-        duration_weeks: Annotated[int, Field(ge=4, le=16)] = 8,
-        goal_id: UUID | None = None,
-        title: Annotated[str | None, Field(max_length=160)] = None,
-        strategy_summary: Annotated[str | None, Field(max_length=4000)] = None,
+        definition: TrainingPlanDocument,
     ) -> McpResultV2:
-        args = {
-            "goal_id": str(goal_id) if goal_id else None,
-            "title": title,
-            "start_date": start_date.isoformat(),
-            "duration_weeks": duration_weeks,
-            "strategy_summary": strategy_summary,
-        }
+        args = {"definition": definition.as_json()}
 
         async def command(
             principal: McpPrincipal, request_id: str, correlation_id: CorrelationId
@@ -1493,11 +1466,7 @@ def _register_v2_tools(
             result = await coach_service.propose_training_plan(
                 principal.user_id,
                 actor_id=principal.subject,
-                goal_id=EntityId(goal_id) if goal_id else None,
-                title=title,
-                start_date=start_date,
-                duration_weeks=duration_weeks,
-                strategy_summary=strategy_summary,
+                definition=definition,
                 correlation_id=correlation_id,
             )
             return McpResult(
@@ -1510,10 +1479,12 @@ def _register_v2_tools(
                     "action_hash": result.proposal.action_hash,
                     "expected_revision": 0,
                     "expires_at": result.proposal.expires_at.isoformat(),
-                    "plan": result.document.model_dump(mode="json"),
+                    "plan": result.document.as_json(),
                     "diff": result.proposal.impact.get("diff"),
                 },
-                human_summary="Created a draft cycle proposal for exact-hash approval.",
+                human_summary=(
+                    "Validated and staged the coach-authored cycle for exact-hash approval."
+                ),
             )
 
         return _as_v2_result(
@@ -1538,6 +1509,33 @@ def _register_v2_tools(
             detail = await coach_service.get_training_plan(
                 principal.user_id, EntityId(plan_id) if plan_id else None
             )
+            materialized: dict[str, dict[str, Any]] = {}
+            for binding in detail.bindings:
+                if binding.workout_id is None:
+                    continue
+                workout = await coach_service.get_materialized_workout(
+                    principal.user_id, binding.workout_id
+                )
+                materialized[str(binding.workout_id)] = {
+                    "workout_id": str(workout.workout.id),
+                    "status": workout.workout.status.value,
+                    "current_revision": workout.current_revision.revision_number,
+                    "definition": workout.current_revision.definition.model_dump(mode="json"),
+                    "schedule": (
+                        {
+                            "scheduled_date": workout.schedule.scheduled_date.isoformat(),
+                            "scheduled_start_time": (
+                                workout.schedule.scheduled_start_time.isoformat(timespec="minutes")
+                                if workout.schedule.scheduled_start_time
+                                else None
+                            ),
+                            "timezone": workout.schedule.timezone,
+                            "pool_id": str(workout.schedule.pool_id),
+                        }
+                        if workout.schedule
+                        else None
+                    ),
+                }
             return McpResult(
                 request_id=request_id,
                 status="OK",
@@ -1550,19 +1548,20 @@ def _register_v2_tools(
                         "start_date": detail.plan.start_date.isoformat(),
                         "end_date": detail.plan.end_date.isoformat(),
                         "duration_weeks": detail.plan.duration_weeks,
+                        "prescription_source": detail.plan.prescription_source.value,
                         "current_revision": detail.plan.current_revision,
                     },
-                    "revision": (
-                        detail.revision.document.model_dump(mode="json")
-                        if detail.revision
-                        else None
-                    ),
+                    "revision": (detail.revision.document.as_json() if detail.revision else None),
                     "revision_history": [
                         {
                             "revision": item.revision_number,
                             "reason": item.reason,
+                            "revision_kind": item.revision_kind.value,
+                            "decision": item.decision.value if item.decision else None,
                             "content_hash": item.content_hash,
                             "created_at": item.created_at.isoformat(),
+                            "definition": item.document.as_json(),
+                            "evidence": item.evidence,
                             "diff": item.diff,
                         }
                         for item in detail.revisions
@@ -1575,6 +1574,9 @@ def _register_v2_tools(
                             "workout_id": str(item.workout_id) if item.workout_id else None,
                             "locked": item.locked,
                             "locked_reason": item.locked_reason,
+                            "materialized_workout": (
+                                materialized.get(str(item.workout_id)) if item.workout_id else None
+                            ),
                         }
                         for item in detail.bindings
                     ],
@@ -1587,6 +1589,7 @@ def _register_v2_tools(
                             "eligibility_reason": item.eligibility_reason,
                             "confidence_cap": item.confidence_cap.value,
                             "evidence_hash": item.evidence_hash,
+                            "evidence": item.evidence_snapshot,
                             "decision": item.decision.value if item.decision else None,
                             "rationale": item.rationale,
                             "recommendation": item.recommendation,
@@ -1605,6 +1608,11 @@ def _register_v2_tools(
                             "importance": item.importance.value,
                             "text": item.text,
                             "affects_adaptation": item.affects_adaptation,
+                            "valid_from": item.valid_from.isoformat() if item.valid_from else None,
+                            "valid_until": item.valid_until.isoformat()
+                            if item.valid_until
+                            else None,
+                            "evidence_activity_refs": list(item.evidence_activity_refs),
                         }
                         for item in detail.notes
                     ],
@@ -1620,8 +1628,8 @@ def _register_v2_tools(
         name="review_training_plan",
         title="Review one plan week",
         description=(
-            "Create an immutable deterministic evidence snapshot for an ended or fully "
-            "resolved plan week. This tool does not change the plan."
+            "Return and persist an immutable deterministic evidence snapshot for an ended "
+            "or resolved plan week. This tool never changes the plan or chooses a decision."
         ),
         annotations=LOCAL_WRITE,
         structured_output=True,
@@ -1668,27 +1676,35 @@ def _register_v2_tools(
 
     @server.tool(
         name="propose_plan_revision",
-        title="Propose an adaptive plan revision",
-        description="Turn one eligible review into a validated, exact-hash revision proposal.",
+        title="Validate a coach-authored plan revision",
+        description=(
+            "Validate and stage a coach-authored adaptation or materialization revision. "
+            "This tool never chooses the adaptation decision or changes its prescription."
+        ),
         annotations=LOCAL_WRITE,
         structured_output=True,
     )
     async def propose_plan_revision(
         ctx: Context[Any, Any, Any],
         plan_id: UUID,
-        review_id: UUID,
         expected_revision: Annotated[int, Field(ge=1)],
-        decision: Literal[
-            "PROGRESS", "HOLD", "REGRESS", "RECOVERY", "RETEST", "RESCHEDULE", "PAUSE"
-        ],
-        rationale: Annotated[str, Field(min_length=1, max_length=2000)],
+        revision_definition: TrainingPlanRevisionDefinition,
     ) -> McpResultV2:
         args = {
             "plan_id": str(plan_id),
-            "review_id": str(review_id),
             "expected_revision": expected_revision,
-            "decision": decision,
-            "rationale": rationale,
+            "revision_definition": {
+                "schema_version": revision_definition.schema_version,
+                "kind": revision_definition.kind,
+                "review_id": revision_definition.review_id,
+                "decision": (
+                    revision_definition.decision.value
+                    if revision_definition.decision is not None
+                    else None
+                ),
+                "rationale": revision_definition.rationale,
+                "definition": revision_definition.definition.as_json(),
+            },
         }
 
         async def command(
@@ -1698,10 +1714,8 @@ def _register_v2_tools(
                 principal.user_id,
                 actor_id=principal.subject,
                 plan_id=EntityId(plan_id),
-                review_id=EntityId(review_id),
                 expected_revision=expected_revision,
-                decision=PlanDecision(decision),
-                rationale=rationale,
+                revision_definition=revision_definition,
                 correlation_id=correlation_id,
             )
             return McpResult(
@@ -1712,11 +1726,18 @@ def _register_v2_tools(
                     "proposal_id": str(result.proposal.id),
                     "action_hash": result.proposal.action_hash,
                     "expected_revision": expected_revision,
-                    "decision": decision,
+                    "decision": (
+                        revision_definition.decision.value
+                        if revision_definition.decision is not None
+                        else None
+                    ),
+                    "revision_kind": revision_definition.kind,
                     "diff": result.proposal.impact.get("diff"),
                     "expires_at": result.proposal.expires_at.isoformat(),
                 },
-                human_summary="Created a validated plan revision proposal; nothing was applied.",
+                human_summary=(
+                    "Validated and staged the exact coach-authored revision; nothing was applied."
+                ),
             )
 
         return _as_v2_result(
@@ -1727,8 +1748,9 @@ def _register_v2_tools(
         name="apply_plan_revision",
         title="Apply an approved plan revision",
         description=(
-            "Apply the exact proposed revision with optimistic concurrency and queue local "
-            "materialization. Garmin is never changed by this tool."
+            "Apply the exact proposed revision with optimistic concurrency, queue changed "
+            "DETAILED weeks, and locally unschedule explicitly removed future sessions. "
+            "Garmin is never changed by this tool."
         ),
         annotations=LOCAL_WRITE,
         structured_output=True,
@@ -1767,16 +1789,18 @@ def _register_v2_tools(
                     "status": result.plan.status.value,
                     "revision": result.revision.revision_number,
                     "content_hash": result.revision.content_hash,
-                    "materialization_job_id": (
-                        str(result.materialization_job_id)
-                        if result.materialization_job_id
-                        else None
-                    ),
+                    "materialization_job_ids": [
+                        str(item) for item in result.materialization_job_ids
+                    ],
+                    "superseded_session_ids": [str(item) for item in result.superseded_session_ids],
+                    "locally_unscheduled_workout_ids": [
+                        str(item) for item in result.locally_unscheduled_workout_ids
+                    ],
                     "garmin_changed": False,
                 },
                 human_summary=(
                     "Applied the plan revision and queued its detailed week locally."
-                    if result.materialization_job_id
+                    if result.materialization_job_ids
                     else "Applied the plan revision without a materializable week."
                 ),
             )
@@ -2163,44 +2187,45 @@ def _register_v2_tools(
         return _as_v2_result(await execute_write("delete_workout", ctx, scope, args, command))
 
     @server.tool(
-        name="generate_week",
-        title="Generate and save a swim week",
-        description="Generate a deterministic week and save its sessions to the local calendar.",
+        name="materialize_plan_week",
+        title="Materialize an approved plan week",
+        description=(
+            "Idempotently create local workouts from an already approved DETAILED plan week. "
+            "This tool never generates training content and never publishes to Garmin."
+        ),
         annotations=LOCAL_WRITE,
         structured_output=True,
     )
-    async def generate_week(
+    async def materialize_plan_week(
         ctx: Context[Any, Any, Any],
         plan_id: UUID,
+        expected_revision: Annotated[int, Field(ge=1)],
         week_number: Annotated[int, Field(ge=1, le=16)],
-        week_start: LocalDate,
     ) -> McpResultV2:
         args = {
             "plan_id": str(plan_id),
+            "expected_revision": expected_revision,
             "week_number": week_number,
-            "week_start": week_start.isoformat(),
         }
 
         async def command(
             principal: McpPrincipal, request_id: str, correlation_id: CorrelationId
         ) -> McpResult:
-            result = await coach_service.generate_week(
+            result = await coach_service.materialize_plan_week(
                 principal.user_id,
-                actor_id=principal.subject,
-                week_start=week_start,
-                preferences=PlanningPreferences(),
-                correlation_id=correlation_id,
                 plan_id=EntityId(plan_id),
+                expected_revision=expected_revision,
                 week_number=week_number,
+                correlation_id=correlation_id,
             )
             sessions = result.week.get("sessions", [])
             return McpResult(
                 request_id=request_id,
                 status="OK",
                 data={
-                    "planning_run_id": str(result.planning_run_id),
+                    "plan_revision_id": str(result.plan_revision_id),
                     "workout_ids": [str(item) for item in result.workout_ids],
-                    "week_start": week_start.isoformat(),
+                    "week_number": week_number,
                     "session_count": len(result.workout_ids),
                     "target_volume_m": result.week.get("target_distance_max_m"),
                     "sessions": sessions,
@@ -2210,7 +2235,9 @@ def _register_v2_tools(
                 human_summary=f"Saved {len(result.workout_ids)} workouts for the week.",
             )
 
-        return _as_v2_result(await execute_write("generate_week", ctx, scope, args, command))
+        return _as_v2_result(
+            await execute_write("materialize_plan_week", ctx, scope, args, command)
+        )
 
     @server.tool(
         name="sync_garmin",
@@ -2335,7 +2362,6 @@ def _apply_tool_security_schemes(server: SwimCoachFastMCP) -> None:
     scope_catalog = {
         **MCP_READ_TOOL_SCOPES,
         **MCP_WRITE_TOOL_SCOPES,
-        **MCP_PLANNING_TOOL_SCOPES,
         **MCP_UI_TOOL_SCOPES,
     }
     for name, tool in server._tool_manager._tools.items():
@@ -2383,7 +2409,7 @@ def _authorization_error_result(
     message: str,
     request_id: str,
     oauth_resource: str,
-    details: dict[str, str | int | bool] | None = None,
+    details: JsonObject | None = None,
     schema_version: _McpSchemaVersion,
 ) -> CallToolResult:
     """Return an MCP OAuth challenge while preserving a model-readable error envelope."""
@@ -2463,7 +2489,7 @@ def _error(
     code: str,
     message: str,
     request_id: str,
-    details: dict[str, str | int | bool] | None = None,
+    details: JsonObject | None = None,
     *,
     schema_version: _McpSchemaVersion = "2.0",
 ) -> str:

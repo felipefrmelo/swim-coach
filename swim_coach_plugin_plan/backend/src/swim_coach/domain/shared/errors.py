@@ -2,6 +2,8 @@
 
 from collections.abc import Mapping
 
+from swim_coach.domain.shared.types import JsonValue
+
 
 class DomainError(Exception):
     """Base error with a stable public code and sanitized details."""
@@ -11,7 +13,7 @@ class DomainError(Exception):
         code: str,
         message: str,
         *,
-        details: Mapping[str, str | int | bool] | None = None,
+        details: Mapping[str, JsonValue] | None = None,
     ) -> None:
         super().__init__(message)
         self.code = code
@@ -26,7 +28,7 @@ class DomainValidationError(DomainError):
         self,
         message: str,
         *,
-        details: Mapping[str, str | int | bool] | None = None,
+        details: Mapping[str, JsonValue] | None = None,
     ) -> None:
         super().__init__("VALIDATION_FAILED", message, details=details)
 

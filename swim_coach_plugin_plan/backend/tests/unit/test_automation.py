@@ -80,12 +80,7 @@ async def test_scheduler_is_timezone_aware_and_replay_safe() -> None:
     first = AutomationService(lambda: uow)
     replay = AutomationService(lambda: uow)
 
-    assert await first.tick(now) == 2
+    assert await first.tick(now) == 1
     assert await replay.tick(now) == 0
-    assert {job.job_type for job in jobs.items.values()} == {
-        "garmin.sync_activities",
-        "planning.generate_week",
-    }
-    planning = next(job for job in jobs.items.values() if job.job_type == "planning.generate_week")
-    assert planning.payload == {"week_start": "2026-08-17"}
+    assert {job.job_type for job in jobs.items.values()} == {"garmin.sync_activities"}
     assert jobs.purge_before == datetime(2026, 7, 17, 21, tzinfo=UTC)

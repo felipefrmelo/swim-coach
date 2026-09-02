@@ -11,7 +11,6 @@ from swim_coach.application.services.garmin_upsert import GarminUpsertService
 from swim_coach.application.services.identity import IdentityService
 from swim_coach.application.services.mcp_read import McpReadService
 from swim_coach.application.services.mcp_write import McpWriteService
-from swim_coach.application.services.planning import PlanningService
 from swim_coach.application.services.privacy import PrivacyService
 from swim_coach.application.services.sessions import SessionService
 from swim_coach.application.services.training_cycles import TrainingCycleService
@@ -30,7 +29,6 @@ __all__ = [
     "IdentityService",
     "McpReadService",
     "McpWriteService",
-    "PlanningService",
     "PrivacyService",
     "SessionService",
     "TrainingCycleService",

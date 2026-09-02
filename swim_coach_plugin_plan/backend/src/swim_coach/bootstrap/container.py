@@ -19,7 +19,6 @@ from swim_coach.application.services import (
     IdentityService,
     McpReadService,
     McpWriteService,
-    PlanningService,
     PrivacyService,
     SessionService,
     TrainingCycleService,
@@ -60,7 +59,6 @@ class AppServices:
     mcp_read: McpReadService
     mcp_write: McpWriteService | None
     coach_commands: CoachCommandService
-    planning: PlanningService | None
     training_cycles: TrainingCycleService | None
     automation: AutomationService | None
     artifact_storage: FilesystemObjectStorage
@@ -157,25 +155,20 @@ def build_services(settings: Settings, database: Database | None = None) -> AppS
         workouts=workouts,
         activity_data=activity_data,
     )
-    planning = PlanningService(uow_factory) if settings.planning_enabled else None
     training_cycles = (
         TrainingCycleService(
             uow_factory=uow_factory,
-            planning=planning,
             workouts=workouts,
         )
-        if planning is not None
+        if settings.planning_enabled
         else None
     )
     automation = (
         AutomationService(
             uow_factory,
             sync_hour=settings.automation_sync_hour,
-            planning_weekday=settings.automation_planning_weekday,
-            planning_hour=settings.automation_planning_hour,
             retention_days=settings.job_retention_days,
             sync_enabled=garmin_sync is not None,
-            planning_enabled=planning is not None,
         )
         if settings.automation_enabled
         else None
@@ -185,7 +178,6 @@ def build_services(settings: Settings, database: Database | None = None) -> AppS
         workouts=workouts,
         garmin_upsert=garmin_upsert,
         workout_deletion=workout_deletion,
-        planning=planning,
         training_cycles=training_cycles,
     )
     return AppServices(
@@ -204,7 +196,6 @@ def build_services(settings: Settings, database: Database | None = None) -> AppS
         workout_deletion=workout_deletion,
         activity_data=activity_data,
         mcp_read=mcp_read,
-        planning=planning,
         training_cycles=training_cycles,
         automation=automation,
         artifact_storage=artifact_storage,
@@ -216,7 +207,6 @@ def build_services(settings: Settings, database: Database | None = None) -> AppS
                 activity_data=activity_data,
                 garmin_sync=garmin_sync,
                 garmin_publish=garmin_publish,
-                planning=planning,
             )
             if settings.mcp_write_enabled
             else None

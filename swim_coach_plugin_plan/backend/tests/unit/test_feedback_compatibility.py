@@ -83,7 +83,6 @@ async def test_mcp_legacy_defaults_to_preserving_feeling_and_v2_opts_out() -> No
         activity_data=cast(ActivityDataService, activity_data),
         garmin_sync=None,
         garmin_publish=cast(GarminPublishService, object()),
-        planning=None,
     )
     principal = McpPrincipal(feedback.user_id, "fixture", frozenset({"feedback:write"}))
 

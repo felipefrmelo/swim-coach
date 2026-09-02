@@ -17,7 +17,6 @@ from swim_coach.application.services import (
     AutomationService,
     CoachCommandService,
     GarminSyncService,
-    PlanningService,
     PrivacyService,
     TrainingCycleService,
 )
@@ -32,7 +31,6 @@ from swim_coach.domain.actions import (
     ExternalWorkoutBindingStatus,
 )
 from swim_coach.domain.operations import Job, Notification
-from swim_coach.domain.planning import PlanningPreferences
 from swim_coach.domain.shared.errors import DomainError, ResourceNotFoundError
 from swim_coach.domain.shared.types import JsonObject
 from swim_coach.domain.shared.value_objects import CorrelationId, EntityId, UserId
@@ -54,7 +52,6 @@ class Worker:
     GARMIN_UPSERT_JOB_TYPE = "workout.upsert_garmin"
     WORKOUT_DELETE_JOB_TYPE = "workout.delete_everywhere"
     ACTIVITY_FETCH_FILE_JOB_TYPE = "activity.fetch_file"
-    PLANNING_JOB_TYPE = "planning.generate_week"
     PLAN_MATERIALIZE_JOB_TYPE = "planning.materialize_cycle_week"
     PRIVACY_DELETE_JOB_TYPE = "privacy.delete_user"
 
@@ -68,7 +65,6 @@ class Worker:
         activity_data: ActivityDataService | None = None,
         automation: AutomationService | None = None,
         coach_commands: CoachCommandService | None = None,
-        planning: PlanningService | None = None,
         training_cycles: TrainingCycleService | None = None,
         privacy: PrivacyService | None = None,
         database: Database | None = None,
@@ -82,7 +78,6 @@ class Worker:
         self._activity_data = activity_data
         self._automation = automation
         self._coach_commands = coach_commands
-        self._planning = planning
         self._training_cycles = training_cycles
         self._privacy = privacy
         self._database = database
@@ -107,8 +102,6 @@ class Worker:
             )
         if self._activity_data is not None:
             job_types.add(self.ACTIVITY_FETCH_FILE_JOB_TYPE)
-        if self._planning is not None:
-            job_types.add(self.PLANNING_JOB_TYPE)
         if self._training_cycles is not None:
             job_types.add(self.PLAN_MATERIALIZE_JOB_TYPE)
         if self._privacy is not None:
@@ -134,8 +127,6 @@ class Worker:
             return await self._run_workout_delete(job)
         if job.job_type == self.ACTIVITY_FETCH_FILE_JOB_TYPE:
             return await self._run_activity_fetch_file(job)
-        if job.job_type == self.PLANNING_JOB_TYPE:
-            return await self._run_planning(job)
         if job.job_type == self.PLAN_MATERIALIZE_JOB_TYPE:
             return await self._run_plan_materialization(job)
         if job.job_type == self.PRIVACY_DELETE_JOB_TYPE:
@@ -198,64 +189,6 @@ class Worker:
         if self._uow_factory is None:
             return False
         async with self._uow_factory() as uow:
-            finished = await uow.jobs.mark_succeeded(job.id, self._worker_id, datetime.now(UTC))
-            await uow.commit()
-        return finished
-
-    async def _run_planning(self, job: Job) -> bool:
-        if self._uow_factory is None or self._planning is None or job.user_id is None:
-            return await self._finish_failure(job, "PLANNING_JOB_INVALID", retryable=False)
-        raw_week_start = job.payload.get("week_start")
-        try:
-            week_start = (
-                date.fromisoformat(raw_week_start) if isinstance(raw_week_start, str) else None
-            )
-        except ValueError:
-            week_start = None
-        if week_start is None:
-            return await self._finish_failure(job, "PLANNING_JOB_INVALID", retryable=False)
-        try:
-            if self._coach_commands is not None:
-                generated = await self._coach_commands.generate_week(
-                    job.user_id,
-                    actor_id="automation:p13",
-                    week_start=week_start,
-                    preferences=PlanningPreferences(),
-                    correlation_id=CorrelationId.new(),
-                )
-                notification_type = "WEEK_READY"
-                dedupe_key = f"planning-ready:{generated.planning_run_id}"
-                title = "Sua próxima semana foi salva"
-                body = f"{len(generated.workout_ids)} treinos estão no calendário."
-                link = "/calendar"
-            else:
-                _run, proposal, _replayed = await self._planning.propose_week(
-                    job.user_id,
-                    actor_id="automation:p11",
-                    week_start=week_start,
-                    preferences=PlanningPreferences(),
-                    user_notes_present=False,
-                    correlation_id=CorrelationId.new(),
-                )
-                notification_type = "WEEK_PROPOSAL_READY"
-                dedupe_key = f"planning-ready:{proposal.id}"
-                title = "Sua próxima semana está pronta para revisão"
-                body = "A proposta é apenas um rascunho: revise antes de aprovar qualquer treino."
-                link = f"/actions/{proposal.id}"
-        except DomainError as exc:
-            return await self._finish_failure(job, exc.code, retryable=False)
-        async with self._uow_factory() as uow:
-            await uow.notifications.add_idempotent(
-                Notification(
-                    id=EntityId.new(),
-                    user_id=job.user_id,
-                    notification_type=notification_type,
-                    dedupe_key=dedupe_key,
-                    title=title,
-                    body=body,
-                    link=link,
-                )
-            )
             finished = await uow.jobs.mark_succeeded(job.id, self._worker_id, datetime.now(UTC))
             await uow.commit()
         return finished
@@ -1063,7 +996,6 @@ async def run_worker() -> None:
             activity_data=services.activity_data,
             automation=services.automation,
             coach_commands=services.coach_commands,
-            planning=services.planning,
             training_cycles=services.training_cycles,
             privacy=services.privacy,
             database=database,

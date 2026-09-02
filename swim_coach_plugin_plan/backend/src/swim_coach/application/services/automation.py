@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from swim_coach.application.ports.repositories import UnitOfWorkFactory
@@ -15,26 +15,19 @@ class AutomationService:
     """Materialize periodic jobs with stable keys for direct personal workflows."""
 
     SYNC_JOB_TYPE = "garmin.sync_activities"
-    PLAN_JOB_TYPE = "planning.generate_week"
 
     def __init__(
         self,
         uow_factory: UnitOfWorkFactory,
         *,
         sync_hour: int = 6,
-        planning_weekday: int = 6,
-        planning_hour: int = 18,
         retention_days: int = 30,
         sync_enabled: bool = True,
-        planning_enabled: bool = True,
     ) -> None:
         self._uow_factory = uow_factory
         self._sync_hour = sync_hour
-        self._planning_weekday = planning_weekday
-        self._planning_hour = planning_hour
         self._retention_days = retention_days
         self._sync_enabled = sync_enabled
-        self._planning_enabled = planning_enabled
         self._last_tick: datetime | None = None
 
     async def tick(self, now: datetime | None = None) -> int:
@@ -120,28 +113,6 @@ class AutomationService:
                     )
                     persisted_notification = await uow.notifications.add_idempotent(notification)
                     created += int(persisted_notification.id == notification.id)
-                if (
-                    local_now.weekday() == self._planning_weekday
-                    and self._planning_enabled
-                    and local_now.hour >= self._planning_hour
-                ):
-                    week_start = self._next_monday(local_now.date())
-                    key = f"automation:plan:{user.id}:{week_start.isoformat()}"
-                    job = Job(
-                        id=EntityId.new(),
-                        user_id=user.id,
-                        job_type=self.PLAN_JOB_TYPE,
-                        payload={"week_start": week_start.isoformat()},
-                        idempotency_key=key,
-                        max_attempts=3,
-                    )
-                    persisted = await uow.jobs.add_idempotent(job)
-                    created += int(persisted.id == job.id)
             await uow.jobs.purge_finished(now - timedelta(days=self._retention_days))
             await uow.commit()
         return created
-
-    @staticmethod
-    def _next_monday(day: date) -> date:
-        days = (7 - day.weekday()) % 7
-        return day + timedelta(days=days or 7)

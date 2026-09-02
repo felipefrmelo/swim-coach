@@ -118,6 +118,23 @@ async def test_migration_up_down_up_and_constraints(
                     "session_feedback"
                 )
             )
+            plan_columns = await connection.run_sync(
+                lambda sync_connection: {
+                    column["name"]
+                    for column in inspect(sync_connection).get_columns("training_plan")
+                }
+            )
+            plan_revision_columns = await connection.run_sync(
+                lambda sync_connection: {
+                    column["name"]
+                    for column in inspect(sync_connection).get_columns("training_plan_revision")
+                }
+            )
+            plan_revision_constraints = await connection.run_sync(
+                lambda sync_connection: inspect(sync_connection).get_check_constraints(
+                    "training_plan_revision"
+                )
+            )
             revision = (
                 await connection.exec_driver_sql("SELECT version_num FROM alembic_version")
             ).scalar_one()
@@ -136,7 +153,7 @@ async def test_migration_up_down_up_and_constraints(
     finally:
         await database.dispose()
 
-        assert revision == "000014"
+        assert revision == "000015"
     assert immutable_trigger == 1
     assert plan_immutable_trigger == 1
     assert {item["name"] for item in constraints} >= {
@@ -155,6 +172,12 @@ async def test_migration_up_down_up_and_constraints(
     assert {item["name"] for item in feedback_constraints} >= {
         "ck_session_feedback_rpe",
         "ck_session_feedback_feeling_score",
+    }
+    assert "prescription_source" in plan_columns
+    assert {"revision_kind", "decision"} <= plan_revision_columns
+    assert {item["name"] for item in plan_revision_constraints} >= {
+        "ck_training_plan_revision_kind",
+        "ck_training_plan_revision_decision",
     }
 
 
@@ -358,7 +381,7 @@ async def test_canonical_v2_downgrade_refuses_to_destroy_persisted_facts(
             )
         with pytest.raises(DBAPIError, match="000013 downgrade is unsafe"):
             await asyncio.to_thread(command.downgrade, config, "000012")
-        assert await database.revision() == "000014"
+        assert await database.revision() == "000015"
         async with database.engine.begin() as connection:
             await connection.execute(
                 text(
@@ -384,7 +407,7 @@ async def test_canonical_v2_downgrade_refuses_to_destroy_persisted_facts(
             )
         with pytest.raises(DBAPIError, match="000013 downgrade is unsafe"):
             await asyncio.to_thread(command.downgrade, config, "000012")
-        assert await database.revision() == "000014"
+        assert await database.revision() == "000015"
         async with database.engine.begin() as connection:
             await connection.execute(
                 text("DELETE FROM session_feedback WHERE id=:id"), {"id": feedback_id}
@@ -394,7 +417,7 @@ async def test_canonical_v2_downgrade_refuses_to_destroy_persisted_facts(
 
         # Alembic rolls the multi-revision downgrade back atomically when the
         # canonical-v2 guard rejects the following step.
-        assert await database.revision() == "000014"
+        assert await database.revision() == "000015"
         async with database.engine.connect() as connection:
             stored = (
                 await connection.execute(

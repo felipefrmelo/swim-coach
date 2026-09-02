@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://swim-coach.local/schemas/training-plan-revision-definition-1.0.json",
+  "title": "Coach-authored training plan revision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "rationale", "definition"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "kind": {"type": "string", "enum": ["ADAPTATION", "MATERIALIZATION"]},
+    "review_id": {"type": ["string", "null"], "format": "uuid"},
+    "decision": {"type": ["string", "null"], "enum": ["PROGRESS", "HOLD", "REGRESS", "RECOVERY", "RETEST", "RESCHEDULE", "PAUSE", null]},
+    "rationale": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "definition": {"$ref": "./training-plan-definition.schema.json"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"kind": {"const": "ADAPTATION"}}},
+      "then": {"required": ["review_id", "decision"]},
+      "else": {
+        "properties": {
+          "review_id": {"type": "null"},
+          "decision": {"type": "null"}
+        }
+      }
+    }
+  ]
+}

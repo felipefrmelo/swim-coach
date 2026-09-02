@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://swim-coach.local/schemas/training-plan-definition-2.0.json",
+  "title": "Coach-authored training plan definition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "goal_id", "title", "start_date", "duration_weeks", "prescription_source", "strategy_summary", "weeks"],
+  "properties": {
+    "schema_version": {"const": "2.0"},
+    "goal_id": {"type": "string", "format": "uuid"},
+    "title": {"type": "string", "minLength": 1, "maxLength": 160},
+    "start_date": {"type": "string", "format": "date"},
+    "timezone": {"type": ["string", "null"], "minLength": 1, "maxLength": 100},
+    "prescription_source": {"const": "COACH_DEFINED"},
+    "strategy_summary": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "review_frequency": {"type": ["string", "null"], "maxLength": 120},
+    "duration_weeks": {"type": "integer", "minimum": 4, "maximum": 16},
+    "baseline_snapshot": {"type": "object", "maxProperties": 0, "default": {}, "deprecated": true, "description": "Legacy compatibility field. Measured evidence is returned separately by coach context and reviews."},
+    "baseline_confidence": {"const": "LOW", "default": "LOW", "deprecated": true, "description": "Legacy compatibility field; new coach-defined plan intent does not embed evidence confidence."},
+    "phases": {"type": "array", "items": {"$ref": "#/$defs/phase"}, "default": []},
+    "weeks": {"type": "array", "minItems": 4, "maxItems": 16, "items": {"$ref": "#/$defs/week"}}
+  },
+  "$defs": {
+    "phase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "start_week", "end_week", "focus"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 120},
+        "start_week": {"type": "integer", "minimum": 1, "maximum": 52},
+        "end_week": {"type": "integer", "minimum": 1, "maximum": 52},
+        "focus": {"type": "string", "minLength": 1, "maxLength": 500},
+        "objectives": {"type": "array", "items": {"type": "string"}, "default": []},
+        "success_criteria": {"type": "array", "items": {"type": "string"}, "default": []}
+      }
+    },
+    "session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["session_number", "purpose"],
+      "properties": {
+        "session_intent_id": {"type": ["string", "null"], "format": "uuid"},
+        "session_number": {"type": "integer", "minimum": 1, "maximum": 14},
+        "purpose": {"type": "string", "enum": ["TECHNIQUE", "BASE", "ENDURANCE", "THRESHOLD", "SPEED", "RECOVERY", "TEST", "MIXED"]},
+        "objective": {"type": ["string", "null"], "maxLength": 1000},
+        "coach_rationale": {"type": ["string", "null"], "maxLength": 2000},
+        "coach_notes": {"type": ["string", "null"], "maxLength": 2000},
+        "target_distance_m": {"type": ["integer", "null"], "minimum": 1, "maximum": 50000},
+        "planned_duration_minutes": {"type": ["integer", "null"], "minimum": 1, "maximum": 240},
+        "max_duration_minutes": {"type": "null"},
+        "intensity": {"type": ["string", "null"], "maxLength": 80},
+        "scheduled_date": {"type": ["string", "null"], "format": "date"},
+        "scheduled_start_time": {"type": ["string", "null"], "format": "time"},
+        "pool_id": {"type": ["string", "null"], "format": "uuid", "description": "Required for every DETAILED session; never selected by the backend."},
+        "key_set": {"type": ["string", "null"], "maxLength": 1000},
+        "workout": {"description": "A complete CanonicalWorkout is required only for DETAILED weeks and forbidden for OUTLINE or STRATEGIC weeks.", "anyOf": [{"$ref": "./canonical-workout.schema.json"}, {"type": "null"}]}
+      }
+    },
+    "week": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["week_number", "focus", "detail_level"],
+      "properties": {
+        "week_number": {"type": "integer", "minimum": 1, "maximum": 52},
+        "focus": {"type": "string", "minLength": 1, "maxLength": 500},
+        "detail_level": {"type": "string", "enum": ["DETAILED", "OUTLINE", "STRATEGIC"]},
+        "coach_rationale": {"type": ["string", "null"], "maxLength": 2000},
+        "target_distance_min_m": {"type": ["integer", "null"], "minimum": 0, "maximum": 100000},
+        "target_distance_max_m": {"type": ["integer", "null"], "minimum": 0, "maximum": 100000},
+        "target_duration_min_minutes": {"type": ["integer", "null"], "minimum": 0, "maximum": 10000},
+        "target_duration_max_minutes": {"type": ["integer", "null"], "minimum": 0, "maximum": 10000},
+        "session_count": {"type": ["integer", "null"], "minimum": 0, "maximum": 14},
+        "load_target": {"type": ["string", "null"], "maxLength": 120},
+        "success_criteria": {"type": "array", "items": {"type": "string"}, "default": []},
+        "sessions": {"type": "array", "items": {"$ref": "#/$defs/session"}, "default": []}
+      }
+    }
+  }
+}

@@ -317,10 +317,10 @@ are excluded from the sanitized projection.
 - Session evaluation resolves each field independently: manual override first, then Garmin FIT,
   then unavailable. sRPE uses the effective RPE and canonical timer duration, records both the
   duration basis and RPE source, and treats Garmin feeling as a separate contextual signal.
-  Weekly planning applies a separate Swim Coach ruleset choice: an effective feeling score at
-  or below `25/100` from the seven days before the planned week adds a conservative recovery
-  signal. This threshold and lookback are product policy, not Garmin/FIT semantics or a clinical
-  interpretation; older low-feeling observations do not repeatedly force recovery weeks.
+  The retired P10 weekly generator used a separate threshold at `25/100`; it is retained only
+  for historical replay. Current plan reviews report feeling and provenance as evidence without
+  choosing recovery, progression, hold, regression, or retest. Those decisions belong to the
+  ChatGPT coach and must be submitted explicitly in a validated revision definition.
 - When ordered alignment matches a planned `REST` to a normalized `UNKNOWN` interval with zero
   distance, the analysis overlay may contextualize its timer duration as rest and emits
   `REST_CLASSIFIED_FROM_PLANNED_WORKOUT`. The stored normalized interval remains `UNKNOWN`.

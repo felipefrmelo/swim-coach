@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 
 import pytest
 
@@ -13,6 +13,7 @@ from swim_coach.domain.planning import (
     PlanSessionIntent,
     PlanStatus,
     PlanWeek,
+    PrescriptionSource,
     TrainingPlan,
     TrainingPlanDocument,
     TrainingPlanRevision,
@@ -62,11 +63,12 @@ def document(*, session_id: EntityId | None = None) -> TrainingPlanDocument:
                 PlanSessionIntent(
                     session_intent_id=str(selected_id),
                     session_number=1,
-                    purpose="technique",
+                    purpose="TECHNIQUE",
                     target_distance_m=800,
-                    max_duration_minutes=45,
+                    planned_duration_minutes=45,
                     intensity="EASY",
                     scheduled_date=date(2026, 9, 7),
+                    scheduled_start_time=time(7),
                     key_set="8 x 100 m",
                     workout=workout(),
                 ),
@@ -88,10 +90,14 @@ def document(*, session_id: EntityId | None = None) -> TrainingPlanDocument:
         for number in range(2, 5)
     )
     return TrainingPlanDocument(
+        schema_version="2.0",
+        goal_id=str(EntityId.new()),
+        title="Ciclo 2 km",
+        start_date=date(2026, 9, 7),
+        timezone="America/Sao_Paulo",
+        prescription_source=PrescriptionSource.COACH_DEFINED,
         strategy_summary="Construir endurance sem prometer a meta ao fim do ciclo.",
         duration_weeks=4,
-        baseline_snapshot={"longest_continuous_m": 120},
-        baseline_confidence=EvidenceConfidence.LOW,
         phases=(
             PlanPhase(
                 name="Base",
@@ -107,8 +113,6 @@ def document(*, session_id: EntityId | None = None) -> TrainingPlanDocument:
             ),
         ),
         weeks=tuple(weeks),
-        ruleset_version="1.1.0",
-        ruleset_hash="a" * 64,
     )
 
 
@@ -205,3 +209,48 @@ def test_review_records_one_explicit_recommendation() -> None:
             recommendation={},
             proposal_id=EntityId.new(),
         )
+
+
+def test_legacy_ruleset_plan_remains_readable_with_its_original_hash() -> None:
+    ruleset_hash = "a" * 64
+    old_document = {
+        "schema_version": "1.0",
+        "strategy_summary": "Legacy deterministic cycle",
+        "duration_weeks": 4,
+        "baseline_snapshot": {},
+        "baseline_confidence": "LOW",
+        "phases": [],
+        "weeks": [
+            {
+                "week_number": number,
+                "focus": "Legacy focus",
+                "detail_level": "STRATEGIC",
+                "target_distance_min_m": None,
+                "target_distance_max_m": None,
+                "target_duration_min_minutes": None,
+                "target_duration_max_minutes": None,
+                "session_count": 0,
+                "load_target": None,
+                "success_criteria": [],
+                "sessions": [],
+            }
+            for number in range(1, 5)
+        ],
+        "ruleset_version": "1.0.0",
+        "ruleset_hash": ruleset_hash,
+    }
+    stored_hash = canonical_json_hash(old_document)
+
+    parsed = TrainingPlanDocument.model_validate(old_document)
+
+    assert parsed.prescription_source is PrescriptionSource.LEGACY_RULESET
+    assert parsed.content_hash == stored_hash
+    assert parsed.as_json()["ruleset_version"] == "1.0.0"
+
+
+def test_new_plan_serialization_contains_no_generation_ruleset_metadata() -> None:
+    serialized = document().as_json()
+
+    assert serialized["prescription_source"] == "COACH_DEFINED"
+    assert "ruleset_version" not in serialized
+    assert "ruleset_hash" not in serialized

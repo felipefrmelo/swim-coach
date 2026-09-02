@@ -37,8 +37,6 @@ class Settings(BaseSettings):
     planning_enabled: bool = False
     automation_enabled: bool = False
     automation_sync_hour: int = Field(default=6, ge=0, le=23)
-    automation_planning_weekday: int = Field(default=6, ge=0, le=6)
-    automation_planning_hour: int = Field(default=18, ge=0, le=23)
     job_retention_days: int = Field(default=30, ge=7, le=365)
     api_read_rate_limit_per_minute: int = Field(default=120, ge=1, le=10_000)
     api_write_rate_limit_per_minute: int = Field(default=30, ge=1, le=1_000)

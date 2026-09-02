@@ -267,7 +267,11 @@ def generate_week(
     ruleset: TrainingRuleSet,
     preferences: PlanningPreferences,
 ) -> GeneratedWeek:
-    """Generate the same safe week for the same context, ruleset and preferences."""
+    """Generate a legacy P10 week for historical replay tests only.
+
+    This function is not reachable through the application runtime and must not be used for
+    new plan creation or revision.
+    """
 
     if not context.availability:
         raise DomainError("AVAILABILITY_REQUIRED", "Configure availability for the target week.")

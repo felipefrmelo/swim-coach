@@ -18,8 +18,8 @@ from swim_coach.domain.planning import (
     RecentWeekSnapshot,
     TrainingRuleSet,
     canonical_json_hash,
-    generate_week,
 )
+from swim_coach.domain.planning.entities import generate_week
 from swim_coach.domain.shared.value_objects import EntityId
 
 

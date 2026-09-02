@@ -1473,6 +1473,7 @@ class TrainingPlanModel(Base):
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
     duration_weeks: Mapped[int] = mapped_column(Integer, nullable=False)
+    prescription_source: Mapped[str] = mapped_column(String(30), nullable=False)
     adaptation_mode: Mapped[str] = mapped_column(String(30), nullable=False)
     current_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     current_revision_id: Mapped[UUID | None] = mapped_column(
@@ -1499,6 +1500,10 @@ class TrainingPlanModel(Base):
         CheckConstraint(
             "adaptation_mode = 'MANUAL_APPROVAL'", name="ck_training_plan_adaptation_mode"
         ),
+        CheckConstraint(
+            "prescription_source IN ('COACH_DEFINED','LEGACY_RULESET')",
+            name="ck_training_plan_prescription_source",
+        ),
         Index("ix_training_plan_user_status", "user_id", "status"),
         Index(
             "uq_training_plan_one_live_per_user",
@@ -1523,6 +1528,8 @@ class TrainingPlanRevisionModel(Base):
     document_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     reason: Mapped[str] = mapped_column(String(1000), nullable=False)
+    revision_kind: Mapped[str] = mapped_column(String(30), nullable=False)
+    decision: Mapped[str | None] = mapped_column(String(20))
     effective_from: Mapped[date | None] = mapped_column(Date)
     evidence_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     diff_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
@@ -1534,8 +1541,17 @@ class TrainingPlanRevisionModel(Base):
 
     __table_args__ = (
         UniqueConstraint("plan_id", "revision_number", name="uq_training_plan_revision_number"),
-        UniqueConstraint("plan_id", "content_hash", name="uq_training_plan_revision_hash"),
         CheckConstraint("revision_number >= 1", name="ck_training_plan_revision_number"),
+        CheckConstraint(
+            "revision_kind IN ('CREATION','ADAPTATION','MATERIALIZATION','LEGACY')",
+            name="ck_training_plan_revision_kind",
+        ),
+        CheckConstraint(
+            "decision IS NULL OR decision IN "
+            "('PROGRESS','HOLD','REGRESS','RECOVERY','RETEST','RESCHEDULE','PAUSE')",
+            name="ck_training_plan_revision_decision",
+        ),
+        Index("ix_training_plan_revision_content_hash", "plan_id", "content_hash"),
         Index("ix_training_plan_revision_plan_created", "plan_id", "created_at"),
     )
 

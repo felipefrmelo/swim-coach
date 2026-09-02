@@ -261,10 +261,10 @@ without a local FIT are left unchanged and are listed as `skipped=FIT_FILE_UNAVA
   existing RPE or feeling override clears that override, and an empty replacement removes the
   manual feedback row and returns `null`. An empty write with nothing to clear is rejected. V1
   retains its required integer RPE contract.
-- Planning ruleset `1.1.0` carries effective RPE and feeling with their source. A feeling score
-  at or below the Swim Coach threshold of `25/100` from the preceding seven days is a
-  conservative recovery signal; that threshold is a versioned product rule, not a Garmin label
-  or a clinical interpretation.
+- The retired P10 planning ruleset `1.1.0` is retained only for historical replay. New training
+  plans expose effective RPE, feeling and provenance as deterministic evidence; ChatGPT decides
+  whether and how those facts affect a coach-authored prescription. No threshold automatically
+  creates a recovery session or week.
 - After FIT promotion, v2 `durations.moving_s` is populated exclusively from FIT
   `session.total_moving_time`. It is null for this activity because that FIT field is absent;
   the private Connect raw-summary `movingDuration=1699.541` remains retained for debugging and

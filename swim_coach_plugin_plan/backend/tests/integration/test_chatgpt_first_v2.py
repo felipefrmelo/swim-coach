@@ -22,7 +22,9 @@ from swim_coach.infrastructure.db.models import (
     ExternalWorkoutBindingModel,
     JobModel,
     PlanReviewModel,
+    PlanSessionBindingModel,
     TrainingPlanRevisionModel,
+    WorkoutScheduleModel,
 )
 from swim_coach.infrastructure.garmin import FakeGarminWorkoutProvider
 from swim_coach.interfaces.mcp.server import create_mcp_server
@@ -30,6 +32,99 @@ from swim_coach.interfaces.worker.main import Worker
 from swim_coach.settings import Settings
 
 from .test_workout_authoring import canonical_workout
+
+
+def plan_workout(distance_m: int, purpose: str) -> dict[str, object]:
+    return {
+        "schema_version": "1.0",
+        "title": f"{purpose.title()} {distance_m} m",
+        "sport": "POOL_SWIMMING",
+        "pool_length_m": 20,
+        "purpose": purpose,
+        "tags": ["coach-defined"],
+        "nodes": [
+            {
+                "type": "step",
+                "step_role": "WORK",
+                "end_condition": {"type": "distance", "meters": distance_m},
+                "target": {
+                    "type": "pace_range",
+                    "min_seconds_per_100m": 130,
+                    "max_seconds_per_100m": 140,
+                },
+                "stroke": {"type": "freestyle"},
+                "equipment": [],
+            }
+        ],
+    }
+
+
+def coach_plan_definition(
+    *, goal_id: EntityId, start_date: date, pool_id: EntityId
+) -> dict[str, object]:
+    weeks: list[dict[str, object]] = [
+        {
+            "week_number": 1,
+            "focus": "Technique and endurance",
+            "detail_level": "DETAILED",
+            "coach_rationale": "Establish two explicit coach-authored sessions.",
+            "session_count": 2,
+            "load_target": "BUILD",
+            "sessions": [
+                {
+                    "session_number": 1,
+                    "purpose": "TECHNIQUE",
+                    "objective": "Technique over 1,000 m.",
+                    "coach_rationale": "Practice stable form.",
+                    "target_distance_m": 1_000,
+                    "planned_duration_minutes": 45,
+                    "intensity": "MODERATE",
+                    "scheduled_date": (start_date + timedelta(days=1)).isoformat(),
+                    "scheduled_start_time": "06:15",
+                    "pool_id": str(pool_id),
+                    "key_set": "Coach-authored 1,000 m technique session",
+                    "workout": plan_workout(1_000, "TECHNIQUE"),
+                },
+                {
+                    "session_number": 2,
+                    "purpose": "ENDURANCE",
+                    "objective": "Endurance over 1,100 m.",
+                    "coach_rationale": "Practice aerobic continuity.",
+                    "target_distance_m": 1_100,
+                    "planned_duration_minutes": 45,
+                    "intensity": "MODERATE",
+                    "scheduled_date": (start_date + timedelta(days=3)).isoformat(),
+                    "scheduled_start_time": "06:15",
+                    "pool_id": str(pool_id),
+                    "key_set": "Coach-authored 1,100 m endurance session",
+                    "workout": plan_workout(1_100, "ENDURANCE"),
+                },
+            ],
+        }
+    ]
+    weeks.extend(
+        {
+            "week_number": number,
+            "focus": "Coach-defined strategic horizon",
+            "detail_level": "STRATEGIC",
+            "coach_rationale": "The coach will author details in a future revision.",
+            "sessions": [],
+        }
+        for number in range(2, 9)
+    )
+    return {
+        "schema_version": "2.0",
+        "goal_id": str(goal_id),
+        "title": "2,000 m in 45 minutes · 8 weeks",
+        "start_date": start_date.isoformat(),
+        "timezone": "America/Sao_Paulo",
+        "prescription_source": "COACH_DEFINED",
+        "strategy_summary": "Coach-authored eight-week strategy.",
+        "review_frequency": "WEEKLY",
+        "duration_weeks": 8,
+        "phases": [],
+        "weeks": weeks,
+    }
 
 
 class CoachTokenVerifier:
@@ -71,8 +166,8 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
     await services.context.replace_availability(
         owner.id,
         [
-            AvailabilityInput(0, time(7), time(8), 60, pools[0].id),
-            AvailabilityInput(2, time(7), time(8), 60, pools[0].id),
+            AvailabilityInput(1, time(6, 15), time(7), 45, pools[0].id),
+            AvailabilityInput(3, time(6, 15), time(7), 45, pools[0].id),
         ],
         correlation_id=CorrelationId.new(),
     )
@@ -89,6 +184,8 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
     transport = httpx.ASGITransport(app=app)
     target_date = date.today() + timedelta(days=2)
     next_monday = target_date + timedelta(days=(7 - target_date.weekday()) % 7)
+    goals = await services.context.list_goals(owner.id)
+    active_goal = next(item for item in goals if item.status.value == "active")
     async with app.router.lifespan_context(app):
         async with httpx.AsyncClient(
             transport=transport,
@@ -118,7 +215,7 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
                         "save_workout",
                         "publish_workout",
                         "delete_workout",
-                        "generate_week",
+                        "materialize_plan_week",
                         "sync_garmin",
                         "save_feedback",
                     ]
@@ -158,12 +255,43 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
                     proposed_plan = await session.call_tool(
                         "propose_training_plan",
                         {
-                            "start_date": next_monday.isoformat(),
-                            "duration_weeks": 8,
+                            "definition": coach_plan_definition(
+                                goal_id=active_goal.id,
+                                start_date=next_monday,
+                                pool_id=pools[0].id,
+                            ),
                         },
                     )
                     assert proposed_plan.structuredContent is not None
                     plan_data = proposed_plan.structuredContent["data"]
+                    proposed_sessions = plan_data["plan"]["weeks"][0]["sessions"]
+                    assert len(proposed_sessions) == 2
+                    assert [item["scheduled_date"] for item in proposed_sessions] == [
+                        (next_monday + timedelta(days=1)).isoformat(),
+                        (next_monday + timedelta(days=3)).isoformat(),
+                    ]
+                    assert [item["target_distance_m"] for item in proposed_sessions] == [
+                        1_000,
+                        1_100,
+                    ]
+                    stale_apply = await session.call_tool(
+                        "apply_plan_revision",
+                        {
+                            "plan_id": plan_data["plan_id"],
+                            "proposal_id": plan_data["proposal_id"],
+                            "expected_revision": 1,
+                            "approval_hash": plan_data["action_hash"],
+                        },
+                    )
+                    tampered_apply = await session.call_tool(
+                        "apply_plan_revision",
+                        {
+                            "plan_id": plan_data["plan_id"],
+                            "proposal_id": plan_data["proposal_id"],
+                            "expected_revision": 0,
+                            "approval_hash": "0" * 64,
+                        },
+                    )
                     applied_plan = await session.call_tool(
                         "apply_plan_revision",
                         {
@@ -174,19 +302,19 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
                         },
                     )
                     generated = await session.call_tool(
-                        "generate_week",
+                        "materialize_plan_week",
                         {
                             "plan_id": plan_data["plan_id"],
+                            "expected_revision": 1,
                             "week_number": 1,
-                            "week_start": next_monday.isoformat(),
                         },
                     )
                     generated_replay = await session.call_tool(
-                        "generate_week",
+                        "materialize_plan_week",
                         {
                             "plan_id": plan_data["plan_id"],
+                            "expected_revision": 1,
                             "week_number": 1,
-                            "week_start": next_monday.isoformat(),
                         },
                     )
                     added_note = await session.call_tool(
@@ -218,15 +346,99 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
                         {"plan_id": plan_data["plan_id"], "week_number": 1},
                     )
                     assert plan_review.structuredContent is not None
-                    review_data = plan_review.structuredContent["data"]
+                    detailed_week_two = {
+                        **plan_data["plan"]["weeks"][1],
+                        "detail_level": "DETAILED",
+                        "session_count": 1,
+                        "sessions": [
+                            {
+                                "session_number": 1,
+                                "purpose": "ENDURANCE",
+                                "objective": "Materialize the coach-authored second week.",
+                                "coach_rationale": "Explicit rolling-horizon detail.",
+                                "target_distance_m": 800,
+                                "planned_duration_minutes": 45,
+                                "intensity": "MODERATE",
+                                "scheduled_date": (next_monday + timedelta(days=8)).isoformat(),
+                                "scheduled_start_time": "06:15",
+                                "pool_id": str(pools[0].id),
+                                "key_set": "Coach-authored 800 m endurance session",
+                                "workout": plan_workout(800, "ENDURANCE"),
+                            }
+                        ],
+                    }
+                    materialized_definition = {
+                        **plan_data["plan"],
+                        "weeks": [
+                            plan_data["plan"]["weeks"][0],
+                            detailed_week_two,
+                            *plan_data["plan"]["weeks"][2:],
+                        ],
+                    }
+                    materialization_proposal = await session.call_tool(
+                        "propose_plan_revision",
+                        {
+                            "plan_id": plan_data["plan_id"],
+                            "expected_revision": 1,
+                            "revision_definition": {
+                                "schema_version": "1.0",
+                                "kind": "MATERIALIZATION",
+                                "rationale": "Detail week two exactly as prescribed.",
+                                "definition": materialized_definition,
+                            },
+                        },
+                    )
+                    assert materialization_proposal.structuredContent is not None
+                    materialization_data = materialization_proposal.structuredContent["data"]
+                    applied_materialization = await session.call_tool(
+                        "apply_plan_revision",
+                        {
+                            "plan_id": plan_data["plan_id"],
+                            "proposal_id": materialization_data["proposal_id"],
+                            "expected_revision": 1,
+                            "approval_hash": materialization_data["action_hash"],
+                        },
+                    )
+                    generated_week_two = await session.call_tool(
+                        "materialize_plan_week",
+                        {
+                            "plan_id": plan_data["plan_id"],
+                            "expected_revision": 2,
+                            "week_number": 2,
+                        },
+                    )
+                    review_after_materialization = await session.call_tool(
+                        "review_training_plan",
+                        {"plan_id": plan_data["plan_id"], "week_number": 1},
+                    )
+                    assert review_after_materialization.structuredContent is not None
+                    review_data = review_after_materialization.structuredContent["data"]
                     revision_proposal = await session.call_tool(
                         "propose_plan_revision",
                         {
                             "plan_id": plan_data["plan_id"],
-                            "review_id": review_data["review_id"],
-                            "expected_revision": 1,
-                            "decision": "HOLD",
-                            "rationale": "Consolidar após duas sessões ignoradas.",
+                            "expected_revision": 2,
+                            "revision_definition": {
+                                "schema_version": "1.0",
+                                "kind": "ADAPTATION",
+                                "review_id": review_data["review_id"],
+                                "decision": "HOLD",
+                                "rationale": "Consolidar após duas sessões ignoradas.",
+                                "definition": {
+                                    **materialized_definition,
+                                    "weeks": [
+                                        materialized_definition["weeks"][0],
+                                        {
+                                            **materialized_definition["weeks"][1],
+                                            "focus": "Coach explicitly holds the strategy",
+                                            "detail_level": "STRATEGIC",
+                                            "session_count": 0,
+                                            "sessions": [],
+                                        },
+                                        *materialized_definition["weeks"][2:],
+                                    ],
+                                },
+                            },
                         },
                     )
                     assert revision_proposal.structuredContent is not None
@@ -236,9 +448,12 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
                         {
                             "plan_id": plan_data["plan_id"],
                             "proposal_id": revision_data["proposal_id"],
-                            "expected_revision": 1,
+                            "expected_revision": 2,
                             "approval_hash": revision_data["action_hash"],
                         },
+                    )
+                    loaded_after_revision = await session.call_tool(
+                        "get_training_plan", {"plan_id": plan_data["plan_id"]}
                     )
 
     assert saved.isError is False
@@ -258,8 +473,13 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
             loaded_plan,
             *skipped_sessions,
             plan_review,
+            materialization_proposal,
+            applied_materialization,
+            generated_week_two,
+            review_after_materialization,
             revision_proposal,
             applied_revision,
+            loaded_after_revision,
         )
     )
     assert saved.structuredContent["data"]["status"] == "scheduled"
@@ -286,14 +506,30 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
         generated_replay.structuredContent["data"]["workout_ids"]
         == generated.structuredContent["data"]["workout_ids"]
     )
+    assert stale_apply.isError is True
+    assert "PLAN_REVISION_CONFLICT" in stale_apply.content[0].text
+    assert tampered_apply.isError is True
+    assert "ACTION_TAMPERED" in tampered_apply.content[0].text
     assert loaded_plan.structuredContent is not None
     assert loaded_plan.structuredContent["data"]["notes"][0]["author_type"] == "COACH"
     assert plan_review.structuredContent is not None
     assert plan_review.structuredContent["data"]["eligible"] is True
+    assert materialization_proposal.structuredContent is not None
+    assert materialization_proposal.structuredContent["data"]["revision_kind"] == "MATERIALIZATION"
+    assert materialization_proposal.structuredContent["data"]["decision"] is None
+    assert generated_week_two.structuredContent is not None
+    assert generated_week_two.structuredContent["data"]["session_count"] == 1
     assert revision_proposal.structuredContent is not None
     assert revision_proposal.structuredContent["data"]["decision"] == "HOLD"
     assert applied_revision.structuredContent is not None
-    assert applied_revision.structuredContent["data"]["revision"] == 2
+    assert applied_revision.structuredContent["data"]["revision"] == 3
+    assert len(applied_revision.structuredContent["data"]["superseded_session_ids"]) == 1
+    assert len(applied_revision.structuredContent["data"]["locally_unscheduled_workout_ids"]) == 1
+    assert applied_revision.structuredContent["data"]["garmin_changed"] is False
+    assert loaded_after_revision.structuredContent is not None
+    assert loaded_after_revision.structuredContent["data"]["notes"][0]["text"] == (
+        "Consolidar antes de aumentar a carga."
+    )
     assert swims.structuredContent is not None
     assert "items" in swims.structuredContent["data"]
     assert missing_swim.isError is True
@@ -307,17 +543,35 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
     assert "action_hash" not in serialized
     assert "content_hash" not in serialized
     assert "proposal" not in serialized.casefold()
+    writer = services.garmin_writer
+    assert isinstance(writer, FakeGarminWorkoutProvider)
+    assert writer.create_calls == 0
+    assert writer.update_calls == 0
+    assert writer.schedule_calls == 0
     async with database.session_factory() as session:
-        assert await session.scalar(select(func.count()).select_from(ActionProposalModel)) == 2
-        assert await session.scalar(select(func.count()).select_from(ActionApprovalModel)) == 2
+        assert await session.scalar(select(func.count()).select_from(ActionProposalModel)) == 3
+        assert await session.scalar(select(func.count()).select_from(ActionApprovalModel)) == 3
         assert await session.scalar(select(func.count()).select_from(ActionExecutionModel)) == 0
         assert (
-            await session.scalar(select(func.count()).select_from(TrainingPlanRevisionModel)) == 2
+            await session.scalar(select(func.count()).select_from(TrainingPlanRevisionModel)) == 3
         )
-        stored_review = await session.scalar(select(PlanReviewModel))
-        assert stored_review is not None
-        assert stored_review.decision == "HOLD"
-        assert stored_review.proposal_id is not None
+        stored_reviews = list(await session.scalars(select(PlanReviewModel)))
+        assert len(stored_reviews) == 2
+        assert all(item.decision is None for item in stored_reviews)
+        assert all(item.proposal_id is None for item in stored_reviews)
+        binding_states = set(await session.scalars(select(PlanSessionBindingModel.state)))
+        assert binding_states == {"SKIPPED", "SUPERSEDED"}
+        week_two_workout_id = EntityId.parse(
+            generated_week_two.structuredContent["data"]["workout_ids"][0]
+        )
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(WorkoutScheduleModel)
+                .where(WorkoutScheduleModel.workout_id == week_two_workout_id.value)
+            )
+            == 0
+        )
 
 
 async def test_direct_save_publish_update_and_reschedule_use_one_binding(

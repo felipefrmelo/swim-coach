@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, time, timedelta
+from datetime import date, time
 from typing import Any
 
 from swim_coach.application.ports.repositories import UnitOfWorkFactory
 from swim_coach.application.services.garmin_upsert import GarminUpsertResult, GarminUpsertService
-from swim_coach.application.services.planning import PlanningService
 from swim_coach.application.services.training_cycles import (
     AppliedPlanRevision,
     PlanDetail,
@@ -25,12 +24,12 @@ from swim_coach.domain.planning import (
     NoteCategory,
     NoteImportance,
     NoteScope,
-    PlanDecision,
-    PlanningPreferences,
     PlanNote,
     PlanReview,
     PlanSessionBinding,
     PlanStatus,
+    TrainingPlanDocument,
+    TrainingPlanRevisionDefinition,
 )
 from swim_coach.domain.shared.errors import DomainError, ResourceNotFoundError
 from swim_coach.domain.shared.value_objects import CorrelationId, EntityId, UserId
@@ -38,8 +37,8 @@ from swim_coach.domain.workouts import CanonicalWorkout, canonical_content_hash
 
 
 @dataclass(frozen=True, slots=True)
-class GeneratedWeekResult:
-    planning_run_id: EntityId
+class MaterializedPlanWeekResult:
+    plan_revision_id: EntityId
     workout_ids: tuple[EntityId, ...]
     week: dict[str, Any]
     replayed: bool
@@ -55,14 +54,12 @@ class CoachCommandService:
         workouts: WorkoutService,
         garmin_upsert: GarminUpsertService,
         workout_deletion: WorkoutDeletionService,
-        planning: PlanningService | None,
         training_cycles: TrainingCycleService | None = None,
     ) -> None:
         self._uow_factory = uow_factory
         self._workouts = workouts
         self._garmin_upsert = garmin_upsert
         self._workout_deletion = workout_deletion
-        self._planning = planning
         self._training_cycles = training_cycles
 
     @property
@@ -71,28 +68,20 @@ class CoachCommandService:
 
     @property
     def planning_enabled(self) -> bool:
-        return self._planning is not None and self._training_cycles is not None
+        return self._training_cycles is not None
 
     async def propose_training_plan(
         self,
         user_id: UserId,
         *,
         actor_id: str,
-        goal_id: EntityId | None,
-        title: str | None,
-        start_date: date,
-        duration_weeks: int,
-        strategy_summary: str | None,
+        definition: TrainingPlanDocument,
         correlation_id: CorrelationId,
     ) -> PlanProposalResult:
         return await self._require_cycles().propose_plan(
             user_id,
             actor_id=actor_id,
-            goal_id=goal_id,
-            title=title,
-            start_date=start_date,
-            duration_weeks=duration_weeks,
-            strategy_summary=strategy_summary,
+            definition=definition,
             correlation_id=correlation_id,
         )
 
@@ -100,6 +89,13 @@ class CoachCommandService:
         self, user_id: UserId, plan_id: EntityId | None = None
     ) -> PlanDetail:
         return await self._require_cycles().get_plan(user_id, plan_id)
+
+    async def get_materialized_workout(
+        self, user_id: UserId, workout_id: EntityId
+    ) -> WorkoutDetail:
+        """Load measured execution separately from the immutable plan intention."""
+
+        return await self._workouts.get_workout(user_id, workout_id)
 
     async def review_training_plan(
         self,
@@ -124,20 +120,16 @@ class CoachCommandService:
         *,
         actor_id: str,
         plan_id: EntityId,
-        review_id: EntityId,
         expected_revision: int,
-        decision: PlanDecision,
-        rationale: str,
+        revision_definition: TrainingPlanRevisionDefinition,
         correlation_id: CorrelationId,
     ) -> PlanProposalResult:
         return await self._require_cycles().propose_revision(
             user_id,
             actor_id=actor_id,
             plan_id=plan_id,
-            review_id=review_id,
             expected_revision=expected_revision,
-            decision=decision,
-            rationale=rationale,
+            revision_definition=revision_definition,
             correlation_id=correlation_id,
         )
 
@@ -353,49 +345,28 @@ class CoachCommandService:
             user_id, workout_id, correlation_id=correlation_id
         )
 
-    async def generate_week(
+    async def materialize_plan_week(
         self,
         user_id: UserId,
         *,
-        actor_id: str,
-        week_start: date,
-        preferences: PlanningPreferences,
+        plan_id: EntityId,
+        expected_revision: int,
+        week_number: int,
         correlation_id: CorrelationId,
-        plan_id: EntityId | None = None,
-        week_number: int | None = None,
-    ) -> GeneratedWeekResult:
-        del actor_id, preferences
+    ) -> MaterializedPlanWeekResult:
         cycles = self._require_cycles()
         detail = await cycles.get_plan(user_id, plan_id)
-        if detail.revision is None:
-            raise DomainError(
-                "ACTIVE_PLAN_REQUIRED", "Approve an active plan before generating a week."
-            )
-        selected_week = week_number
-        if selected_week is None:
-            detailed = next(
-                (
-                    item
-                    for item in detail.revision.document.weeks
-                    if item.detail_level.value == "DETAILED"
-                ),
-                None,
-            )
-            if detailed is None:
-                raise DomainError("PLAN_WEEK_NOT_DETAILED", "The plan has no detailed week.")
-            selected_week = detailed.week_number
-        expected_start = detail.plan.start_date + timedelta(days=(selected_week - 1) * 7)
-        if expected_start != week_start:
-            raise DomainError("PLAN_WEEK_MISMATCH", "week_start does not match the plan week.")
+        if detail.revision is None or detail.plan.current_revision != expected_revision:
+            raise DomainError("PLAN_REVISION_CONFLICT", "The plan revision changed.")
         materialized = await cycles.materialize_week(
             user_id,
             plan_id=detail.plan.id,
-            expected_revision=detail.plan.current_revision,
-            week_number=selected_week,
+            expected_revision=expected_revision,
+            week_number=week_number,
             correlation_id=correlation_id,
         )
-        week = detail.revision.document.weeks[selected_week - 1]
-        return GeneratedWeekResult(
+        week = detail.revision.document.weeks[week_number - 1]
+        return MaterializedPlanWeekResult(
             detail.revision.id,
             materialized.workout_ids,
             week.model_dump(mode="json"),

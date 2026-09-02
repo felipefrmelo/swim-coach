@@ -64,7 +64,7 @@ resolução de login e checksums de artefatos. Só então declare o backup verif
 
 ## API ou banco indisponível
 
-Veja `/health/live` e `/health/ready`. Readiness exige banco, migration `000014` e
+Veja `/health/live` e `/health/ready`. Readiness exige banco, migration `000015` e
 volume de artefatos gravável. Não reinicie em loop se houver `SCHEMA_MISMATCH`;
 execute a migration controlada. Em falha de storage, preserve o volume e corrija
 owner/permissões antes de reabrir exports ou FIT.

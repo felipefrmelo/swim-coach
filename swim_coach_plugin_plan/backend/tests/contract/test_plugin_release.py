@@ -40,7 +40,7 @@ SKILLS = {
         "add_plan_note",
         "set_training_plan_status",
         "skip_plan_session",
-        "generate_week",
+        "materialize_plan_week",
         "publish_workout",
     ),
     "delete-workout": ("get_workouts", "delete_workout"),

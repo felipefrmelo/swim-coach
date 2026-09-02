@@ -11,14 +11,17 @@ from swim_coach.domain.planning.cycles import (
     PlanNote,
     PlanPhase,
     PlanReview,
+    PlanRevisionKind,
     PlanSessionBinding,
     PlanSessionIntent,
     PlanSessionState,
     PlanStatus,
     PlanWeek,
+    PrescriptionSource,
     TrainingPlan,
     TrainingPlanDocument,
     TrainingPlanRevision,
+    TrainingPlanRevisionDefinition,
     plan_document_diff,
 )
 from swim_coach.domain.planning.entities import (
@@ -38,7 +41,6 @@ from swim_coach.domain.planning.entities import (
     TrainingDecisionRecord,
     TrainingRuleSet,
     canonical_json_hash,
-    generate_week,
 )
 
 __all__ = [
@@ -58,6 +60,7 @@ __all__ = [
     "PlanNote",
     "PlanPhase",
     "PlanReview",
+    "PlanRevisionKind",
     "PlanSessionBinding",
     "PlanSessionIntent",
     "PlanSessionState",
@@ -69,13 +72,14 @@ __all__ = [
     "PlanningRules",
     "PlanningRun",
     "PlanningRunStatus",
+    "PrescriptionSource",
     "RecentWeekSnapshot",
     "TrainingDecisionRecord",
     "TrainingPlan",
     "TrainingPlanDocument",
     "TrainingPlanRevision",
+    "TrainingPlanRevisionDefinition",
     "TrainingRuleSet",
     "canonical_json_hash",
-    "generate_week",
     "plan_document_diff",
 ]

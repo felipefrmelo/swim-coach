@@ -1,13 +1,12 @@
-import pytest
+from test_training_cycle_domain import document
 
-from swim_coach.application.services.training_cycles import TrainingCycleService
 from swim_coach.domain.planning import (
     EvidenceConfidence,
     PlanDecision,
     PlanReview,
+    TrainingPlanRevisionDefinition,
     canonical_json_hash,
 )
-from swim_coach.domain.shared.errors import DomainError
 from swim_coach.domain.shared.value_objects import EntityId, UserId
 
 
@@ -31,33 +30,15 @@ def review(*, confidence: EvidenceConfidence, comparable: int, pain: bool = Fals
     )
 
 
-@pytest.mark.parametrize(
-    ("candidate", "expected_code"),
-    [
-        (
-            review(confidence=EvidenceConfidence.HIGH, comparable=3, pain=True),
-            "PLAN_PROGRESS_BLOCKED_BY_PAIN",
-        ),
-        (
-            review(confidence=EvidenceConfidence.LOW, comparable=3),
-            "PLAN_PROGRESS_LOW_CONFIDENCE",
-        ),
-        (
-            review(confidence=EvidenceConfidence.HIGH, comparable=1),
-            "PLAN_PROGRESS_EVIDENCE_REQUIRED",
-        ),
-    ],
-)
-def test_progression_requires_safe_repeated_evidence(
-    candidate: PlanReview, expected_code: str
-) -> None:
-    with pytest.raises(DomainError) as captured:
-        TrainingCycleService._validate_decision(candidate, PlanDecision.PROGRESS)
+def test_backend_records_but_does_not_choose_adaptation_decision() -> None:
+    evidence = review(confidence=EvidenceConfidence.LOW, comparable=0, pain=True)
 
-    assert captured.value.code == expected_code
+    revision = TrainingPlanRevisionDefinition(
+        kind="ADAPTATION",
+        review_id=str(evidence.id),
+        decision=PlanDecision.PROGRESS,
+        rationale="Coach accepts responsibility for the explicit decision.",
+        definition=document(),
+    )
 
-
-def test_progression_accepts_two_comparable_samples_without_pain() -> None:
-    candidate = review(confidence=EvidenceConfidence.MEDIUM, comparable=2)
-
-    TrainingCycleService._validate_decision(candidate, PlanDecision.PROGRESS)
+    assert revision.decision is PlanDecision.PROGRESS
