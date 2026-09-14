@@ -62,11 +62,12 @@
   },
   "verification": {
     "schema_revision": "000016",
-    "python_tests": 274,
+    "python_tests": 308,
     "web_tests": 29,
     "repository_validation": "passed",
     "format_lint_typecheck_deploy_check": "passed",
-    "status": "unit-contract-property-web-verified-integration-pending"
+    "status": "tests-verified-ci",
+    "ci_tests_run": "https://github.com/felipefrmelo/swim-coach/actions/runs/34791517488"
   },
   "deployment": {
     "url": "https://swim-coach.ozix.com.br",
@@ -76,7 +77,7 @@
     "status": "pending"
   },
   "pending_gates": [
-    "postgres-integration-ci",
+    "full-ci",
     "production-deploy-and-smoke"
   ]
 }
