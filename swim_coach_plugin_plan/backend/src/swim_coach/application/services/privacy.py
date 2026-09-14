@@ -16,6 +16,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from swim_coach.application.ports.activity_data import ObjectStorage
 from swim_coach.application.ports.repositories import UnitOfWorkFactory
 from swim_coach.domain.activities import FileArtifact
+from swim_coach.domain.activities.checkin import SwimCheckIn
 from swim_coach.domain.operations import (
     AuditEvent,
     DataExport,
@@ -369,6 +370,8 @@ class PrivacyService:
 
 
 def _jsonable(value: Any) -> JsonValue:
+    if isinstance(value, SwimCheckIn):
+        return value.as_json()
     if value is None or isinstance(value, str | int | float | bool):
         return value
     if isinstance(value, Decimal):

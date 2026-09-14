@@ -1,6 +1,8 @@
 import { api } from "../api/client";
+import type { SwimCheckIn } from "../api/types";
 
 export interface FeedbackPayload {
+  check_in?: SwimCheckIn | null;
   rpe?: number;
   feeling_score?: number;
   technique_rating: number | null;

@@ -22,6 +22,7 @@ from swim_coach.domain.activities import (
     WorkoutExecutionMatch,
     analyze_swim,
 )
+from swim_coach.domain.activities.checkin import SwimCheckIn
 from swim_coach.domain.activities.contextual import align_planned_steps
 from swim_coach.domain.garmin import Activity
 from swim_coach.domain.goals import GoalStatus
@@ -571,6 +572,9 @@ class ActivityDataService:
         request_hash: str | None = None,
         reuse_idempotency_key_when_state_changed: bool = False,
         preserve_existing_feeling_score: bool = False,
+        check_in: SwimCheckIn | None = None,
+        preserve_existing_check_in: bool = True,
+        check_in_only: bool = False,
     ) -> SessionFeedback | None:
         async with self._uow_factory() as uow:
             activity = await uow.activities.get(user_id, activity_id)
@@ -626,6 +630,32 @@ class ActivityDataService:
                     await uow.idempotency.delete(idempotency_scope, idempotency_key)
             feedback = await uow.activity_data.get_feedback(user_id, activity_id)
             normalized = await uow.activity_data.get_current_normalization(user_id, activity_id)
+            stored_check_in = (
+                feedback.check_in
+                if preserve_existing_check_in and check_in is None and feedback is not None
+                else check_in
+            )
+            if (
+                preserve_existing_check_in
+                and check_in is not None
+                and feedback is not None
+                and feedback.check_in is not None
+            ):
+                stored_check_in = SwimCheckIn.model_validate(
+                    {**feedback.check_in.as_json(), **check_in.as_patch()}
+                )
+            if stored_check_in is not None and not stored_check_in.has_answers:
+                stored_check_in = None
+            if check_in_only and feedback is not None:
+                rpe = feedback.rpe
+                technique_rating = feedback.technique_rating
+                fatigue_rating = feedback.fatigue_rating
+                enjoyment_rating = feedback.enjoyment_rating
+                feeling_score = feedback.feeling_score
+                pain_present = feedback.pain_present
+                pain_location = feedback.pain_location
+                pain_intensity = feedback.pain_intensity
+                comment = feedback.comment
             stored_feeling_score = (
                 feedback.feeling_score
                 if preserve_existing_feeling_score and feedback is not None
@@ -641,6 +671,7 @@ class ActivityDataService:
                 and pain_location is None
                 and pain_intensity is None
                 and not (comment and comment.strip())
+                and stored_check_in is None
             )
             if clear_manual_feedback and feedback is None:
                 raise DomainError(
@@ -650,6 +681,7 @@ class ActivityDataService:
             if (
                 not clear_manual_feedback
                 and rpe is None
+                and stored_check_in is None
                 and (normalized is None or normalized.normalization.perceived_effort_rpe is None)
             ):
                 raise DomainError(
@@ -687,6 +719,7 @@ class ActivityDataService:
                     pain_location=pain_location,
                     pain_intensity=pain_intensity,
                     comment=comment,
+                    check_in=stored_check_in,
                 )
             else:
                 if expected_version is not None and expected_version != feedback.version:
@@ -701,6 +734,7 @@ class ActivityDataService:
                     pain_location=pain_location,
                     pain_intensity=pain_intensity,
                     comment=comment,
+                    check_in=stored_check_in,
                 )
                 stored_feedback = feedback
             if stored_feedback is not None:
@@ -750,6 +784,7 @@ class ActivityDataService:
                         "comment_stored": bool(
                             stored_feedback.comment if stored_feedback is not None else None
                         ),
+                        "check_in_stored": bool(stored_feedback and stored_feedback.check_in),
                     },
                 )
             )

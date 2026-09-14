@@ -43,7 +43,7 @@ export function ActivityDetailPage() {
   return (
     <Page title={item.name} eyebrow={formatDate(item.started_at_local, item.timezone)}>
       <section className="activity-hero">
-        <div><p className="text-sm text-cyan-100">Distância concluída</p><p className="mt-2 font-mono text-4xl font-bold tracking-tight">{item.distance_m.toLocaleString("pt-BR")}<span className="ml-2 text-base font-medium text-cyan-200">m</span></p></div>
+        <div><p className="text-sm text-cyan-100">Distância registrada pelo Garmin</p><p className="mt-2 font-mono text-4xl font-bold tracking-tight">{item.distance_m.toLocaleString("pt-BR")}<span className="ml-2 text-base font-medium text-cyan-200">m</span></p></div>
         <div className="activity-hero-grid"><HeroMetric label="Tempo da sessão (elapsed)" value={formatDuration(item.durations.elapsed_s)} /><HeroMetric label="Ritmo nadando (moving)" value={formatPace(item.paces.moving_s_per_100m)} /><HeroMetric label="Ritmo por extensões ativas" value={formatPace(item.paces.swim_s_per_100m)} /><HeroMetric label="Ritmo da sessão (elapsed)" value={formatPace(item.paces.session_s_per_100m)} /></div>
       </section>
 
@@ -87,6 +87,11 @@ function FeedbackCardForm({ activityId, detail }: { activityId: string; detail: 
   const [painLocation, setPainLocation] = useState(current?.pain_location ?? "");
   const [painIntensity, setPainIntensity] = useState(current?.pain_intensity ?? 1);
   const [comment, setComment] = useState(current?.comment ?? "");
+  const [completed, setCompleted] = useState<boolean | null>(current?.check_in?.completed_as_planned ?? null);
+  const [watchAccurate, setWatchAccurate] = useState<boolean | null>(current?.check_in?.watch_data_accurate ?? null);
+  const [freestyle, setFreestyle] = useState<boolean | null>(current?.check_in?.all_freestyle ?? null);
+  const [difficulty, setDifficulty] = useState(current?.check_in?.main_difficulty ?? "");
+  const hasCheckIn = completed !== null || watchAccurate !== null || freestyle !== null || difficulty.trim() !== "";
   const [confirmRemoval, setConfirmRemoval] = useState(false);
   const save = useMutation({
     mutationFn: () => saveFeedbackResilient(activityId, {
@@ -99,6 +104,12 @@ function FeedbackCardForm({ activityId, detail }: { activityId: string; detail: 
       pain_location: pain ? painLocation : null,
       pain_intensity: pain ? painIntensity : null,
       comment: comment || null,
+      check_in: hasCheckIn ? {
+        completed_as_planned: completed,
+        watch_data_accurate: watchAccurate,
+        all_freestyle: freestyle,
+        main_difficulty: difficulty.trim() || null,
+      } : null,
       version: current?.version ?? null,
     }),
     onSuccess: async (result) => result === "synced" ? queryClient.invalidateQueries({ queryKey: ["activity", activityId] }) : undefined,
@@ -112,6 +123,7 @@ function FeedbackCardForm({ activityId, detail }: { activityId: string; detail: 
       pain_location: null,
       pain_intensity: null,
       comment: null,
+      check_in: null,
       version: current?.version ?? null,
     }),
     onSuccess: async (result) => {
@@ -121,7 +133,7 @@ function FeedbackCardForm({ activityId, detail }: { activityId: string; detail: 
   });
   const hasGarminRpe = garminRpe !== null;
   const hasGarminFeeling = evaluation.garmin.feeling_score !== null;
-  const hasManualFeedback = current !== null || (overrideRpe && rpe !== null) || overrideFeeling || technique !== null || pain || comment.trim() !== "";
+  const hasManualFeedback = current !== null || hasCheckIn || (overrideRpe && rpe !== null) || overrideFeeling || technique !== null || pain || comment.trim() !== "";
   return (
     <section className="surface-card form-stack">
       <div className="flex gap-4">
@@ -129,10 +141,18 @@ function FeedbackCardForm({ activityId, detail }: { activityId: string; detail: 
         <div><p className="eyebrow">Check-in pós-treino</p><h2 className="section-title mt-2">Avaliação da sessão</h2></div>
       </div>
       <SessionEvaluationSummary evaluation={evaluation} />
+      <div className="form-stack">
+        <p className="text-sm text-slate-600">Conte como o treino aconteceu. Responda só o que souber; os dados originais do Garmin permanecem.</p>
+        <OptionalAnswer label="Concluiu como planejado?" value={completed} onChange={setCompleted} />
+        <OptionalAnswer label="O relógio registrou corretamente?" value={watchAccurate} onChange={setWatchAccurate} />
+        <OptionalAnswer label="Foi tudo crawl?" value={freestyle} onChange={setFreestyle} />
+        <label className="grid gap-2 text-sm font-semibold">Principal dificuldade (opcional)<input maxLength={500} value={difficulty} onChange={(event) => setDifficulty(event.target.value)} placeholder="Ex.: manter a respiração nos últimos tiros" /></label>
+        {watchAccurate === false && <p className="text-sm text-amber-800" role="status">Erro do relógio informado: os ritmos e as distâncias registrados não serão usados para adaptar o plano. Isso não confirma automaticamente a conclusão do treino.</p>}
+      </div>
       <div className="evaluation-actions">
         {hasGarminRpe
           ? <button aria-pressed={overrideRpe} className="secondary-button" onClick={() => setOverrideRpe((value) => !value)} type="button">{overrideRpe ? "Usar RPE do Garmin" : "Ajustar RPE"}</button>
-          : <p className="text-sm leading-6 text-slate-600">O FIT não trouxe esforço. Informe o RPE para completar o check-in.</p>}
+          : <p className="text-sm leading-6 text-slate-600">O FIT não trouxe esforço. Você pode informar o RPE ou salvar apenas as respostas do check-in.</p>}
         <button aria-pressed={overrideFeeling} className="secondary-button" onClick={() => setOverrideFeeling((value) => !value)} type="button">{overrideFeeling ? (hasGarminFeeling ? "Usar sensação do Garmin" : "Remover sensação") : (hasGarminFeeling ? "Ajustar sensação" : "Informar sensação")}</button>
       </div>
       {overrideRpe && <ChoiceRow label="Esforço percebido manual" values={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]} selected={rpe} onSelect={setRpe} suffix="/10" />}
@@ -150,6 +170,10 @@ function FeedbackCardForm({ activityId, detail }: { activityId: string; detail: 
       {current && !confirmRemoval && <button className="secondary-button border-rose-200 text-rose-700 hover:bg-rose-50" disabled={save.isPending || removeFeedback.isPending} onClick={() => setConfirmRemoval(true)} type="button">Remover feedback manual</button>}
     </section>
   );
+}
+
+function OptionalAnswer({ label, value, onChange }: { label: string; value: boolean | null; onChange: (value: boolean | null) => void }) {
+  return <label className="grid gap-2 text-sm font-semibold">{label}<select value={value === null ? "unknown" : String(value)} onChange={(event) => onChange(event.target.value === "unknown" ? null : event.target.value === "true")}><option value="unknown">Não informado</option><option value="true">Sim</option><option value="false">Não</option></select></label>;
 }
 
 function SessionEvaluationSummary({ evaluation }: { evaluation: SwimActivityDetailV2["session_evaluation"] }) {

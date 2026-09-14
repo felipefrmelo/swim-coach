@@ -148,6 +148,21 @@ afterEach(() => {
 });
 
 describe("activity v2 client and pages", () => {
+  it("saves execution answers without guessing completion or replacing Garmin RPE", async () => {
+    const save = vi.spyOn(api, "saveFeedback").mockResolvedValue(null);
+    const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    render(<QueryClientProvider client={client}><FeedbackCard activityId={activityId} detail={detail} /></QueryClientProvider>);
+    expect(screen.getByLabelText("Concluiu como planejado?")).toHaveValue("unknown");
+    fireEvent.change(screen.getByLabelText("O relógio registrou corretamente?"), { target: { value: "false" } });
+    expect(screen.getByText(/Isso não confirma automaticamente/)).toBeVisible();
+    fireEvent.change(screen.getByLabelText("Principal dificuldade (opcional)"), { target: { value: "Respiração" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar feedback" }));
+    await waitFor(() => expect(save).toHaveBeenCalledOnce());
+    expect(save.mock.calls[0][2].check_in).toEqual({
+      completed_as_planned: null, watch_data_accurate: false, all_freestyle: null, main_difficulty: "Respiração",
+    });
+    expect(save.mock.calls[0][2]).not.toHaveProperty("rpe");
+  });
   it("requests the versioned activity collection instead of the legacy endpoint", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify([activity]), {
@@ -535,6 +550,7 @@ describe("activity v2 client and pages", () => {
     await waitFor(() => expect(remove).toHaveBeenCalledOnce());
     const payload = remove.mock.calls[0]?.[2];
     expect(payload).toEqual({
+      check_in: null,
       technique_rating: null,
       fatigue_rating: null,
       enjoyment_rating: null,

@@ -94,7 +94,15 @@ export interface SwimActivity {
   avg_swolf: string | null;
 }
 
+export interface SwimCheckIn {
+  completed_as_planned?: boolean | null;
+  watch_data_accurate?: boolean | null;
+  all_freestyle?: boolean | null;
+  main_difficulty?: string | null;
+}
+
 export interface SessionFeedback {
+  check_in?: SwimCheckIn | null;
   id: string;
   rpe: number | null;
   technique_rating: number | null;

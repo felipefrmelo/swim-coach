@@ -10,6 +10,7 @@ import type {
   Pool,
   ProblemDetail,
   SwimActivity,
+  SwimCheckIn,
   SwimActivityV2,
   SwimActivityDetailV2,
   CanonicalWorkout,
@@ -137,6 +138,7 @@ export const api = {
     id: string,
     idempotencyKey: string,
     payload: {
+      check_in?: SwimCheckIn | null;
       rpe?: number;
       feeling_score?: number;
       technique_rating: number | null;

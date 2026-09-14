@@ -43,6 +43,7 @@ from swim_coach.application.services.mcp_write import (
     MCP_WRITE_TOOL_SCOPES,
     McpWriteService,
 )
+from swim_coach.domain.activities.checkin import SwimCheckIn
 from swim_coach.domain.planning import (
     NoteAuthor,
     NoteCategory,
@@ -188,7 +189,13 @@ def create_mcp_server(
         "exception: show their exact diff and hash, then apply only after explicit "
         "approval. Calling "
         "delete_workout means the user asked to remove the planned workout locally, from "
-        "the calendar, and from Garmin after the host's destructive-action confirmation."
+        "the calendar, and from Garmin after the host's destructive-action confirmation. "
+        "For a weekly coaching checkpoint, read context and current plan, collect only missing "
+        "relevant athlete feedback with save_feedback(check_in=...), then review_training_plan. "
+        "Separate execution, athlete response and reliable performance. A reported watch error "
+        "does not prove completion; use execution_evidence and never reconstruct pace from "
+        "prescribed distance. Explain the next session's purpose, technical cue and observable "
+        "success criterion. The coach authors changes; approval and Garmin remain separate."
         if v2_enabled and oauth_enabled
         else "Swim Coach exposes authenticated, user-scoped swimming training data. "
         + (
@@ -1629,7 +1636,10 @@ def _register_v2_tools(
         title="Review one plan week",
         description=(
             "Return and persist an immutable deterministic evidence snapshot for an ended "
-            "or resolved plan week. This tool never changes the plan or chooses a decision."
+            "or resolved plan week. Includes coach_checkpoint: execution, athlete response, "
+            "measurement reliability and missing context. Explain what the next session should "
+            "change and why; request explicit revision approval. Never chooses a decision, "
+            "changes the plan or publishes to Garmin."
         ),
         annotations=LOCAL_WRITE,
         structured_output=True,
@@ -2271,7 +2281,12 @@ def _register_v2_tools(
     @server.tool(
         name="save_feedback",
         title="Save post-swim feedback",
-        description="Store effort, technique, pain signal, and notes for a pool swim.",
+        description=(
+            "Store optional effort, technique, pain, notes and a structured check_in. "
+            "Ask only missing relevant questions; never repeat imported RPE. A check_in-only "
+            "save preserves existing assessment. Watch errors do not imply completion and "
+            "exclude measured performance from weekly adaptation, not attendance."
+        ),
         annotations=LOCAL_WRITE,
         structured_output=True,
     )
@@ -2285,6 +2300,7 @@ def _register_v2_tools(
         pain_location: Annotated[str | None, Field(max_length=120)] = None,
         pain_intensity: Annotated[int | None, Field(ge=1, le=10)] = None,
         notes: Annotated[str | None, Field(max_length=2000)] = None,
+        check_in: SwimCheckIn | None = None,
     ) -> McpResultV2:
         args = {
             "activity_id": str(activity_id),
@@ -2295,6 +2311,7 @@ def _register_v2_tools(
             "pain_location": pain_location,
             "pain_intensity": pain_intensity,
             "notes": notes,
+            "check_in": check_in.as_patch() if check_in else None,
         }
 
         async def command(
@@ -2320,6 +2337,7 @@ def _register_v2_tools(
                 correlation_id=correlation_id,
                 reuse_idempotency_key_when_state_changed=True,
                 preserve_existing_feeling_score=False,
+                check_in=check_in,
             )
 
         return _as_v2_result(await execute_write("save_feedback", ctx, scope, args, command))
