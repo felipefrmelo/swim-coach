@@ -1,6 +1,10 @@
+import asyncio
 from pathlib import Path
 
 import pytest
+from alembic import command
+from alembic.config import Config
+from sqlalchemy.exc import DBAPIError
 
 from swim_coach.application.services import ActivityDataService, GarminSyncService, IdentityService
 from swim_coach.application.services.activity_views import activity_detail_v2
@@ -13,10 +17,13 @@ from swim_coach.infrastructure.storage import FilesystemObjectStorage
 from .test_activity_data import FixtureParser
 from .test_garmin_sync import FixtureGarminProvider, no_op_user_lock
 
+ROOT = Path(__file__).resolve().parents[3]
+
 
 async def test_checkin_database_roundtrip_idempotency_and_ownership(
     database: Database,
     tmp_path: Path,
+    postgres_database: tuple,
 ) -> None:
     factory = SqlAlchemyUnitOfWorkFactory(database.session_factory)
     identity = IdentityService(
@@ -74,3 +81,11 @@ async def test_checkin_database_roundtrip_idempotency_and_ownership(
         await service.record_feedback(UserId.new(), activity.id, **kwargs)
     with pytest.raises(DomainError, match="idempotency"):
         await service.record_feedback(owner.id, activity.id, **{**kwargs, "request_hash": "b" * 64})
+    config = Config(str(ROOT / "backend/alembic.ini"))
+    config.attributes["database_url"] = postgres_database[0]
+    with pytest.raises(DBAPIError, match="would discard athlete check-ins"):
+        await asyncio.to_thread(command.downgrade, config, "000015")
+    assert await database.revision() == "000016"
+    async with factory() as uow:
+        protected = await uow.activity_data.get_feedback(owner.id, activity.id)
+    assert protected is not None and protected.check_in == loaded.check_in

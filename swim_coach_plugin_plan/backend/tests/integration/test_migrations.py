@@ -153,7 +153,7 @@ async def test_migration_up_down_up_and_constraints(
     finally:
         await database.dispose()
 
-        assert revision == "000015"
+        assert revision == "000016"
     assert immutable_trigger == 1
     assert plan_immutable_trigger == 1
     assert {item["name"] for item in constraints} >= {
@@ -381,7 +381,7 @@ async def test_canonical_v2_downgrade_refuses_to_destroy_persisted_facts(
             )
         with pytest.raises(DBAPIError, match="000013 downgrade is unsafe"):
             await asyncio.to_thread(command.downgrade, config, "000012")
-        assert await database.revision() == "000015"
+        assert await database.revision() == "000016"
         async with database.engine.begin() as connection:
             await connection.execute(
                 text(
@@ -407,7 +407,7 @@ async def test_canonical_v2_downgrade_refuses_to_destroy_persisted_facts(
             )
         with pytest.raises(DBAPIError, match="000013 downgrade is unsafe"):
             await asyncio.to_thread(command.downgrade, config, "000012")
-        assert await database.revision() == "000015"
+        assert await database.revision() == "000016"
         async with database.engine.begin() as connection:
             await connection.execute(
                 text("DELETE FROM session_feedback WHERE id=:id"), {"id": feedback_id}
@@ -417,7 +417,7 @@ async def test_canonical_v2_downgrade_refuses_to_destroy_persisted_facts(
 
         # Alembic rolls the multi-revision downgrade back atomically when the
         # canonical-v2 guard rejects the following step.
-        assert await database.revision() == "000015"
+        assert await database.revision() == "000016"
         async with database.engine.connect() as connection:
             stored = (
                 await connection.execute(
