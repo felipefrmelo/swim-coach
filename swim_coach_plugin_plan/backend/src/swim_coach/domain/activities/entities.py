@@ -7,6 +7,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 
+from swim_coach.domain.activities.checkin import SwimCheckIn
 from swim_coach.domain.identity.entities import utc_now
 from swim_coach.domain.shared.errors import DomainValidationError
 from swim_coach.domain.shared.types import JsonObject
@@ -588,6 +589,7 @@ class SessionFeedback:
     pain_location: str | None = None
     pain_intensity: int | None = None
     comment: str | None = None
+    check_in: SwimCheckIn | None = None
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
     version: int = 1
@@ -628,6 +630,7 @@ class SessionFeedback:
         pain_location: str | None,
         pain_intensity: int | None,
         comment: str | None,
+        check_in: SwimCheckIn | None = None,
     ) -> None:
         candidate = SessionFeedback(
             id=self.id,
@@ -644,6 +647,7 @@ class SessionFeedback:
             pain_location=pain_location,
             pain_intensity=pain_intensity,
             comment=comment,
+            check_in=check_in,
             created_at=self.created_at,
             updated_at=utc_now(),
             version=self.version + 1,
@@ -657,6 +661,7 @@ class SessionFeedback:
         self.pain_location = candidate.pain_location
         self.pain_intensity = candidate.pain_intensity
         self.comment = candidate.comment
+        self.check_in = candidate.check_in
         self.updated_at = candidate.updated_at
         self.version = candidate.version
 

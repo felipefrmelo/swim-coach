@@ -15,6 +15,7 @@ from swim_coach.application.services.activity_views import (
     activity_summary_v2,
 )
 from swim_coach.domain.activities import SessionFeedback
+from swim_coach.domain.activities.checkin import SwimCheckIn
 from swim_coach.domain.shared.value_objects import EntityId
 from swim_coach.interfaces.rest.activities import (
     IdempotencyHeader,
@@ -104,6 +105,7 @@ class SessionEvaluationV2(StrictModel):
 
 
 class ActivitySummaryV2(StrictModel):
+    execution_evidence: dict[str, Any] = Field(default_factory=dict)
     activity_id: UUID
     name: str
     subtype: str
@@ -183,6 +185,7 @@ class MatchV2(StrictModel):
 
 
 class FeedbackV2(StrictModel):
+    check_in: SwimCheckIn | None = None
     id: UUID
     rpe: int | None
     technique_rating: int | None
@@ -209,12 +212,14 @@ class FeedbackV2(StrictModel):
             pain_location=feedback.pain_location,
             pain_intensity=feedback.pain_intensity,
             comment=feedback.comment,
+            check_in=feedback.check_in,
             version=feedback.version,
             updated_at=feedback.updated_at.isoformat(),
         )
 
 
 class FeedbackRequestV2(StrictModel):
+    check_in: SwimCheckIn | None = None
     rpe: int | None = Field(default=None, ge=1, le=10)
     technique_rating: int | None = Field(default=None, ge=1, le=5)
     fatigue_rating: int | None = Field(default=None, ge=1, le=5)
@@ -299,7 +304,11 @@ async def put_feedback_v2(
     """Store field-level overrides; Garmin RPE may satisfy the effective RPE."""
 
     request_hash = hashlib.sha256(
-        json.dumps(payload.model_dump(mode="json"), sort_keys=True, separators=(",", ":")).encode()
+        json.dumps(
+            payload.model_dump(mode="json", exclude_unset=True),
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
     ).hexdigest()
     feedback = await services.activity_data.record_feedback(
         authenticated.user.id,
@@ -319,6 +328,12 @@ async def put_feedback_v2(
         idempotency_key=idempotency_key,
         request_hash=request_hash,
         preserve_existing_feeling_score=False,
+        check_in=payload.check_in,
+        preserve_existing_check_in="check_in" not in payload.model_fields_set,
+        check_in_only=(
+            "check_in" in payload.model_fields_set
+            and payload.model_fields_set <= {"check_in", "version"}
+        ),
     )
     return FeedbackV2.from_domain(feedback) if feedback is not None else None
 

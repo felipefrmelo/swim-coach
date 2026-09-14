@@ -34,6 +34,7 @@ from swim_coach.domain.activities import (
     SessionFeedback,
     WorkoutExecutionMatch,
 )
+from swim_coach.domain.activities.checkin import SwimCheckIn
 from swim_coach.domain.athlete import (
     AthleteConstraint,
     AthleteProfile,
@@ -872,6 +873,7 @@ def _feedback(model: SessionFeedbackModel) -> SessionFeedback:
         pain_location=model.pain_location,
         pain_intensity=model.pain_intensity,
         comment=model.comment,
+        check_in=SwimCheckIn.model_validate(model.check_in) if model.check_in else None,
         created_at=model.created_at,
         updated_at=model.updated_at,
         version=model.version,
@@ -2235,6 +2237,7 @@ class SqlAlchemyActivityDataRepository:
                     pain_location=feedback.pain_location,
                     pain_intensity=feedback.pain_intensity,
                     comment=feedback.comment,
+                    check_in=feedback.check_in.as_json() if feedback.check_in else None,
                     created_at=feedback.created_at,
                     updated_at=feedback.updated_at,
                     version=feedback.version,
@@ -2258,6 +2261,7 @@ class SqlAlchemyActivityDataRepository:
                 pain_location=feedback.pain_location,
                 pain_intensity=feedback.pain_intensity,
                 comment=feedback.comment,
+                check_in=feedback.check_in.as_json() if feedback.check_in else None,
                 updated_at=feedback.updated_at,
                 version=feedback.version,
             )

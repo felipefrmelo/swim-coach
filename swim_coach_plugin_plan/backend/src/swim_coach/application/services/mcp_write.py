@@ -19,6 +19,7 @@ from swim_coach.domain.actions import (
     ActionExecution,
     ActionProposal,
 )
+from swim_coach.domain.activities.checkin import SwimCheckIn, execution_evidence
 from swim_coach.domain.operations import (
     ApiIdempotencyRecord,
     AuditEvent,
@@ -173,6 +174,7 @@ class McpWriteService:
         correlation_id: CorrelationId,
         reuse_idempotency_key_when_state_changed: bool = False,
         preserve_existing_feeling_score: bool = True,
+        check_in: SwimCheckIn | None = None,
     ) -> McpResult:
         technique_rating = self._rating(technique, "technique") if technique is not None else None
         pain_present = bool(pain.get("present", False))
@@ -189,6 +191,7 @@ class McpWriteService:
                     "feeling_score": feeling_score,
                     "pain": pain,
                     "notes": notes,
+                    "check_in": check_in.as_patch() if check_in else None,
                 },
                 sort_keys=True,
                 separators=(",", ":"),
@@ -214,6 +217,17 @@ class McpWriteService:
             request_hash=request_hash,
             reuse_idempotency_key_when_state_changed=(reuse_idempotency_key_when_state_changed),
             preserve_existing_feeling_score=preserve_existing_feeling_score,
+            check_in=check_in,
+            check_in_only=(
+                check_in is not None
+                and rpe is None
+                and technique is None
+                and feeling_score is None
+                and notes is None
+                and not pain_present
+                and pain_intensity is None
+                and not pain.get("location")
+            ),
         )
         return McpResult(
             request_id=request_id,
@@ -228,6 +242,7 @@ class McpWriteService:
                     feedback.feeling_score if feedback is not None else None
                 ),
                 "cleared": feedback is None,
+                "execution_evidence": execution_evidence(feedback.check_in if feedback else None),
             },
             human_summary=(
                 "Manual post-swim feedback was cleared; Garmin evaluation remains effective."

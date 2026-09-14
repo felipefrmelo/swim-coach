@@ -207,7 +207,7 @@ tools:
     input: {type: object, additionalProperties: false, properties: {from_date: {type: [string, "null"], format: date}, force: {type: boolean, default: false}}}
   - name: save_feedback
     title: Save post-swim feedback
-    description: Store optional field-level overrides or manual technique, pain, and notes for a pool swim; Garmin FIT effort may remain effective when RPE is omitted.
+    description: Store optional feedback and structured check_in. Ask only missing relevant context. A check_in-only save preserves assessment and merges provided check-in fields. Watch errors exclude performance from weekly adaptation, never imply completion. Garmin remains unchanged.
     scopes: [coach]
     annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
     input:
@@ -223,3 +223,11 @@ tools:
         pain_location: {type: [string, "null"], maxLength: 120}
         pain_intensity: {type: [integer, "null"], minimum: 1, maximum: 10}
         notes: {type: [string, "null"], maxLength: 2000}
+        check_in:
+          type: [object, "null"]
+          additionalProperties: false
+          properties:
+            completed_as_planned: {type: [boolean, "null"]}
+            watch_data_accurate: {type: [boolean, "null"]}
+            all_freestyle: {type: [boolean, "null"]}
+            main_difficulty: {type: [string, "null"], maxLength: 500}

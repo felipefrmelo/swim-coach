@@ -75,6 +75,12 @@ pelos kill switches do servidor.
 
 ## Experiência principal
 
+O [checkpoint semanal do coach](docs/weekly-coach-checkpoint.md) conecta o check-in
+opcional à revisão existente, separando execução confirmada, resposta do atleta
+e confiabilidade das métricas. Erros declarados do relógio não viram falhas de
+desempenho nem correções inventadas; mudanças seguem prescritas pelo ChatGPT e
+aprovadas pelo atleta.
+
 Depois de instalar ou atualizar o plugin, abra uma conversa nova no ChatGPT e
 faça um smoke user-scoped: consulte o contexto, revise a natação mais recente e
 liste os treinos planejados. Escritas e publicação Garmin só devem ser testadas

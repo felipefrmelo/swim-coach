@@ -14,6 +14,7 @@ from swim_coach.domain.activities import (
     SessionFeedback,
     resolve_session_evaluation,
 )
+from swim_coach.domain.activities.checkin import execution_evidence
 from swim_coach.domain.garmin import Activity
 
 _LEGACY_NORMALIZER_MARKER = "|swim-coach:1."
@@ -369,6 +370,7 @@ def activity_summary_v2(
             extra_reasons=("INVALID_TIMEZONE_FALLBACK_UTC",) if invalid_timezone else (),
         ),
         "session_evaluation": session_evaluation_v2(normalized, feedback),
+        "execution_evidence": execution_evidence(feedback.check_in if feedback else None),
     }
 
 
@@ -459,6 +461,9 @@ def activity_detail_v2(
                     "pain_location": detail.feedback.pain_location,
                     "pain_intensity": detail.feedback.pain_intensity,
                     "comment": detail.feedback.comment,
+                    "check_in": detail.feedback.check_in.as_json()
+                    if detail.feedback.check_in
+                    else None,
                     "version": detail.feedback.version,
                     "updated_at": detail.feedback.updated_at.isoformat(),
                 }

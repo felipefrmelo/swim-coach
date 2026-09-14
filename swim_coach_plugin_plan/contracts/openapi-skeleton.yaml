@@ -294,13 +294,16 @@ paths:
         required: true
         content:
           application/json:
-            schema: {$ref: "#/components/schemas/FeedbackRequest"}
+            schema: {$ref: "#/components/schemas/FeedbackRequestV2"}
       responses:
         "200":
           description: Feedback stored and analysis versioned
           content:
             application/json:
-              schema: {$ref: "#/components/schemas/FeedbackResponse"}
+              schema:
+                oneOf:
+                  - {$ref: "#/components/schemas/FeedbackV2"}
+                  - {type: "null"}
   /v2/activities/{activity_id}/match:
     put:
       operationId: putActivityMatchV2
@@ -538,11 +541,35 @@ components:
         planned_workout_id: {type: string, format: uuid}
         confidence: {type: string}
         method: {type: string}
+    SwimCheckIn:
+      type: [object, "null"]
+      additionalProperties: false
+      properties:
+        completed_as_planned: {type: [boolean, "null"]}
+        watch_data_accurate: {type: [boolean, "null"]}
+        all_freestyle: {type: [boolean, "null"]}
+        main_difficulty: {type: [string, "null"], maxLength: 500}
+    FeedbackRequestV2:
+      type: object
+      additionalProperties: false
+      properties:
+        check_in: {$ref: "#/components/schemas/SwimCheckIn"}
+        rpe: {type: [integer, "null"], minimum: 1, maximum: 10}
+        feeling_score: {type: [integer, "null"], minimum: 0, maximum: 100}
+        technique_rating: {type: [integer, "null"], minimum: 1, maximum: 5}
+        fatigue_rating: {type: [integer, "null"], minimum: 1, maximum: 5}
+        enjoyment_rating: {type: [integer, "null"], minimum: 1, maximum: 5}
+        pain_present: {type: boolean, default: false}
+        pain_location: {type: [string, "null"], maxLength: 120}
+        pain_intensity: {type: [integer, "null"], minimum: 1, maximum: 10}
+        comment: {type: [string, "null"], maxLength: 2000}
+        version: {type: [integer, "null"], minimum: 1}
     FeedbackV2:
       type: object
       additionalProperties: false
       required: [id, rpe, feeling_score, technique_rating, fatigue_rating, enjoyment_rating, pain_present, pain_location, pain_intensity, comment, version, updated_at]
       properties:
+        check_in: {$ref: "#/components/schemas/SwimCheckIn"}
         id: {type: string, format: uuid}
         rpe: {type: [integer, "null"], minimum: 1, maximum: 10}
         feeling_score: {type: [integer, "null"], minimum: 0, maximum: 100}
@@ -560,6 +587,7 @@ components:
       additionalProperties: false
       required: [activity_id, name, subtype, started_at_utc, started_at_local, timezone, distance_m, durations, speeds, paces, pool, provenance, data_quality, session_evaluation]
       properties:
+        execution_evidence: {type: object}
         activity_id: {type: string, format: uuid}
         name: {type: string}
         subtype: {type: string}
@@ -579,6 +607,7 @@ components:
       additionalProperties: false
       required: [activity_id, name, subtype, started_at_utc, started_at_local, timezone, distance_m, durations, speeds, paces, pool, provenance, data_quality, session_evaluation, schema_version, normalization, intervals, lengths, analysis, match, feedback, raw_fit_exposed]
       properties:
+        execution_evidence: {type: object}
         activity_id: {type: string, format: uuid}
         name: {type: string}
         subtype: {type: string}

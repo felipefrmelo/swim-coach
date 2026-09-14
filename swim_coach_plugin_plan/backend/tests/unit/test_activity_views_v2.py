@@ -587,7 +587,7 @@ def test_checked_in_openapi_v2_is_closed_and_accepts_the_real_public_projection(
         "#/components/parameters/IdempotencyKey",
     }
     assert feedback["requestBody"]["content"]["application/json"]["schema"] == {
-        "$ref": "#/components/schemas/FeedbackRequest"
+        "$ref": "#/components/schemas/FeedbackRequestV2"
     }
     assert {item["$ref"] for item in match["parameters"]} == {
         "#/components/parameters/ActivityId",

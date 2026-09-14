@@ -5,17 +5,20 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from typing import cast
+from typing import Any, cast
 from uuid import uuid5
 from zoneinfo import ZoneInfo
 
 from swim_coach.application.ports.repositories import UnitOfWorkFactory
+from swim_coach.application.services.activity_views import session_evaluation_v2
 from swim_coach.application.services.training_plan_validator import (
     TrainingPlanValidationContext,
     TrainingPlanValidator,
 )
+from swim_coach.application.services.weekly_checkpoint import adaptation_metrics, weekly_checkpoint
 from swim_coach.application.services.workouts import WorkoutService
 from swim_coach.domain.actions import ActionApproval, ActionDecision, ActionProposal
+from swim_coach.domain.activities.checkin import execution_evidence
 from swim_coach.domain.goals import GoalStatus
 from swim_coach.domain.operations import AuditEvent, Job, OutboxEvent
 from swim_coach.domain.planning import (
@@ -284,11 +287,23 @@ class TrainingCycleService:
                 completed_ids.add(binding.session_intent_id)
                 executed_distance += activity.distance.meters
                 metrics = analysis.metrics if analysis is not None else {}
+                normalized = await uow.activity_data.get_current_normalization(user_id, activity.id)
+                execution = execution_evidence(feedback.check_in if feedback else None)
+                metrics = adaptation_metrics(
+                    {**metrics, "session_evaluation": session_evaluation_v2(normalized, feedback)},
+                    blocked=execution["performance_blocked"] is True,
+                )
                 raw_quality = metrics.get("data_quality")
                 quality = (
                     str(raw_quality.get("level"))
                     if isinstance(raw_quality, dict) and raw_quality.get("level")
-                    else (analysis.quality.value.upper() if analysis is not None else "LOW")
+                    else (
+                        {"complete": "HIGH", "partial": "MEDIUM", "poor": "LOW"}.get(
+                            analysis.quality.value, "LOW"
+                        )
+                        if analysis is not None
+                        else "LOW"
+                    )
                 )
                 quality_levels.append(quality)
                 raw_sets = metrics.get("sets")
@@ -311,6 +326,8 @@ class TrainingCycleService:
                     {
                         "activity_ref": f"{activity.provider}:{activity.external_activity_id}",
                         "workout_id": str(binding.workout_id),
+                        "activity_id": str(activity.id),
+                        "execution_evidence": execution,
                         "distance_m": activity.distance.meters,
                         "data_quality": (
                             raw_quality
@@ -346,6 +363,9 @@ class TrainingCycleService:
                                 "pain_present": feedback.pain_present,
                                 "pain_intensity": feedback.pain_intensity,
                                 "comment": feedback.comment,
+                                "check_in": feedback.check_in.as_json()
+                                if feedback.check_in
+                                else None,
                             }
                             if feedback is not None
                             else None
@@ -407,6 +427,8 @@ class TrainingCycleService:
         else:
             confidence = EvidenceConfidence.MEDIUM
         planned_distance = sum(item.target_distance_m or 0 for item in week.sessions)
+        checkpoint = weekly_checkpoint(cast(list[dict[str, Any]], activities))
+        disputed_performance = bool(checkpoint["measurement"]["excluded_performance_activity_ids"])
         evidence = cast(
             JsonObject,
             {
@@ -424,15 +446,17 @@ class TrainingCycleService:
                 ),
                 "planned_distance_m": planned_distance,
                 "executed_distance_m": executed_distance,
+                "distance_basis": "RECORDED_GARMIN_UNCORRECTED",
                 "distance_adherence_ratio": (
                     float(Decimal(executed_distance) / Decimal(planned_distance))
-                    if planned_distance
+                    if planned_distance and not disputed_performance
                     else None
                 ),
                 "comparable_evidence_count": comparable_samples,
                 "pain_signals": pain_signals,
                 "activities": activities,
                 "notes": notes,
+                "coach_checkpoint": checkpoint,
             },
         )
         review = PlanReview(
