@@ -17,6 +17,39 @@ um segundo gerador de treinos, editor de FIT ou publicação automática.
    Garmin continua exigindo pedido separado. Não inferir capacidade de 2.000 m
    a partir de tiros curtos; comparar blocos sustentados e equivalentes.
 
+## Revisão segura e recuperação de erros
+
+Toda revisão começa por uma nova leitura de `get_training_plan`. O coach copia
+`data.revision` como documento-base completo e altera somente semanas futuras
+elegíveis. Semanas passadas ou já revisadas e sessões bloqueadas são copiadas
+exatamente, inclusive IDs, workouts, datas, horários, coleções vazias e valores
+`null`. Resumos da conversa e métricas executadas nunca são usados para
+reconstruir prescrição histórica.
+
+Ao receber `PLAN_VALIDATION_FAILED`, o agente lê `error.details.issues` e o bloco
+`error.details.recovery`. Erros de imutabilidade informam os caminhos divergentes
+e orientam uma nova leitura do plano. O agente então recompõe o documento a
+partir da revisão atual, reaplica somente as mudanças futuras e tenta novamente
+uma vez. Persistindo o erro, ele informa o bloqueio; não remove a proteção, não
+altera o passado silenciosamente e não entra em loop.
+
+`PLAN_REVISION_CONFLICT` também orienta recarregar a revisão corrente e refazer o
+payload com o novo `current_revision`. Uma proposta corrigida continua apenas
+preparada: aplicação e publicação Garmin permanecem ações separadas.
+
+Fluxo resumido:
+
+```text
+get_training_plan
+→ copiar data.revision
+→ alterar somente semanas futuras elegíveis
+→ propose_plan_revision
+→ se falhar, seguir error.details.recovery e tentar novamente uma vez
+→ revisar diff e action_hash
+→ aguardar aprovação explícita
+→ apply_plan_revision
+```
+
 Esse fluxo é sob demanda. Não há novo agendamento, revisão automática em segundo
 plano nem alteração das sessões reais durante o desenvolvimento.
 
