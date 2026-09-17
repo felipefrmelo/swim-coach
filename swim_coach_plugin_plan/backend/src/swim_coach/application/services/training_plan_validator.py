@@ -16,8 +16,10 @@ from swim_coach.domain.planning import (
     TrainingPlanDocument,
 )
 from swim_coach.domain.shared.errors import DomainError
-from swim_coach.domain.shared.types import JsonObject
+from swim_coach.domain.shared.types import JsonObject, JsonValue
 from swim_coach.domain.workouts import CanonicalWorkout, validate_workout
+
+_MAX_CHANGED_PATHS = 20
 
 
 @dataclass(frozen=True, slots=True)
@@ -170,8 +172,67 @@ class TrainingPlanValidator:
             raise DomainError(
                 "PLAN_VALIDATION_FAILED",
                 "The coach-authored training plan is invalid.",
-                details=cast(JsonObject, {"issues": issues}),
+                details=self.error_details(issues),
             )
+
+    @classmethod
+    def error_details(cls, issues: list[JsonObject]) -> JsonObject:
+        """Return validation issues with deterministic recovery instructions."""
+
+        immutable_codes = {
+            "PLAN_METADATA_IMMUTABLE",
+            "PLAN_PAST_WEEK_IMMUTABLE",
+            "PLAN_SESSION_LOCKED",
+        }
+        immutable_paths = sorted(
+            {
+                str(issue["path"])
+                for issue in issues
+                if issue.get("code") in immutable_codes and "path" in issue
+            }
+        )
+        if immutable_paths:
+            recovery: JsonObject = {
+                "action": "RELOAD_CURRENT_REVISION_AND_REBUILD",
+                "next_tool": "get_training_plan",
+                "retry_tool": "propose_plan_revision",
+                "preserve_paths": cast(JsonValue, immutable_paths),
+                "instructions": [
+                    "Call get_training_plan again and use data.revision as the complete "
+                    "base document.",
+                    "Copy protected weeks, sessions, IDs, workouts, and null values exactly.",
+                    "Apply the intended edits only to eligible future weeks, then propose again.",
+                ],
+                "retry_after_rebuild": True,
+                "requires_user_approval_after_success": True,
+            }
+        else:
+            context_codes = {
+                "INVALID_TIMEZONE",
+                "SESSION_DURATION_EXCEEDS_AVAILABILITY",
+                "SESSION_OUTSIDE_AVAILABILITY",
+                "SESSION_POOL_NOT_AVAILABLE",
+                "SESSION_POOL_REQUIRED",
+                "TIMEZONE_MISMATCH",
+                "WORKOUT_POOL_LENGTH_MISMATCH",
+            }
+            recovery = {
+                "action": "CORRECT_DEFINITION_AND_RETRY",
+                "next_tool": (
+                    "get_coach_context"
+                    if any(issue.get("code") in context_codes for issue in issues)
+                    else None
+                ),
+                "retry_tool": "propose_plan_revision",
+                "instructions": [
+                    "Correct the coach-authored definition using the issue paths and values.",
+                    "Do not ask the backend to invent replacement training content.",
+                    "Validate the complete corrected definition again before requesting approval.",
+                ],
+                "retry_after_rebuild": True,
+                "requires_user_approval_after_success": True,
+            }
+        return cast(JsonObject, {"issues": issues, "recovery": recovery})
 
     def _validate_detailed_session(
         self,
@@ -393,12 +454,16 @@ class TrainingPlanValidator:
                         "PLAN_METADATA_IMMUTABLE",
                         f"definition.{field_name}",
                         "Plan identity metadata cannot change in a revision.",
+                        repair_action="COPY_FROM_CURRENT_REVISION",
+                        repair_hint=(
+                            "Reload the plan and copy this field exactly from data.revision."
+                        ),
                     )
                 )
         before_sessions = {
-            session.session_intent_id: session
-            for week in before.weeks
-            for session in week.sessions
+            session.session_intent_id: (week_index, session_index, session)
+            for week_index, week in enumerate(before.weeks)
+            for session_index, session in enumerate(week.sessions)
             if session.session_intent_id is not None
         }
         after_sessions = {
@@ -410,14 +475,39 @@ class TrainingPlanValidator:
         protected_ids = set(immutable_session_ids)
         protected_ids.update(str(item.session_intent_id) for item in bindings if item.locked)
         for session_id in protected_ids:
-            if before_sessions.get(session_id) != after_sessions.get(session_id):
+            before_entry = before_sessions.get(session_id)
+            before_session = before_entry[2] if before_entry is not None else None
+            after_session = after_sessions.get(session_id)
+            if before_session != after_session:
+                session_path = (
+                    f"definition.weeks[{before_entry[0]}].sessions[{before_entry[1]}]"
+                    if before_entry is not None
+                    else f"definition.sessions[{session_id}]"
+                )
+                changed_paths, changed_path_count = self._changed_paths(
+                    (
+                        before_session.model_dump(mode="json")
+                        if before_session is not None
+                        else None
+                    ),
+                    (after_session.model_dump(mode="json") if after_session is not None else None),
+                    session_path,
+                )
                 issues.append(
                     self._issue(
                         "PLAN_SESSION_LOCKED",
-                        f"definition.sessions[{session_id}]",
+                        session_path,
                         "Completed, skipped, manually edited, or activity-linked "
                         "sessions are immutable.",
                         session_intent_id=session_id,
+                        changed_paths=changed_paths,
+                        changed_path_count=changed_path_count,
+                        changed_paths_truncated=changed_path_count > len(changed_paths),
+                        repair_action="COPY_FROM_CURRENT_REVISION",
+                        repair_hint=(
+                            "Reload the plan and copy this locked session exactly from "
+                            "data.revision."
+                        ),
                     )
                 )
         for index, before_week in enumerate(before.weeks):
@@ -429,12 +519,32 @@ class TrainingPlanValidator:
             past = local_today is not None and week_end is not None and week_end < local_today
             reviewed = reviewed_week is not None and before_week.week_number <= reviewed_week
             if (past or reviewed) and before_week != after.weeks[index]:
+                week_path = f"definition.weeks[{index}]"
+                changed_paths, changed_path_count = self._changed_paths(
+                    before_week.model_dump(mode="json"),
+                    after.weeks[index].model_dump(mode="json"),
+                    week_path,
+                )
+                protection_reasons = [
+                    reason
+                    for reason, protected in (("PAST", past), ("REVIEWED", reviewed))
+                    if protected
+                ]
                 issues.append(
                     self._issue(
                         "PLAN_PAST_WEEK_IMMUTABLE",
-                        f"definition.weeks[{index}]",
+                        week_path,
                         "Past or reviewed plan weeks cannot be changed.",
                         week_number=before_week.week_number,
+                        protection_reasons=protection_reasons,
+                        changed_paths=changed_paths,
+                        changed_path_count=changed_path_count,
+                        changed_paths_truncated=changed_path_count > len(changed_paths),
+                        repair_action="COPY_FROM_CURRENT_REVISION",
+                        repair_hint=(
+                            "Call get_training_plan, copy this week exactly from "
+                            "data.revision, and modify only eligible future weeks."
+                        ),
                     )
                 )
         if revision_kind == "MATERIALIZATION":
@@ -464,6 +574,12 @@ class TrainingPlanValidator:
                         "definition.weeks",
                         "A materialization revision must detail exactly one future week.",
                         changed_week_count=len(changed),
+                        changed_week_numbers=[before.weeks[index].week_number for index in changed],
+                        repair_action="LIMIT_TO_ONE_FUTURE_WEEK",
+                        repair_hint=(
+                            "Start from data.revision and replace exactly one future OUTLINE "
+                            "or STRATEGIC week with its DETAILED version."
+                        ),
                     )
                 )
             elif not (
@@ -477,8 +593,45 @@ class TrainingPlanValidator:
                         f"definition.weeks[{changed[0]}].detail_level",
                         "Materialization must turn one outline or strategic week into a "
                         "coach-authored detailed week.",
+                        repair_action="DETAIL_ONE_FUTURE_WEEK",
                     )
                 )
+
+    @staticmethod
+    def _changed_paths(before: Any, after: Any, root: str) -> tuple[list[str], int]:
+        """Return bounded deterministic leaf paths that differ between two values."""
+
+        paths: list[str] = []
+        changed_path_count = 0
+
+        def record(path: str) -> None:
+            nonlocal changed_path_count
+            changed_path_count += 1
+            if len(paths) < _MAX_CHANGED_PATHS:
+                paths.append(path)
+
+        def walk(left: Any, right: Any, path: str) -> None:
+            if isinstance(left, dict) and isinstance(right, dict):
+                for key in sorted(set(left) | set(right)):
+                    child_path = f"{path}.{key}"
+                    if key not in left or key not in right:
+                        record(child_path)
+                    else:
+                        walk(left[key], right[key], child_path)
+                return
+            if isinstance(left, list) and isinstance(right, list):
+                for index in range(max(len(left), len(right))):
+                    child_path = f"{path}[{index}]"
+                    if index >= len(left) or index >= len(right):
+                        record(child_path)
+                    else:
+                        walk(left[index], right[index], child_path)
+                return
+            if left != right:
+                record(path)
+
+        walk(before, after, root)
+        return paths, changed_path_count
 
     @staticmethod
     def _issue(code: str, path: str, message: str, **details: Any) -> JsonObject:
