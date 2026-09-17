@@ -28,17 +28,32 @@ description: Author, review, and materialize an approval-gated pool-swimming cyc
    `skip_plan_session` only when the athlete intentionally resolves a session
    as missed; never use it merely because an activity has not synchronized yet.
 7. To adapt after a week, call `review_training_plan`. It returns evidence only.
-   Interpret the evidence yourself, choose the decision, and author the full
-   resulting future plan in an `ADAPTATION` revision definition passed to
-   `propose_plan_revision`.
-8. To turn an OUTLINE or STRATEGIC week into workouts before it is due, author a
-   `MATERIALIZATION` revision for exactly that future week. This does not require
-   an adaptation decision, but still requires validation, diff, hash, and user approval.
-9. Call `apply_plan_revision` only after the athlete approves that exact
+   Interpret the evidence yourself and choose the decision. Then call
+   `get_training_plan` again, deep-copy its current `data.revision`, and edit only
+   eligible future weeks. Past or reviewed weeks and locked sessions must remain
+   byte-equivalent after model normalization, including IDs, workouts, dates,
+   times, omitted/empty collections, and null values. Never rebuild protected
+   content from a summary, activity, earlier proposal, or conversation. Submit
+   the complete resulting document in an `ADAPTATION` revision definition.
+8. To turn an OUTLINE or STRATEGIC week into workouts before it is due, start
+   from the same fresh `data.revision` and author a `MATERIALIZATION` revision
+   that changes exactly that one future week. Use MATERIALIZATION when no new
+   review decision is being recorded; use ADAPTATION when a weekly review caused
+   a decision even if the existing strategy already anticipated the progression.
+   Both flows require validation, diff, hash, and user approval.
+9. If `propose_plan_revision` fails, inspect every item in
+   `error.details.issues` and follow `error.details.recovery`. For immutable or
+   stale-revision errors, call `get_training_plan` again, rebuild from the newly
+   returned `data.revision`, copy each reported protected path exactly, reapply
+   edits only to eligible future weeks, and retry once. For other validation
+   errors, correct the reported paths without asking the backend to invent
+   training content. If the rebuilt proposal still fails, explain the remaining
+   issue instead of looping or weakening a safety rule.
+10. Call `apply_plan_revision` only after the athlete approves that exact
    proposal. Never infer approval from a request to review or explain it.
-10. Use `materialize_plan_week` only to retry idempotent local materialization of
+11. Use `materialize_plan_week` only to retry idempotent local materialization of
     already approved DETAILED content. It never authors a session.
-11. Publish sessions with `publish_workout` only when the athlete explicitly asks.
+12. Publish sessions with `publish_workout` only when the athlete explicitly asks.
 
 Do not delegate phases, loads, recovery, pace, sets, tests, or progressions to
 the backend. Do not roll missed work forward, diagnose pain, prescribe treatment,
