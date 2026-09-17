@@ -219,6 +219,12 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
                         "sync_garmin",
                         "save_feedback",
                     ]
+                    revision_tool = next(
+                        tool for tool in listed.tools if tool.name == "propose_plan_revision"
+                    )
+                    assert revision_tool.description is not None
+                    assert "deep-copying data.revision" in revision_tool.description
+                    assert "error.details.recovery" in revision_tool.description
                     assert all(
                         tool.meta
                         and tool.meta.get("securitySchemes")
@@ -413,6 +419,30 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
                     )
                     assert review_after_materialization.structuredContent is not None
                     review_data = review_after_materialization.structuredContent["data"]
+                    invalid_reviewed_week_proposal = await session.call_tool(
+                        "propose_plan_revision",
+                        {
+                            "plan_id": plan_data["plan_id"],
+                            "expected_revision": 2,
+                            "revision_definition": {
+                                "schema_version": "1.0",
+                                "kind": "ADAPTATION",
+                                "review_id": review_data["review_id"],
+                                "decision": "HOLD",
+                                "rationale": "Synthetic immutable-week regression.",
+                                "definition": {
+                                    **materialized_definition,
+                                    "weeks": [
+                                        {
+                                            **materialized_definition["weeks"][0],
+                                            "focus": "Incorrectly reconstructed reviewed week",
+                                        },
+                                        *materialized_definition["weeks"][1:],
+                                    ],
+                                },
+                            },
+                        },
+                    )
                     revision_proposal = await session.call_tool(
                         "propose_plan_revision",
                         {
@@ -517,6 +547,16 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
     assert materialization_proposal.structuredContent is not None
     assert materialization_proposal.structuredContent["data"]["revision_kind"] == "MATERIALIZATION"
     assert materialization_proposal.structuredContent["data"]["decision"] is None
+    assert invalid_reviewed_week_proposal.isError is True
+    invalid_error = json.loads(invalid_reviewed_week_proposal.content[0].text)
+    assert invalid_error["error"]["code"] == "PLAN_VALIDATION_FAILED"
+    invalid_details = invalid_error["error"]["details"]
+    immutable_issue = next(
+        item for item in invalid_details["issues"] if item["code"] == "PLAN_PAST_WEEK_IMMUTABLE"
+    )
+    assert immutable_issue["changed_paths"] == ["definition.weeks[0].focus"]
+    assert invalid_details["recovery"]["next_tool"] == "get_training_plan"
+    assert invalid_details["recovery"]["retry_tool"] == "propose_plan_revision"
     assert generated_week_two.structuredContent is not None
     assert generated_week_two.structuredContent["data"]["session_count"] == 1
     assert revision_proposal.structuredContent is not None
