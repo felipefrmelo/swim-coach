@@ -18,6 +18,7 @@ from swim_coach.domain.planning import (
     PlanWeek,
     PrescriptionSource,
     TrainingPlanDocument,
+    plan_document_diff,
 )
 from swim_coach.domain.shared.errors import DomainError
 from swim_coach.domain.shared.value_objects import EntityId, PoolLength, UserId
@@ -175,6 +176,10 @@ def test_detailed_session_without_explicit_pool_is_rejected_not_defaulted() -> N
         TrainingPlanValidator().validate(definition, context)
 
     assert "SESSION_POOL_REQUIRED" in issue_codes(captured.value)
+    recovery = captured.value.details["recovery"]
+    assert isinstance(recovery, dict)
+    assert recovery["action"] == "CORRECT_DEFINITION_AND_RETRY"
+    assert recovery["next_tool"] == "get_coach_context"
 
 
 def test_normalization_preserves_every_coach_authored_sport_decision() -> None:
@@ -328,6 +333,14 @@ def test_locked_session_cannot_be_changed_or_removed() -> None:
         )
 
     assert "PLAN_SESSION_LOCKED" in issue_codes(captured.value)
+    issues = captured.value.details["issues"]
+    assert isinstance(issues, list)
+    locked = next(item for item in issues if item["code"] == "PLAN_SESSION_LOCKED")
+    assert locked["changed_paths"] == ["definition.weeks[0].sessions[0].target_distance_m"]
+    recovery = captured.value.details["recovery"]
+    assert isinstance(recovery, dict)
+    assert recovery["action"] == "RELOAD_CURRENT_REVISION_AND_REBUILD"
+    assert recovery["next_tool"] == "get_training_plan"
 
 
 def test_activity_linked_session_is_immutable_even_if_binding_state_is_materialized() -> None:
@@ -356,6 +369,94 @@ def test_activity_linked_session_is_immutable_even_if_binding_state_is_materiali
         )
 
     assert "PLAN_SESSION_LOCKED" in issue_codes(captured.value)
+
+
+def test_reviewed_week_error_identifies_changes_and_how_to_rebuild() -> None:
+    context = validation_context()
+    before = normalized(plan_definition(), context)
+    changed_week = before.weeks[0].model_copy(update={"focus": "Reconstructed summary"})
+    after = before.model_copy(update={"weeks": (changed_week, *before.weeks[1:])})
+
+    with pytest.raises(DomainError) as captured:
+        TrainingPlanValidator().validate(
+            after,
+            context,
+            previous=before,
+            reviewed_week=1,
+            revision_kind="ADAPTATION",
+            local_today=date(2026, 9, 10),
+        )
+
+    issues = captured.value.details["issues"]
+    assert isinstance(issues, list)
+    immutable = next(item for item in issues if item["code"] == "PLAN_PAST_WEEK_IMMUTABLE")
+    assert immutable == {
+        "code": "PLAN_PAST_WEEK_IMMUTABLE",
+        "path": "definition.weeks[0]",
+        "message": "Past or reviewed plan weeks cannot be changed.",
+        "week_number": 1,
+        "protection_reasons": ["REVIEWED"],
+        "changed_paths": ["definition.weeks[0].focus"],
+        "changed_path_count": 1,
+        "changed_paths_truncated": False,
+        "repair_action": "COPY_FROM_CURRENT_REVISION",
+        "repair_hint": (
+            "Call get_training_plan, copy this week exactly from data.revision, "
+            "and modify only eligible future weeks."
+        ),
+    }
+    recovery = captured.value.details["recovery"]
+    assert isinstance(recovery, dict)
+    assert recovery["preserve_paths"] == ["definition.weeks[0]"]
+    assert recovery["retry_tool"] == "propose_plan_revision"
+    assert recovery["retry_after_rebuild"] is True
+    assert recovery["requires_user_approval_after_success"] is True
+
+
+def test_adaptation_can_detail_only_a_future_week_after_review() -> None:
+    context = validation_context()
+    before = normalized(plan_definition(), context)
+    source_session = before.weeks[0].sessions[0]
+    detailed_session = source_session.model_copy(
+        update={
+            "session_intent_id": str(EntityId.new()),
+            "scheduled_date": date(2026, 9, 15),
+        }
+    )
+    detailed_week = before.weeks[1].model_copy(
+        update={
+            "detail_level": PlanDetailLevel.DETAILED,
+            "session_count": 1,
+            "sessions": (detailed_session,),
+        }
+    )
+    after = before.model_copy(update={"weeks": (before.weeks[0], detailed_week, *before.weeks[2:])})
+
+    TrainingPlanValidator().validate(
+        after,
+        context,
+        previous=before,
+        reviewed_week=1,
+        revision_kind="ADAPTATION",
+        local_today=date(2026, 9, 10),
+    )
+
+    diff = plan_document_diff(before, after)
+    changed_weeks = diff["changed_weeks"]
+    assert isinstance(changed_weeks, list)
+    assert [item["week_number"] for item in changed_weeks] == [2]
+
+
+def test_changed_path_diagnostics_are_bounded() -> None:
+    before = {f"field_{index:02d}": index for index in range(25)}
+    after = {f"field_{index:02d}": index + 1 for index in range(25)}
+
+    paths, count = TrainingPlanValidator._changed_paths(before, after, "definition")
+
+    assert count == 25
+    assert len(paths) == 20
+    assert paths[0] == "definition.field_00"
+    assert paths[-1] == "definition.field_19"
 
 
 def test_materialization_only_details_one_future_outline_or_strategic_week() -> None:

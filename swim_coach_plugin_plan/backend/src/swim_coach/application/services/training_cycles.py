@@ -508,7 +508,26 @@ class TrainingCycleService:
         plan = detail.plan
         current = detail.revision
         if current is None or plan.current_revision != expected_revision:
-            raise DomainError("PLAN_REVISION_CONFLICT", "The plan revision changed.")
+            raise DomainError(
+                "PLAN_REVISION_CONFLICT",
+                "The plan revision changed.",
+                details={
+                    "expected_revision": expected_revision,
+                    "current_revision": plan.current_revision,
+                    "recovery": {
+                        "action": "RELOAD_CURRENT_REVISION_AND_REBUILD",
+                        "next_tool": "get_training_plan",
+                        "retry_tool": "propose_plan_revision",
+                        "instructions": [
+                            "Reload the plan and use data.revision as the new complete base.",
+                            "Reapply intended edits only to eligible future weeks.",
+                            "Retry with the newly returned current_revision value.",
+                        ],
+                        "retry_after_rebuild": True,
+                        "requires_user_approval_after_success": True,
+                    },
+                },
+            )
         if plan.status is not PlanStatus.ACTIVE:
             raise DomainError("PLAN_NOT_ACTIVE", "Only an active plan can be adapted.")
         review: PlanReview | None = None
@@ -537,7 +556,21 @@ class TrainingCycleService:
             ):
                 raise ResourceNotFoundError("plan_review")
             if not review.eligible:
-                raise DomainError("PLAN_REVIEW_NOT_ELIGIBLE", "The plan week is still open.")
+                raise DomainError(
+                    "PLAN_REVIEW_NOT_ELIGIBLE",
+                    "The plan week is still open.",
+                    details={
+                        "review_id": str(review.id),
+                        "week_number": review.week_number,
+                        "eligibility_reason": review.eligibility_reason,
+                        "recovery": {
+                            "action": "RESOLVE_WEEK_EVIDENCE_BEFORE_ADAPTATION",
+                            "next_tool": "review_training_plan",
+                            "retry_after_rebuild": False,
+                            "requires_user_approval_after_success": True,
+                        },
+                    },
+                )
             reviewed_week = review.week_number
         candidate = self._normalize_definition(
             revision_definition.definition,
@@ -557,13 +590,17 @@ class TrainingCycleService:
                         "code": "PLAN_METADATA_IMMUTABLE",
                         "path": f"definition.{field_name}",
                         "message": "Plan identity metadata cannot change in a revision.",
+                        "repair_action": "COPY_FROM_CURRENT_REVISION",
+                        "repair_hint": (
+                            "Reload the plan and copy this field exactly from data.revision."
+                        ),
                     }
                 )
         if identity_issues:
             raise DomainError(
                 "PLAN_VALIDATION_FAILED",
                 "The coach-authored training plan is invalid.",
-                details=cast(JsonObject, {"issues": identity_issues}),
+                details=self._validator.error_details(identity_issues),
             )
         local_today = datetime.now(UTC).astimezone(ZoneInfo(user.timezone)).date()
         self._validator.validate(

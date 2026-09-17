@@ -48,7 +48,7 @@ tools:
         week_number: {type: integer, minimum: 1, maximum: 16}
   - name: propose_plan_revision
     title: Validate a coach-authored plan revision
-    description: Validate and stage a coach-authored revision. This tool never chooses the adaptation decision or changes its prescription.
+    description: Validate and stage a coach-authored revision built by deep-copying the current data.revision, preserving past or reviewed weeks and locked sessions exactly, and editing only eligible future weeks. Validation failures include structured recovery guidance and changed paths. This tool never chooses the adaptation decision, applies a proposal, or writes to Garmin.
     scopes: [coach]
     annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
     input:
