@@ -1689,7 +1689,12 @@ def _register_v2_tools(
         title="Validate a coach-authored plan revision",
         description=(
             "Validate and stage a coach-authored adaptation or materialization revision. "
-            "This tool never chooses the adaptation decision or changes its prescription."
+            "Build definition by deep-copying data.revision from a fresh get_training_plan "
+            "call, preserve past/reviewed weeks and locked sessions exactly (including IDs, "
+            "workouts, and nulls), and edit only eligible future weeks. On validation failure, "
+            "follow error.details.recovery and issue changed_paths before retrying. This tool "
+            "never chooses the adaptation decision, changes its prescription, applies a "
+            "proposal, or writes to Garmin."
         ),
         annotations=LOCAL_WRITE,
         structured_output=True,
