@@ -548,7 +548,8 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
     assert materialization_proposal.structuredContent["data"]["revision_kind"] == "MATERIALIZATION"
     assert materialization_proposal.structuredContent["data"]["decision"] is None
     assert invalid_reviewed_week_proposal.isError is True
-    invalid_error = json.loads(invalid_reviewed_week_proposal.content[0].text)
+    invalid_error_text = invalid_reviewed_week_proposal.content[0].text
+    invalid_error = json.loads(invalid_error_text[invalid_error_text.index("{") :])
     assert invalid_error["error"]["code"] == "PLAN_VALIDATION_FAILED"
     invalid_details = invalid_error["error"]["details"]
     immutable_issue = next(
