@@ -7,6 +7,7 @@ from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from swim_coach.application.services.activity_data import ActivityDetail
+from swim_coach.application.services.heart_rate import main_block_heart_rate
 from swim_coach.domain.activities import (
     ActivityNormalization,
     NormalizedActivity,
@@ -15,6 +16,7 @@ from swim_coach.domain.activities import (
     resolve_session_evaluation,
 )
 from swim_coach.domain.activities.checkin import execution_evidence
+from swim_coach.domain.activities.heart_rate import HeartRateFacts, valid_bpm
 from swim_coach.domain.garmin import Activity
 
 _LEGACY_NORMALIZER_MARKER = "|swim-coach:1."
@@ -371,6 +373,16 @@ def activity_summary_v2(
         ),
         "session_evaluation": session_evaluation_v2(normalized, feedback),
         "execution_evidence": execution_evidence(feedback.check_in if feedback else None),
+        "heart_rate": (
+            HeartRateFacts.model_validate(normalization.heart_rate).as_json()
+            if normalization is not None and normalization.heart_rate
+            else HeartRateFacts(
+                avg_bpm=valid_bpm(activity.avg_hr),
+                max_bpm=valid_bpm(activity.max_hr),
+                source="GARMIN_SUMMARY" if activity.avg_hr or activity.max_hr else None,
+                warnings=("HR_ZONES_UNAVAILABLE",),
+            ).as_json()
+        ),
     }
 
 
@@ -473,6 +485,7 @@ def activity_detail_v2(
             "raw_fit_exposed": False,
         }
     )
+    result["main_set_heart_rate"] = main_block_heart_rate(result)
     return result
 
 
@@ -510,6 +523,12 @@ def _interval(item: Any, alignment: dict[str, Any] | None = None) -> dict[str, A
         "stroke_count": item.stroke_count,
         "stroke_rate": _number(item.stroke_rate),
         "swolf": _number(item.swolf),
+        "heart_rate": {
+            "avg_bpm": valid_bpm(item.avg_hr_bpm),
+            "max_bpm": valid_bpm(item.max_hr_bpm),
+            "source": "FIT_LAP" if item.avg_hr_bpm or item.max_hr_bpm else None,
+            "scope": "LAP_SUMMARY",
+        },
         "provenance": dict(item.provenance),
         "quality_warnings": list(item.quality_warnings),
     }

@@ -795,6 +795,7 @@ class ActivityNormalizationModel(Base):
     quality: Mapped[str] = mapped_column(String(20), nullable=False)
     warnings_json: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     provenance_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    heart_rate_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     __table_args__ = (

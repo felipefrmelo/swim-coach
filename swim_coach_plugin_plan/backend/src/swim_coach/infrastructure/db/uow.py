@@ -852,6 +852,7 @@ def _normalization(model: ActivityNormalizationModel) -> ActivityNormalization:
         perceived_effort_rpe=_optional_decimal(model.perceived_effort_rpe),
         feeling_score=model.feeling_score,
         provenance=_json(provenance),
+        heart_rate=_json(model.heart_rate_json or {}),
     )
 
 
@@ -1846,6 +1847,7 @@ class SqlAlchemyActivityDataRepository:
                 quality=item.quality.value,
                 warnings_json=list(item.warnings),
                 provenance_json=item.provenance,
+                heart_rate_json=item.heart_rate,
                 created_at=item.created_at,
             )
             .on_conflict_do_nothing(constraint="uq_activity_normalization_input_version")

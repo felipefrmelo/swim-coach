@@ -441,6 +441,7 @@ class ActivityNormalization:
     perceived_effort_rpe: Decimal | None = None
     feeling_score: int | None = None
     provenance: JsonObject = field(default_factory=dict)
+    heart_rate: JsonObject = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.parser_version.strip() or not self.profile_version.strip():

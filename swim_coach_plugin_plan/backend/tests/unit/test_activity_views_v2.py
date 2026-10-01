@@ -630,6 +630,14 @@ class _ActivityDataServiceStub:
         assert activity_id == self._detail.activity.id
         return self._detail
 
+    async def heart_rate_comparisons(
+        self, user_id: UserId, detail: ActivityDetail, view: dict[str, object]
+    ) -> dict[str, object]:
+        from swim_coach.application.services.heart_rate import aerobic_comparisons
+
+        assert user_id == detail.activity.user_id
+        return aerobic_comparisons(view, [])
+
 
 class _McpUnitOfWork:
     def __init__(

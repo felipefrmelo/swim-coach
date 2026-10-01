@@ -9,6 +9,7 @@ import zipfile
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from swim_coach.application.ports.activity_data import FitActivityParser, ObjectStorage
@@ -382,6 +383,38 @@ class ActivityDataService:
             match = await uow.activity_data.get_match(user_id, activity_id)
             feedback = await uow.activity_data.get_feedback(user_id, activity_id)
         return ActivityDetail(activity, normalized, analysis, match, feedback)
+
+    async def heart_rate_comparisons(
+        self, user_id: UserId, detail: ActivityDetail, view: dict[str, Any]
+    ) -> dict[str, Any]:
+        # Imported locally to avoid the ActivityDetail/view module dependency cycle.
+        from swim_coach.application.services.activity_views import activity_detail_v2
+        from swim_coach.application.services.heart_rate import aerobic_comparisons
+
+        history: list[dict[str, Any]] = []
+        if detail.activity.user_id != user_id:
+            raise ResourceNotFoundError("activity")
+        blocks = view.get("main_set_heart_rate", {}).get("blocks", [])
+        if (
+            not any(block.get("avg_bpm") is not None for block in blocks)
+            or view.get("data_quality", {}).get("level") == "LOW"
+            or view.get("execution_evidence", {}).get("performance_blocked")
+        ):
+            return aerobic_comparisons(view, history)
+        async with self._uow_factory() as uow:
+            activities = await uow.activities.list_recent(
+                user_id, limit=20, before=detail.activity.start_time_utc
+            )
+            for activity in activities:
+                normalized = await uow.activity_data.get_current_normalization(user_id, activity.id)
+                analysis = await uow.activity_data.get_analysis(user_id, activity.id)
+                feedback = await uow.activity_data.get_feedback(user_id, activity.id)
+                history.append(
+                    activity_detail_v2(
+                        ActivityDetail(activity, normalized, analysis, None, feedback)
+                    )
+                )
+        return aerobic_comparisons(view, history)
 
     async def _match_automatically(
         self,

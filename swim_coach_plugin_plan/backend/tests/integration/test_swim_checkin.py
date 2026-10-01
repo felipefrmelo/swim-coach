@@ -85,7 +85,7 @@ async def test_checkin_database_roundtrip_idempotency_and_ownership(
     config.attributes["database_url"] = postgres_database[0]
     with pytest.raises(DBAPIError, match="would discard athlete check-ins"):
         await asyncio.to_thread(command.downgrade, config, "000015")
-    assert await database.revision() == "000016"
+    assert await database.revision() == "000017"
     async with factory() as uow:
         protected = await uow.activity_data.get_feedback(owner.id, activity.id)
     assert protected is not None and protected.check_in == loaded.check_in
