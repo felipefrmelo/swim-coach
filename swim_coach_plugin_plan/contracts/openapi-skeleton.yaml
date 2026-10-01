@@ -457,6 +457,7 @@ components:
       additionalProperties: false
       required: [index, interval_type, planned_role, distance_m, durations, speeds, paces, detected_stroke, planned_stroke, stroke_count, stroke_rate, swolf, provenance, quality_warnings]
       properties:
+        heart_rate: {type: object}
         index: {type: integer, minimum: 0}
         interval_type: {type: string, enum: [SWIM, REST, DRILL, UNKNOWN]}
         planned_role: {type: [string, "null"], enum: [WARMUP, WORK, RECOVERY, REST, COOLDOWN, DRILL, OTHER, null]}
@@ -587,6 +588,7 @@ components:
       additionalProperties: false
       required: [activity_id, name, subtype, started_at_utc, started_at_local, timezone, distance_m, durations, speeds, paces, pool, provenance, data_quality, session_evaluation]
       properties:
+        heart_rate: {$ref: "#/components/schemas/HeartRateFacts"}
         execution_evidence: {type: object}
         activity_id: {type: string, format: uuid}
         name: {type: string}
@@ -607,6 +609,9 @@ components:
       additionalProperties: false
       required: [activity_id, name, subtype, started_at_utc, started_at_local, timezone, distance_m, durations, speeds, paces, pool, provenance, data_quality, session_evaluation, schema_version, normalization, intervals, lengths, analysis, match, feedback, raw_fit_exposed]
       properties:
+        heart_rate: {$ref: "#/components/schemas/HeartRateFacts"}
+        main_set_heart_rate: {type: object}
+        aerobic_comparisons: {type: object}
         execution_evidence: {type: object}
         activity_id: {type: string, format: uuid}
         name: {type: string}
@@ -676,6 +681,96 @@ components:
         planned_workout_id: {type: string, format: uuid}
     MatchResponse:
       $ref: "#/components/schemas/MatchV2"
+    HeartRateFacts:
+      additionalProperties: false
+      properties:
+        avg_bpm:
+          anyOf:
+          - maximum: 254
+            minimum: 1
+            type: integer
+          - type: 'null'
+          default: null
+          title: Avg Bpm
+        max_bpm:
+          anyOf:
+          - maximum: 254
+            minimum: 1
+            type: integer
+          - type: 'null'
+          default: null
+          title: Max Bpm
+        source:
+          anyOf:
+          - enum:
+            - FIT_SESSION
+            - GARMIN_SUMMARY
+            type: string
+          - type: 'null'
+          default: null
+          title: Source
+        zones:
+          default: []
+          items:
+            $ref: '#/components/schemas/HeartRateZone'
+          title: Zones
+          type: array
+        zones_source:
+          anyOf:
+          - enum:
+            - FIT_SESSION
+            - FIT_TIME_IN_ZONE
+            type: string
+          - type: 'null'
+          default: null
+          title: Zones Source
+        zone_time_s:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Zone Time S
+        zone_time_basis:
+          anyOf:
+          - const: GARMIN_REPORTED_ZONE_TIME
+            type: string
+          - type: 'null'
+          default: null
+          title: Zone Time Basis
+        warnings:
+          default: []
+          items:
+            type: string
+          title: Warnings
+          type: array
+      title: HeartRateFacts
+      type: object
+    HeartRateZone:
+      additionalProperties: false
+      properties:
+        zone_index:
+          maximum: 15
+          minimum: 0
+          title: Zone Index
+          type: integer
+        duration_s:
+          title: Duration S
+          type: string
+        percent_of_zone_time:
+          title: Percent Of Zone Time
+          type: string
+        high_boundary_bpm:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          title: High Boundary Bpm
+      required:
+      - zone_index
+      - duration_s
+      - percent_of_zone_time
+      title: HeartRateZone
+      type: object
   responses:
     Problem:
       description: Problem Details

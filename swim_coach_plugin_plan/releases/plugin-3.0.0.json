@@ -58,7 +58,7 @@
     "contracts/tool-result-envelope-v2.schema.json": "056a6cbe89eaedf1663635ec7fd78b8ca718f61faa4f39c6979e118e41fb4d3f",
     "contracts/oauth-scopes.md": "5e066ad38798ba739fe854a88058543ed447fa7506729b02478f9450d87c845a",
     "contracts/capability-release-matrix.yaml": "ad3f75be4661c22e09cfac8ac331a339468a771ebf388d5d492f6019337e1ca5",
-    "contracts/openapi-skeleton.yaml": "2f0d1ab18a95bcbee34cd8f1da0ef2e803f54c0da619583e3ecb32ee41d05d8e"
+    "contracts/openapi-skeleton.yaml": "2fe10e39c80bcd338b857245ae58b3e6628a29e9a2629965b032cd4a9abe2887"
   },
   "verification": {
     "schema_revision": "000016",
@@ -73,7 +73,7 @@
     "url": "https://swim-coach.ozix.com.br",
     "runtime_tool_count": 17,
     "target_tool_count": 17,
-    "schema_revision": "000016",
+    "schema_revision": "000017",
     "status": "pending"
   },
   "pending_gates": [

@@ -478,7 +478,7 @@ def test_zero_count_rest_lap_owns_idle_length_until_next_fit_boundary() -> None:
     assert normalized.normalization.rest_seconds == Decimal("25.000")
     assert normalized.lengths[2].interval_id == normalized.intervals[1].id
     assert normalized.lengths[3].interval_id == normalized.intervals[2].id
-    assert normalized.normalization.parser_version.endswith("|swim-coach:2.1.0")
+    assert normalized.normalization.parser_version.endswith("|swim-coach:2.2.0")
     assert "UNASSIGNED_LENGTH_MESSAGES" not in normalized.normalization.warnings
     assert "LAP_IDLE_LENGTH_OWNERSHIP_INFERRED" in normalized.normalization.warnings
     assert "ZERO_DISTANCE_INTERVAL_WITHOUT_REST_EVIDENCE" not in (normalized.normalization.warnings)

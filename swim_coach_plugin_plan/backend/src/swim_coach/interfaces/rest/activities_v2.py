@@ -16,6 +16,7 @@ from swim_coach.application.services.activity_views import (
 )
 from swim_coach.domain.activities import SessionFeedback
 from swim_coach.domain.activities.checkin import SwimCheckIn
+from swim_coach.domain.activities.heart_rate import HeartRateFacts
 from swim_coach.domain.shared.value_objects import EntityId
 from swim_coach.interfaces.rest.activities import (
     IdempotencyHeader,
@@ -105,6 +106,7 @@ class SessionEvaluationV2(StrictModel):
 
 
 class ActivitySummaryV2(StrictModel):
+    heart_rate: HeartRateFacts = Field(default_factory=HeartRateFacts)
     execution_evidence: dict[str, Any] = Field(default_factory=dict)
     activity_id: UUID
     name: str
@@ -138,6 +140,7 @@ class IntervalPacesV2(StrictModel):
 
 
 class IntervalV2(StrictModel):
+    heart_rate: dict[str, Any] = Field(default_factory=dict)
     index: int
     interval_type: Literal["SWIM", "REST", "DRILL", "UNKNOWN"]
     planned_role: Literal["WARMUP", "WORK", "RECOVERY", "REST", "COOLDOWN", "DRILL", "OTHER"] | None
@@ -233,6 +236,8 @@ class FeedbackRequestV2(StrictModel):
 
 
 class ActivityDetailV2(ActivitySummaryV2):
+    main_set_heart_rate: dict[str, Any] = Field(default_factory=dict)
+    aerobic_comparisons: dict[str, Any] = Field(default_factory=dict)
     schema_version: Literal["2.0"]
     normalization: NormalizationV2 | None
     intervals: list[IntervalV2]
@@ -275,9 +280,11 @@ async def get_activity_v2(
     activity_id: UUID, authenticated: Authenticated, services: Services
 ) -> ActivityDetailV2:
     detail = await services.activity_data.get(authenticated.user.id, EntityId(activity_id))
-    return ActivityDetailV2.model_validate(
-        activity_detail_v2(detail, timezone_name=authenticated.user.timezone)
+    view = activity_detail_v2(detail, timezone_name=authenticated.user.timezone)
+    view["aerobic_comparisons"] = await services.activity_data.heart_rate_comparisons(
+        authenticated.user.id, detail, view
     )
+    return ActivityDetailV2.model_validate(view)
 
 
 @router.post("/{activity_id}/process", response_model=SyncJobResponse, status_code=202)

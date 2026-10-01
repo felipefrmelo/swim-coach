@@ -173,6 +173,23 @@ class FixtureParser:
             perceived_effort_rpe=Decimal("4.5"),
             feeling_score=80,
             provenance={"moving_seconds": {"source": "garmin"}},
+            heart_rate={
+                "avg_bpm": 142,
+                "max_bpm": 172,
+                "source": "FIT_SESSION",
+                "zones": [
+                    {
+                        "zone_index": 0,
+                        "duration_s": "20",
+                        "percent_of_zone_time": "100.00",
+                        "high_boundary_bpm": None,
+                    }
+                ],
+                "zones_source": "FIT_SESSION",
+                "zone_time_s": "20",
+                "zone_time_basis": "GARMIN_REPORTED_ZONE_TIME",
+                "warnings": [],
+            },
         )
         return NormalizedActivity(normalization, (lap,), tuple(intervals), tuple(lengths))
 
@@ -274,6 +291,8 @@ async def test_activity_pipeline_replay_versions_feedback_and_preserves_ownershi
     assert replay.normalized.normalization.swim_seconds == Decimal(168)
     assert replay.normalized.normalization.perceived_effort_rpe == Decimal("4.5")
     assert replay.normalized.normalization.feeling_score == 80
+    assert replay.normalized.normalization.heart_rate["avg_bpm"] == 142
+    assert replay.normalized.normalization.heart_rate["zone_time_s"] == "20"
     assert replay.normalized.normalization.provenance["moving_seconds"]["source"] == "garmin"
     assert replay.normalized.intervals[0].planned_role == "work"
     assert replay.normalized.intervals[0].quality_warnings == ("SYNTHETIC_WARNING",)

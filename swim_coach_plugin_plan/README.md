@@ -75,6 +75,10 @@ pelos kill switches do servidor.
 
 ## Experiência principal
 
+A [análise de frequência cardíaca](docs/heart-rate-analysis.md) expõe FC da sessão,
+dos blocos principais, zonas Garmin e comparações históricas exploratórias no
+ChatGPT e no painel auxiliar, com origem e cobertura explícitas.
+
 O [checkpoint semanal do coach](docs/weekly-coach-checkpoint.md) conecta o check-in
 opcional à revisão existente, separando execução confirmada, resposta do atleta
 e confiabilidade das métricas. Erros declarados do relógio não viram falhas de

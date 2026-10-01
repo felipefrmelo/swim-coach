@@ -81,6 +81,7 @@ def test_uow_invalidates_known_parser_v1_moving_alias_on_read() -> None:
         perceived_effort_rpe=Decimal("3.0"),
         feeling_score=75,
         provenance_json={},
+        heart_rate_json={},
     )
 
     normalization = _normalization(model)

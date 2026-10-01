@@ -26,9 +26,11 @@ from swim_coach.domain.activities import (
     NormalizedActivity,
     ProvenanceSource,
 )
+from swim_coach.domain.activities.heart_rate import valid_bpm
 from swim_coach.domain.shared.errors import DomainError
 from swim_coach.domain.shared.types import JsonObject
 from swim_coach.domain.shared.value_objects import EntityId, UserId
+from swim_coach.infrastructure.fit.heart_rate import fit_heart_rate
 
 ZERO = Decimal(0)
 MILLISECOND = Decimal("0.001")
@@ -415,7 +417,7 @@ def _lap_length_messages(
 
 
 class GarminFitActivityParser:
-    NORMALIZER_VERSION = "2.1.0"
+    NORMALIZER_VERSION = "2.2.0"
 
     def __init__(self, *, max_size_bytes: int = 50 * 1024 * 1024) -> None:
         self._max_size_bytes = max_size_bytes
@@ -963,8 +965,8 @@ class GarminFitActivityParser:
                 swim_pace_seconds_per_100m=_pace(lap_swim, lap_distance),
                 timer_pace_seconds_per_100m=timer_pace,
                 elapsed_pace_seconds_per_100m=_pace(lap_elapsed, lap_distance),
-                avg_hr_bpm=_integer(raw_lap.get("avg_heart_rate")),
-                max_hr_bpm=_integer(raw_lap.get("max_heart_rate")),
+                avg_hr_bpm=valid_bpm(raw_lap.get("avg_heart_rate")),
+                max_hr_bpm=valid_bpm(raw_lap.get("max_heart_rate")),
                 stroke_type=detected_stroke,
                 detected_stroke=detected_stroke,
                 provenance=lap_provenance,
@@ -1568,6 +1570,7 @@ class GarminFitActivityParser:
             parser_version=self.parser_version,
             profile_version=self.profile_version,
             input_checksum=input_checksum,
+            heart_rate=fit_heart_rate(session, decoded).as_json(),
             pool_length_m=pool_length_m,
             distance_m=distance_m,
             elapsed_seconds=elapsed_seconds,

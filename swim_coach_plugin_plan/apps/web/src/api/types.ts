@@ -173,6 +173,13 @@ export interface SwimActivityDetail {
 }
 
 export interface SwimActivityV2 {
+  heart_rate?: {
+    avg_bpm: number | null;
+    max_bpm: number | null;
+    source: string | null;
+    zones: Array<{ zone_index: number; duration_s: string; percent_of_zone_time: string; high_boundary_bpm: number | null }>;
+    warnings: string[];
+  };
   activity_id: string;
   name: string;
   subtype: string;
@@ -205,6 +212,23 @@ export interface SwimActivityV2 {
 }
 
 export interface SwimActivityDetailV2 extends SwimActivityV2 {
+  main_set_heart_rate?: {
+    avg_bpm: string | null;
+    max_bpm: number | null;
+    coverage_ratio: string | null;
+    warnings: string[];
+  };
+  aerobic_comparisons?: {
+    status: string;
+    items: Array<{
+      previous_started_at_utc: string;
+      current: { distance_m: number; pace_s_per_100m: string; avg_bpm: number };
+      previous: { distance_m: number; pace_s_per_100m: string; avg_bpm: number };
+      delta_avg_bpm: number;
+      confidence: string;
+      reasons: string[];
+    }>;
+  };
   schema_version: "2.0";
   normalization: {
     parser_version: string;
@@ -213,6 +237,7 @@ export interface SwimActivityDetailV2 extends SwimActivityV2 {
     warnings: string[];
   } | null;
   intervals: Array<{
+    heart_rate?: { avg_bpm: number | null; max_bpm: number | null; source: string | null; scope: string };
     index: number;
     interval_type: "SWIM" | "REST" | "DRILL" | "UNKNOWN";
     planned_role: "WARMUP" | "WORK" | "RECOVERY" | "REST" | "COOLDOWN" | "DRILL" | "OTHER" | null;

@@ -5,10 +5,32 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import type { Me, SwimActivityDetailV2, SwimActivityV2 } from "../api/types";
 import { App } from "../app/App";
-import { FeedbackCard } from "./activities";
+import { FeedbackCard, HeartRateCard } from "./activities";
 import { router } from "./router";
 
 const activityId = "00000000-0000-0000-0000-000000000860";
+
+describe("Frequência cardíaca", () => {
+  it("mostra ausência de FC e zonas sem transformar em zero", () => {
+    render(<HeartRateCard detail={detail} />);
+    expect(screen.getByText("Zonas indisponíveis nesta atividade.")).toBeInTheDocument();
+    expect(screen.getAllByText("—")).toHaveLength(3);
+    expect(screen.queryByText("0 bpm")).not.toBeInTheDocument();
+  });
+
+  it("mostra FC, cobertura e índices de zonas preservados", () => {
+    render(<HeartRateCard detail={{ ...detail,
+      heart_rate: { avg_bpm: 142, max_bpm: 172, source: "FIT_SESSION", warnings: [],
+        zones: [{ zone_index: 0, duration_s: "60", percent_of_zone_time: "100.00", high_boundary_bpm: null }] },
+      main_set_heart_rate: { avg_bpm: "150.00", max_bpm: 165, coverage_ratio: "0.50", warnings: [] },
+    }} />);
+    expect(screen.getByText("142 bpm")).toBeInTheDocument();
+    expect(screen.getByText("172 bpm")).toBeInTheDocument();
+    expect(screen.getByText("150.00 bpm")).toBeInTheDocument();
+    expect(screen.getByText(/cobertura 50,?\.?0%/)).toBeInTheDocument();
+    expect(screen.getByText(/Zona registrada 0/)).toBeInTheDocument();
+  });
+});
 const me: Me = {
   user: {
     id: "00000000-0000-0000-0000-000000000001",

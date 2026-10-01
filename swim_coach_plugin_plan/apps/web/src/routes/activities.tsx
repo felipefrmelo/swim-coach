@@ -61,10 +61,32 @@ export function ActivityDetailPage() {
 
       <section><div className="mb-4"><p className="eyebrow">Séries detectadas</p><h2 className="section-title mt-2">Como o treino aconteceu</h2></div>{item.intervals.length ? <div className="grid gap-3">{item.intervals.map((interval) => <article className="interval-row" key={interval.index}><div className="interval-index">{interval.index + 1}</div><div className="flex-1"><p className="font-semibold">{intervalTitle(interval)}</p><p className="mt-1 text-sm text-slate-500">{intervalDetail(interval)}</p></div><p className="font-mono text-sm font-bold text-cyan-950">{intervalPace(interval)}</p></article>)}</div> : <section className="empty-card"><AlertTriangle className="size-6 text-amber-600" /><p className="text-sm leading-6 text-slate-600">O arquivo não trouxe séries utilizáveis. A qualidade permanece explícita; nada foi inventado.</p></section>}</section>
 
+      <HeartRateCard detail={item} />
       <FeedbackCard activityId={activityId} detail={item} />
       <section className="privacy-note"><ShieldCheck className="size-5" /><p>FIT bruto e payload Garmin não são retornados por esta API. Métricas esportivas não são diagnóstico médico.</p></section>
     </Page>
   );
+}
+
+export function HeartRateCard({ detail }: { detail: SwimActivityDetailV2 }) {
+  const hr = detail.heart_rate;
+  const main = detail.main_set_heart_rate;
+  const comparisons = detail.aerobic_comparisons?.items ?? [];
+  return <section className="surface-card">
+    <h2 className="section-title flex items-center gap-2"><HeartPulse className="size-5" />Frequência cardíaca</h2>
+    <div className="mt-4 grid grid-cols-2 gap-3">
+      <Metric icon={HeartPulse} label="FC média da sessão" value={hr?.avg_bpm == null ? "—" : `${hr.avg_bpm} bpm`} detail={hr?.source === "GARMIN_SUMMARY" ? "resumo Garmin" : "sessão Garmin"} />
+      <Metric icon={HeartPulse} label="FC máxima da sessão" value={hr?.max_bpm == null ? "—" : `${hr.max_bpm} bpm`} detail="máximo registrado" />
+      <Metric icon={HeartPulse} label="FC média dos blocos principais" value={main?.avg_bpm == null ? "—" : `${main.avg_bpm} bpm`} detail={`ponderada pelo tempo · cobertura ${main?.coverage_ratio == null ? "desconhecida" : formatPercent(main.coverage_ratio)}`} />
+    </div>
+    <p className="mt-3 text-xs text-slate-500">A FC das séries pode incluir paradas dentro do intervalo. Dados ausentes aparecem como —.</p>
+    <h3 className="mt-5 font-semibold">Distribuição por zonas</h3>
+    {hr?.zones.length ? <ul className="mt-2 space-y-2">{hr.zones.map((zone) => <li key={zone.zone_index} className="text-sm">Zona registrada {zone.zone_index} · {formatDuration(zone.duration_s)} · {zone.percent_of_zone_time}%{zone.high_boundary_bpm == null ? "" : ` · limite superior ${zone.high_boundary_bpm} bpm`}</li>)}</ul> : <p className="mt-2 text-sm text-slate-500">Zonas indisponíveis nesta atividade.</p>}
+    <p className="mt-2 text-xs text-slate-500">Percentual do tempo registrado nas zonas. Índices e limites preservados do Garmin.</p>
+    <h3 className="mt-5 font-semibold">FC em ritmos semelhantes</h3>
+    {comparisons.length ? <ul className="mt-2 space-y-3">{comparisons.slice(0, 3).map((comparison, index) => <li key={index} className="text-sm leading-6">{comparison.current.distance_m} m a {formatPace(comparison.current.pace_s_per_100m)}: {comparison.current.avg_bpm} bpm. Antes, {comparison.previous.distance_m} m a {formatPace(comparison.previous.pace_s_per_100m)}: {comparison.previous.avg_bpm} bpm ({formatDate(comparison.previous_started_at_utc, detail.timezone)}). Diferença: {comparison.delta_avg_bpm > 0 ? "+" : ""}{comparison.delta_avg_bpm} bpm.</li>)}</ul> : <p className="mt-2 text-sm text-slate-500">Ainda não há blocos com FC e contexto suficientes para comparar.</p>}
+    <p className="mt-3 text-xs text-slate-500">Comparação exploratória, com confiança limitada. Considere duração, descanso, sensor e esforço percebido; uma FC menor isolada não comprova melhora aeróbica.</p>
+  </section>;
 }
 
 export function FeedbackCard({ activityId, detail }: { activityId: string; detail: SwimActivityDetailV2 }) {

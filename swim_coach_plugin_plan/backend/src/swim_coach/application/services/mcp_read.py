@@ -512,6 +512,9 @@ class McpReadService:
             detail,
             timezone_name=principal.timezone or detail.activity.timezone,
         )
+        view["aerobic_comparisons"] = await self._activity_data.heart_rate_comparisons(
+            principal.user_id, detail, view
+        )
         if view["normalization"] is None and not any(
             warning.code == "DATA_INCOMPLETE" for warning in warnings
         ):
