@@ -23,7 +23,7 @@ async def test_liveness() -> None:
 async def test_readiness() -> None:
     app = create_app()
     app.state.services.database.ping = AsyncMock(return_value=True)
-    app.state.services.database.revision = AsyncMock(return_value="000016")
+    app.state.services.database.revision = AsyncMock(return_value="000017")
     app.state.services.artifact_storage.readiness = AsyncMock(return_value=True)
     transport = httpx.ASGITransport(app=app)
     async with app.router.lifespan_context(app):
@@ -36,10 +36,25 @@ async def test_readiness() -> None:
         "checks": {
             "application": "ready",
             "database": "ready",
-            "schema": "000016",
+            "schema": "000017",
             "artifact_storage": "ready",
         },
     }
+
+
+@pytest.mark.asyncio
+async def test_readiness_rejects_previous_heart_rate_schema() -> None:
+    app = create_app()
+    app.state.services.database.ping = AsyncMock(return_value=True)
+    app.state.services.database.revision = AsyncMock(return_value="000016")
+    app.state.services.artifact_storage.readiness = AsyncMock(return_value=True)
+    transport = httpx.ASGITransport(app=app)
+    async with app.router.lifespan_context(app):
+        async with httpx.AsyncClient(transport=transport, base_url="http://localhost") as client:
+            response = await client.get("/health/ready")
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "SCHEMA_MISMATCH"
 
 
 @pytest.mark.asyncio
