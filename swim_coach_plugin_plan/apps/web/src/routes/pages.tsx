@@ -16,6 +16,7 @@ export function DashboardPage() {
   if (!me.data || !pools.data || !goals.data || !availability.data) return <ErrorState message="Seu contexto não pôde ser carregado." />;
   const defaultPool = pools.data.find((pool) => pool.is_default);
   const primaryGoal = goals.data.find((goal) => goal.status === "active");
+  const goalDurationMinutes = primaryGoal ? (Number(primaryGoal.target_duration_seconds) / 60).toLocaleString("pt-BR") : null;
   const contextComplete = availability.data.length > 0;
   return (
     <div className="page-stack">
@@ -31,13 +32,13 @@ export function DashboardPage() {
         </article>
         <article className="metric-card">
           <GoalIcon className="size-6 text-orange-600" aria-hidden="true" />
-          <div><p className="metric-value">{primaryGoal?.target_distance_m.toLocaleString("pt-BR") ?? "—"}<span className="metric-unit"> m</span></p><p className="metric-label">Meta em 45 minutos</p></div>
+          <div><p className="metric-value">{primaryGoal?.target_distance_m.toLocaleString("pt-BR") ?? "—"}<span className="metric-unit"> m</span></p><p className="metric-label">{primaryGoal ? `Meta em ${goalDurationMinutes} minutos` : "Nenhuma meta ativa"}</p></div>
         </article>
       </section>
       <section className="surface-card">
         <div className="flex items-start gap-4"><span className="icon-chip"><Sparkles className="size-5" /></span><div><h2 className="section-title">{contextComplete ? "Contexto inicial completo" : "Seu contexto está quase pronto"}</h2><p className="mt-2 text-sm leading-6 text-slate-600">{contextComplete ? "Perfil, piscina, disponibilidade e meta estão isolados na sua conta." : "Perfil, piscina e meta já estão isolados na sua conta. Configure a disponibilidade para fechar esta etapa."}</p></div></div>
         <div className="mt-6 grid gap-3">
-          {["Perfil local autenticado", `Piscina padrão de ${defaultPool?.length_m ?? "—"} m`, ...(contextComplete ? ["Disponibilidade semanal registrada"] : []), `Meta de ${(primaryGoal?.target_distance_m ?? 0).toLocaleString("pt-BR")} m em 45 min`].map((item) => <p className="check-row" key={item}><Check className="size-4" />{item}</p>)}
+          {["Perfil local autenticado", `Piscina padrão de ${defaultPool?.length_m ?? "—"} m`, ...(contextComplete ? ["Disponibilidade semanal registrada"] : []), ...(primaryGoal ? [`Meta de ${primaryGoal.target_distance_m.toLocaleString("pt-BR")} m em ${goalDurationMinutes} min`] : [])].map((item) => <p className="check-row" key={item}><Check className="size-4" />{item}</p>)}
         </div>
       </section>
       <section className="empty-card"><CalendarPlus className="size-7 text-cyan-800" /><div><h2 className="section-title">Crie sua próxima sessão</h2><p className="mt-2 text-sm leading-6 text-slate-600">O editor valida cada distância contra a piscina de 20 m e guarda revisões imutáveis antes de agendar.</p></div></section>
