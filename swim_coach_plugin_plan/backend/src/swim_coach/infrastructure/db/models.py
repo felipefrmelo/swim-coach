@@ -1463,6 +1463,11 @@ class TrainingDecisionModel(Base):
 class TrainingPlanModel(Base):
     __tablename__ = "training_plan"
 
+    predecessor_plan_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("training_plan.id", ondelete="RESTRICT")
+    )
+    goal_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
     user_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
@@ -1493,7 +1498,7 @@ class TrainingPlanModel(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('DRAFT','ACTIVE','PAUSED','COMPLETED','CANCELLED')",
+            "status IN ('DRAFT','ACTIVE','PAUSED','COMPLETED','CANCELLED','SUPERSEDED')",
             name="ck_training_plan_status",
         ),
         CheckConstraint("duration_weeks BETWEEN 4 AND 16", name="ck_training_plan_duration"),
@@ -1545,7 +1550,7 @@ class TrainingPlanRevisionModel(Base):
         UniqueConstraint("plan_id", "revision_number", name="uq_training_plan_revision_number"),
         CheckConstraint("revision_number >= 1", name="ck_training_plan_revision_number"),
         CheckConstraint(
-            "revision_kind IN ('CREATION','ADAPTATION','MATERIALIZATION','LEGACY')",
+            "revision_kind IN ('CREATION','ADAPTATION','MATERIALIZATION','LEGACY','RESCHEDULE')",
             name="ck_training_plan_revision_kind",
         ),
         CheckConstraint(

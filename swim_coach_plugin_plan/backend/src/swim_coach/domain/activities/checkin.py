@@ -13,6 +13,7 @@ class SwimCheckIn(BaseModel):
     completed_as_planned: bool | None = None
     watch_data_accurate: bool | None = None
     all_freestyle: bool | None = None
+    confirmed_distance_m: int | None = Field(default=None, ge=0, le=50000)
     main_difficulty: str | None = Field(default=None, max_length=500)
 
     def as_json(self) -> JsonObject:
@@ -40,6 +41,7 @@ def execution_evidence(check_in: SwimCheckIn | None) -> JsonObject:
             if completed is False
             else "UNCONFIRMED"
         ),
+        "athlete_confirmed_distance_m": check_in.confirmed_distance_m if check_in else None,
         "performance_blocked": disputed,
         "performance_block_reason": "ATHLETE_REPORTED_WATCH_ERROR" if disputed else None,
         "guidance": (

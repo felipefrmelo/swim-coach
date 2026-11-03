@@ -22,6 +22,7 @@ class PlanStatus(StrEnum):
     ACTIVE = "ACTIVE"
     PAUSED = "PAUSED"
     COMPLETED = "COMPLETED"
+    SUPERSEDED = "SUPERSEDED"
     CANCELLED = "CANCELLED"
 
 
@@ -56,6 +57,7 @@ class PlanRevisionKind(StrEnum):
     CREATION = "CREATION"
     ADAPTATION = "ADAPTATION"
     MATERIALIZATION = "MATERIALIZATION"
+    RESCHEDULE = "RESCHEDULE"
     LEGACY = "LEGACY"
 
 
@@ -63,9 +65,9 @@ class PlanSessionState(StrEnum):
     PLANNED = "PLANNED"
     MATERIALIZED = "MATERIALIZED"
     COMPLETED = "COMPLETED"
+    SUPERSEDED = "SUPERSEDED"
     SKIPPED = "SKIPPED"
     CANCELLED = "CANCELLED"
-    SUPERSEDED = "SUPERSEDED"
 
 
 class NoteScope(StrEnum):
@@ -349,7 +351,7 @@ class TrainingPlanDocument(PlanDocumentModel):
 
 class TrainingPlanRevisionDefinition(PlanDocumentModel):
     schema_version: Literal["1.0"] = "1.0"
-    kind: Literal["ADAPTATION", "MATERIALIZATION"]
+    kind: Literal["ADAPTATION", "MATERIALIZATION", "RESCHEDULE"]
     review_id: str | None = None
     decision: PlanDecision | None = None
     rationale: str = Field(min_length=1, max_length=2_000)
@@ -382,6 +384,8 @@ class TrainingPlan:
     start_date: date
     end_date: date
     duration_weeks: int
+    predecessor_plan_id: EntityId | None = None
+    goal_snapshot: JsonObject = field(default_factory=dict)
     prescription_source: PrescriptionSource = PrescriptionSource.COACH_DEFINED
     status: PlanStatus = PlanStatus.DRAFT
     adaptation_mode: str = "MANUAL_APPROVAL"
@@ -409,6 +413,11 @@ class TrainingPlan:
         if self.adaptation_mode != "MANUAL_APPROVAL":
             raise DomainValidationError("unsupported training plan adaptation mode")
 
+    def lifecycle_state(self, local_today: date) -> str:
+        if self.status in {PlanStatus.ACTIVE, PlanStatus.PAUSED} and local_today > self.end_date:
+            return "ENDED_NEEDS_REVIEW"
+        return self.status.value
+
     def apply_revision(self, revision: TrainingPlanRevision, now: datetime) -> None:
         if revision.plan_id != self.id or revision.revision_number != self.current_revision + 1:
             raise DomainError("PLAN_REVISION_CONFLICT", "The plan revision is stale.")
@@ -421,8 +430,18 @@ class TrainingPlan:
 
     def set_status(self, status: PlanStatus, now: datetime) -> None:
         allowed = {
-            PlanStatus.ACTIVE: {PlanStatus.PAUSED, PlanStatus.COMPLETED, PlanStatus.CANCELLED},
-            PlanStatus.PAUSED: {PlanStatus.ACTIVE, PlanStatus.CANCELLED},
+            PlanStatus.ACTIVE: {
+                PlanStatus.PAUSED,
+                PlanStatus.COMPLETED,
+                PlanStatus.CANCELLED,
+                PlanStatus.SUPERSEDED,
+            },
+            PlanStatus.PAUSED: {
+                PlanStatus.ACTIVE,
+                PlanStatus.COMPLETED,
+                PlanStatus.CANCELLED,
+                PlanStatus.SUPERSEDED,
+            },
             PlanStatus.DRAFT: {PlanStatus.CANCELLED},
         }
         if status not in allowed.get(self.status, set()):

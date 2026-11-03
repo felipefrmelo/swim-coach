@@ -213,7 +213,9 @@ def test_p15_release_manifest_hashes_are_current() -> None:
     assert release["mode"] == "approval-gated-training-cycles"
     assert release["status"] == "release_candidate"
     assert release["oauth_scopes"] == ["coach"]
-    assert len(release["tools"]) == 17
+    assert len(release["tools"]) == len(
+        yaml.safe_load((ROOT / "contracts/mcp-tools.yaml").read_text())["tools"]
+    )
     for relative, expected in release["hashes"].items():
         actual = hashlib.sha256((ROOT / relative).read_bytes()).hexdigest()
         assert actual == expected, relative

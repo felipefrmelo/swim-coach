@@ -122,7 +122,25 @@ class TrainingPlanValidator:
                                 value=session.scheduled_date.isoformat(),
                             )
                         )
-                if week.detail_level is PlanDetailLevel.DETAILED:
+                previous_session = (
+                    next(
+                        (
+                            i
+                            for w in previous.weeks
+                            for i in w.sessions
+                            if i.session_intent_id == session.session_intent_id
+                        ),
+                        None,
+                    )
+                    if previous
+                    else None
+                )
+                historical = bool(
+                    local_today and session.scheduled_date and session.scheduled_date < local_today
+                )
+                if week.detail_level is PlanDetailLevel.DETAILED and not (
+                    historical and previous_session == session
+                ):
                     self._validate_detailed_session(
                         session,
                         session_path,
@@ -232,6 +250,14 @@ class TrainingPlanValidator:
                 "retry_after_rebuild": True,
                 "requires_user_approval_after_success": True,
             }
+        recovery["max_automatic_retries"] = 1
+        if any(i.get("code") == "PLAN_METADATA_IMMUTABLE" for i in issues):
+            recovery["alternative"] = (
+                "Propose a successor with predecessor_plan_id to change goal, title or duration."
+            )
+        for issue in issues:
+            issue.setdefault("repair_action", "CORRECT_FIELD")
+            issue.setdefault("repair_hint", "Use the current coach context and canonical schema.")
         return cast(JsonObject, {"issues": issues, "recovery": recovery})
 
     def _validate_detailed_session(
@@ -385,14 +411,21 @@ class TrainingPlanValidator:
                     calculated_distance_m=validation.totals.distance_m,
                 )
             )
-        if duration is not None and validation.totals.estimated_total_seconds > duration * 60:
+        if (
+            duration is not None
+            and (validation.totals.duration_max_seconds or validation.totals.duration_min_seconds)
+            > duration * 60
+        ):
             issues.append(
                 self._issue(
                     "WORKOUT_EXCEEDS_PLANNED_DURATION",
                     f"{path}.planned_duration_minutes",
                     "Deterministically calculable workout time exceeds the planned duration.",
                     value=duration,
-                    calculated_seconds=validation.totals.estimated_total_seconds,
+                    calculated_seconds=(
+                        validation.totals.duration_max_seconds
+                        or validation.totals.duration_min_seconds
+                    ),
                 )
             )
 
@@ -473,6 +506,11 @@ class TrainingPlanValidator:
             if session.session_intent_id is not None
         }
         protected_ids = set(immutable_session_ids)
+        protected_ids.update(
+            sid
+            for sid, (_, _, item) in before_sessions.items()
+            if local_today and item.scheduled_date and item.scheduled_date < local_today
+        )
         protected_ids.update(str(item.session_intent_id) for item in bindings if item.locked)
         for session_id in protected_ids:
             before_entry = before_sessions.get(session_id)
@@ -545,6 +583,22 @@ class TrainingPlanValidator:
                             "Call get_training_plan, copy this week exactly from "
                             "data.revision, and modify only eligible future weeks."
                         ),
+                    )
+                )
+        if revision_kind == "RESCHEDULE":
+            # Only calendar fields may differ; full plan identity/content is preserved.
+            left, right = before.model_dump(mode="json"), after.model_dump(mode="json")
+            for doc in (left, right):
+                for week in doc["weeks"]:
+                    for session in week["sessions"]:
+                        for key in ("scheduled_date", "scheduled_start_time"):
+                            session.pop(key, None)
+            if left != right:
+                issues.append(
+                    self._issue(
+                        "RESCHEDULE_SCOPE_INVALID",
+                        "definition",
+                        "Calendar revisions may only change dates and start times.",
                     )
                 )
         if revision_kind == "MATERIALIZATION":

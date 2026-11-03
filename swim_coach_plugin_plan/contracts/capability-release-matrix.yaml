@@ -41,6 +41,18 @@ tools:
   - {name: set_training_plan_status, introduced: P15, release: 3.0.0, kind: local-write, external_effect: false}
   - {name: skip_plan_session, introduced: P15, release: 3.0.0, kind: local-write, external_effect: false}
 
+  - {name: get_coach_operations, introduced: P16, release: 3.0.0, kind: read, external_effect: false}
+  - {name: preview_calendar, introduced: P16, release: 3.0.0, kind: read, external_effect: false}
+  - {name: get_publication_status, introduced: P16, release: 3.0.0, kind: read, external_effect: false}
+  - {name: reschedule_workout, introduced: P16, release: 3.0.0, kind: local-write, external_effect: true}
+  - {name: set_current_goal, introduced: P16, release: 3.0.0, kind: local-write, external_effect: false}
+  - {name: associate_workout_to_plan, introduced: P16, release: 3.0.0, kind: local-write,
+  external_effect: false}
+  - {name: publish_workouts, introduced: P16, release: 3.0.0, kind: local-write, external_effect: true}
+  - {name: validate_training_plan, introduced: P16, release: 3.0.0, kind: read, external_effect: false}
+
+  - {name: diagnose_connection, introduced: P16, release: 3.0.0, kind: read, external_effect: false}
+
 skills:
   - name: review-latest-swim
     introduced: P13

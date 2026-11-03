@@ -22,7 +22,7 @@ from mcp.server.fastmcp.server import Settings as FastMCPSettings
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from mcp.types import Tool as McpTool
-from pydantic import AnyHttpUrl, Field
+from pydantic import AnyHttpUrl, Field, ValidationError
 
 from swim_coach.application.queries.get_capabilities import (
     CapabilityResult,
@@ -31,6 +31,7 @@ from swim_coach.application.queries.get_capabilities import (
     get_capabilities as p00_capabilities,
 )
 from swim_coach.application.services.coach_commands import CoachCommandService
+from swim_coach.application.services.coach_operations import account_ref
 from swim_coach.application.services.mcp_read import (
     MCP_READ_TOOL_SCOPES,
     McpPrincipal,
@@ -53,10 +54,13 @@ from swim_coach.domain.planning import (
     TrainingPlanDocument,
     TrainingPlanRevisionDefinition,
 )
+from swim_coach.domain.shared.diagnostics import classify_failure
 from swim_coach.domain.shared.errors import DomainError
+from swim_coach.domain.shared.repair import schema_recovery
 from swim_coach.domain.shared.types import JsonObject
 from swim_coach.domain.shared.value_objects import CorrelationId, EntityId
 from swim_coach.domain.workouts import CanonicalWorkout
+from swim_coach.domain.workouts.calendar import CalendarRequest
 from swim_coach.interfaces.mcp.ui import (
     MCP_UI_RESOURCE_URIS,
     MCP_UI_TOOL_SCOPES,
@@ -138,6 +142,33 @@ def _garmin_warning(code: str) -> McpWarning:
 class SwimCoachFastMCP(FastMCP):
     """Expose standard securitySchemes and its ChatGPT compatibility mirror."""
 
+    async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
+        try:
+            return await super().call_tool(name, arguments)
+        except ToolError as error:
+            cause: BaseException | None = error
+            while cause is not None and not isinstance(cause, ValidationError):
+                cause = cause.__cause__
+            if not isinstance(cause, ValidationError):
+                raise
+            request_id = _safe_request_id(self.get_context().request_id)
+            return CallToolResult(
+                isError=True,
+                content=[
+                    TextContent(
+                        type="text",
+                        text=_error(
+                            "VALIDATION_FAILED",
+                            "Correct the indicated canonical schema fields.",
+                            request_id,
+                            schema_recovery(
+                                cause.errors(include_input=False, include_url=False), arguments
+                            ),
+                        ),
+                    )
+                ],
+            )
+
     async def list_tools(self) -> list[McpTool]:
         tools = await super().list_tools()
         advertised: list[McpTool] = []
@@ -177,6 +208,7 @@ def create_mcp_server(
             issuer_url=AnyHttpUrl(oauth_issuer),
             resource_server_url=AnyHttpUrl(oauth_resource),
             required_scopes=[],
+            validate_token_resource=True,
         )
     write_enabled = bool(oauth_enabled and write_service)
     ui_enabled = bool(oauth_enabled and write_enabled and ui_enabled)
@@ -352,6 +384,9 @@ def create_mcp_server(
                 scopes=access_token.scopes,
                 required_scopes=required_scopes,
             )
+            expected_account = arguments.get("expected_account_ref")
+            if expected_account is not None and expected_account != account_ref(principal.user_id):
+                raise DomainError("ACCOUNT_MISMATCH", "Select the account used in the preflight.")
             result = await command(principal, request_id, correlation_id)
             causation_id = _result_causation(result)
             await read_service.record_invocation(
@@ -482,7 +517,7 @@ def create_mcp_server(
     async def get_training_context(
         ctx: Context[Any, Any, Any], include_constraints: bool = True
     ) -> McpResult:
-        args = {"include_constraints": include_constraints}
+        args: dict[str, Any] = {"include_constraints": include_constraints}
         return await execute(
             "get_training_context",
             ctx,
@@ -508,7 +543,7 @@ def create_mcp_server(
         include_steps: bool = True,
         include_publish_status: bool = True,
     ) -> McpResult:
-        args = {
+        args: dict[str, Any] = {
             "date": date.isoformat() if date else None,
             "include_steps": include_steps,
             "include_publish_status": include_publish_status,
@@ -539,7 +574,7 @@ def create_mcp_server(
     async def get_week_plan(
         ctx: Context[Any, Any, Any], week_start: LocalDate | None = None
     ) -> McpResult:
-        args = {"week_start": week_start.isoformat() if week_start else None}
+        args: dict[str, Any] = {"week_start": week_start.isoformat() if week_start else None}
         return await execute(
             "get_week_plan",
             ctx,
@@ -584,7 +619,7 @@ def create_mcp_server(
                     schema_version=envelope_schema_version,
                 )
             )
-        args = {
+        args: dict[str, Any] = {
             "limit": limit,
             "before": before.isoformat() if before else None,
             "include_analysis_summary": include_analysis_summary,
@@ -629,7 +664,7 @@ def create_mcp_server(
                     schema_version=envelope_schema_version,
                 )
             )
-        args = {
+        args: dict[str, Any] = {
             "activity_id": str(activity_id),
             "include_intervals": include_intervals,
             "include_lengths": include_lengths,
@@ -663,7 +698,7 @@ def create_mcp_server(
     async def get_goal_progress(
         ctx: Context[Any, Any, Any], goal_id: UUID | None = None
     ) -> McpResult:
-        args = {"goal_id": str(goal_id) if goal_id else None}
+        args: dict[str, Any] = {"goal_id": str(goal_id) if goal_id else None}
         return await execute(
             "get_goal_progress",
             ctx,
@@ -736,7 +771,7 @@ def _register_write_tools(
         structured_output=True,
     )
     async def get_action_proposal(proposal_id: UUID, ctx: Context[Any, Any, Any]) -> McpResult:
-        args = {"proposal_id": str(proposal_id)}
+        args: dict[str, Any] = {"proposal_id": str(proposal_id)}
         return await execute(
             "get_action_proposal",
             ctx,
@@ -755,7 +790,7 @@ def _register_write_tools(
         structured_output=True,
     )
     async def get_job_status(job_id: UUID, ctx: Context[Any, Any, Any]) -> McpResult:
-        args = {"job_id": str(job_id)}
+        args: dict[str, Any] = {"job_id": str(job_id)}
         return await execute(
             "get_job_status",
             ctx,
@@ -779,7 +814,7 @@ def _register_write_tools(
         from_date: LocalDate | None = None,
         force: bool = False,
     ) -> McpResult:
-        args = {
+        args: dict[str, Any] = {
             "from_date": from_date.isoformat() if from_date else None,
             "force": force,
             "idempotency_key": idempotency_key,
@@ -814,7 +849,7 @@ def _register_write_tools(
         ctx: Context[Any, Any, Any],
         notes: Annotated[str | None, Field(max_length=2000)] = None,
     ) -> McpResult:
-        args = {
+        args: dict[str, Any] = {
             "activity_id": str(activity_id),
             "rpe": rpe,
             "technique": technique,
@@ -852,7 +887,7 @@ def _register_write_tools(
         ctx: Context[Any, Any, Any],
         pool_id: UUID | None = None,
     ) -> McpResult:
-        args = {
+        args: dict[str, Any] = {
             "definition": definition.model_dump(mode="json"),
             "pool_id": str(pool_id) if pool_id else None,
         }
@@ -883,7 +918,7 @@ def _register_write_tools(
         change_request: dict[str, Any],
         ctx: Context[Any, Any, Any],
     ) -> McpResult:
-        args = {
+        args: dict[str, Any] = {
             "workout_id": str(workout_id),
             "expected_revision": expected_revision,
             "change_request": change_request,
@@ -916,7 +951,7 @@ def _register_write_tools(
         ctx: Context[Any, Any, Any],
         local_time: time | None = None,
     ) -> McpResult:
-        args = {
+        args: dict[str, Any] = {
             "workout_id": str(workout_id),
             "new_date": new_date.isoformat(),
             "local_time": local_time.isoformat() if local_time else None,
@@ -951,7 +986,7 @@ def _register_write_tools(
         ctx: Context[Any, Any, Any],
         target_device_id: UUID | None = None,
     ) -> McpResult:
-        args = {
+        args: dict[str, Any] = {
             "workout_id": str(workout_id),
             "revision": revision,
             "schedule_date": schedule_date.isoformat(),
@@ -986,7 +1021,7 @@ def _register_write_tools(
         ctx: Context[Any, Any, Any],
         reason: Annotated[str | None, Field(max_length=500)] = None,
     ) -> McpResult:
-        args = {"proposal_id": str(proposal_id), "reason": reason}
+        args: dict[str, Any] = {"proposal_id": str(proposal_id), "reason": reason}
         return await execute(
             "cancel_action_proposal",
             ctx,
@@ -1015,7 +1050,7 @@ def _register_write_tools(
         confirmation_text: Annotated[str, Field(min_length=1, max_length=1000)],
         ctx: Context[Any, Any, Any],
     ) -> McpResult:
-        args = {
+        args: dict[str, Any] = {
             "proposal_id": str(proposal_id),
             "expected_action_hash": expected_action_hash,
             "decision": decision,
@@ -1052,7 +1087,7 @@ def _register_write_tools(
         idempotency_key: Annotated[str, Field(min_length=8, max_length=200)],
         ctx: Context[Any, Any, Any],
     ) -> McpResult:
-        args = {"proposal_id": str(proposal_id), "idempotency_key": idempotency_key}
+        args: dict[str, Any] = {"proposal_id": str(proposal_id), "idempotency_key": idempotency_key}
         return await execute(
             "execute_approved_action",
             ctx,
@@ -1079,7 +1114,7 @@ def _register_write_tools(
         idempotency_key: Annotated[str, Field(min_length=8, max_length=200)],
         ctx: Context[Any, Any, Any],
     ) -> McpResult:
-        args = {"job_id": str(job_id), "idempotency_key": idempotency_key}
+        args: dict[str, Any] = {"job_id": str(job_id), "idempotency_key": idempotency_key}
         return await execute(
             "retry_failed_job",
             ctx,
@@ -1150,7 +1185,7 @@ def _register_ui_tools(
                     schema_version=schema_version,
                 )
             )
-        args = {
+        args: dict[str, Any] = {
             "view": view,
             "date": date.isoformat() if date else None,
             "week_start": week_start.isoformat() if week_start else None,
@@ -1198,7 +1233,7 @@ def _register_ui_tools(
         ctx: Context[Any, Any, Any],
         max_intervals: Annotated[int, Field(ge=1, le=30)] = 20,
     ) -> McpResult:
-        args = {"activity_id": str(activity_id), "max_intervals": max_intervals}
+        args: dict[str, Any] = {"activity_id": str(activity_id), "max_intervals": max_intervals}
 
         async def query(principal: McpPrincipal, request_id: str) -> McpResult:
             result = await read_service.get_swim_activity_v1(
@@ -1230,7 +1265,7 @@ def _register_ui_tools(
     async def render_goal_progress_card(
         ctx: Context[Any, Any, Any], goal_id: UUID | None = None
     ) -> McpResult:
-        args = {"goal_id": str(goal_id) if goal_id else None}
+        args: dict[str, Any] = {"goal_id": str(goal_id) if goal_id else None}
 
         async def query(principal: McpPrincipal, request_id: str) -> McpResult:
             result = await read_service.get_goal_progress_v1(
@@ -1263,7 +1298,7 @@ def _register_ui_tools(
         proposal_id: UUID,
         ctx: Context[Any, Any, Any],
     ) -> McpResult:
-        args = {"proposal_id": str(proposal_id)}
+        args: dict[str, Any] = {"proposal_id": str(proposal_id)}
 
         async def query(principal: McpPrincipal, request_id: str) -> McpResult:
             result = await write_service.get_action_proposal(
@@ -1295,7 +1330,7 @@ def _register_ui_tools(
     async def render_sync_status_card(
         ctx: Context[Any, Any, Any], job_id: UUID | None = None
     ) -> McpResult:
-        args = {"job_id": str(job_id) if job_id else None}
+        args: dict[str, Any] = {"job_id": str(job_id) if job_id else None}
         scopes = {"sync:read"}
         if job_id is not None:
             scopes.add("operations:read")
@@ -1355,7 +1390,7 @@ def _register_v2_tools(
     async def get_coach_context(
         ctx: Context[Any, Any, Any], include_constraints: bool = True
     ) -> McpResultV2:
-        args = {"include_constraints": include_constraints}
+        args: dict[str, Any] = {"include_constraints": include_constraints}
 
         async def query(principal: McpPrincipal, request_id: str) -> McpResult:
             training = await read_service.get_training_context(
@@ -1390,6 +1425,12 @@ def _register_v2_tools(
                     "goal_id": str(plan_detail.plan.goal_id),
                     "title": plan_detail.plan.title,
                     "status": plan_detail.plan.status.value,
+                    "lifecycle_state": plan_detail.plan.lifecycle_state(local_today),
+                    "version": plan_detail.plan.version,
+                    "goal_snapshot": plan_detail.plan.goal_snapshot,
+                    "predecessor_plan_id": str(plan_detail.plan.predecessor_plan_id)
+                    if plan_detail.plan.predecessor_plan_id
+                    else None,
                     "start_date": plan_detail.plan.start_date.isoformat(),
                     "end_date": plan_detail.plan.end_date.isoformat(),
                     "duration_weeks": plan_detail.plan.duration_weeks,
@@ -1428,6 +1469,7 @@ def _register_v2_tools(
                 request_id=request_id,
                 status="OK",
                 data={
+                    "operations": await coach_service.operations.overview(principal.user_id),
                     "training": training.data,
                     "recent_training_evidence": recent.data,
                     "goal_progress": progress_data,
@@ -1464,8 +1506,15 @@ def _register_v2_tools(
     async def propose_training_plan(
         ctx: Context[Any, Any, Any],
         definition: TrainingPlanDocument,
+        predecessor_plan_id: UUID | None = None,
+        expected_predecessor_version: int | None = None,
+        expected_account_ref: str | None = None,
     ) -> McpResultV2:
-        args = {"definition": definition.as_json()}
+        args: dict[str, Any] = {
+            "definition": definition.as_json(),
+            "predecessor_plan_id": str(predecessor_plan_id) if predecessor_plan_id else None,
+            "expected_predecessor_version": expected_predecessor_version,
+        }
 
         async def command(
             principal: McpPrincipal, request_id: str, correlation_id: CorrelationId
@@ -1475,6 +1524,8 @@ def _register_v2_tools(
                 actor_id=principal.subject,
                 definition=definition,
                 correlation_id=correlation_id,
+                predecessor_plan_id=EntityId(predecessor_plan_id) if predecessor_plan_id else None,
+                expected_predecessor_version=expected_predecessor_version,
             )
             return McpResult(
                 request_id=request_id,
@@ -1494,6 +1545,7 @@ def _register_v2_tools(
                 ),
             )
 
+        args["expected_account_ref"] = expected_account_ref
         return _as_v2_result(
             await execute_write("propose_training_plan", ctx, scope, args, command)
         )
@@ -1510,7 +1562,7 @@ def _register_v2_tools(
     async def get_training_plan(
         ctx: Context[Any, Any, Any], plan_id: UUID | None = None
     ) -> McpResultV2:
-        args = {"plan_id": str(plan_id) if plan_id else None}
+        args: dict[str, Any] = {"plan_id": str(plan_id) if plan_id else None}
 
         async def query(principal: McpPrincipal, request_id: str) -> McpResult:
             detail = await coach_service.get_training_plan(
@@ -1549,6 +1601,18 @@ def _register_v2_tools(
                 data={
                     "plan": {
                         "plan_id": str(detail.plan.id),
+                        "version": detail.plan.version,
+                        "goal_snapshot": detail.plan.goal_snapshot,
+                        "predecessor_plan_id": str(detail.plan.predecessor_plan_id)
+                        if detail.plan.predecessor_plan_id
+                        else None,
+                        "lifecycle_state": detail.plan.lifecycle_state(
+                            datetime.now(
+                                ZoneInfo(detail.revision.document.timezone or "UTC")
+                                if detail.revision
+                                else ZoneInfo("UTC")
+                            ).date()
+                        ),
                         "goal_id": str(detail.plan.goal_id),
                         "title": detail.plan.title,
                         "status": detail.plan.status.value,
@@ -1648,8 +1712,9 @@ def _register_v2_tools(
         ctx: Context[Any, Any, Any],
         plan_id: UUID,
         week_number: Annotated[int, Field(ge=1, le=16)],
+        expected_account_ref: str | None = None,
     ) -> McpResultV2:
-        args = {"plan_id": str(plan_id), "week_number": week_number}
+        args: dict[str, Any] = {"plan_id": str(plan_id), "week_number": week_number}
 
         async def command(
             principal: McpPrincipal, request_id: str, correlation_id: CorrelationId
@@ -1682,6 +1747,7 @@ def _register_v2_tools(
                 ),
             )
 
+        args["expected_account_ref"] = expected_account_ref
         return _as_v2_result(await execute_write("review_training_plan", ctx, scope, args, command))
 
     @server.tool(
@@ -1704,8 +1770,9 @@ def _register_v2_tools(
         plan_id: UUID,
         expected_revision: Annotated[int, Field(ge=1)],
         revision_definition: TrainingPlanRevisionDefinition,
+        expected_account_ref: str | None = None,
     ) -> McpResultV2:
-        args = {
+        args: dict[str, Any] = {
             "plan_id": str(plan_id),
             "expected_revision": expected_revision,
             "revision_definition": {
@@ -1755,6 +1822,7 @@ def _register_v2_tools(
                 ),
             )
 
+        args["expected_account_ref"] = expected_account_ref
         return _as_v2_result(
             await execute_write("propose_plan_revision", ctx, scope, args, command)
         )
@@ -1776,8 +1844,9 @@ def _register_v2_tools(
         proposal_id: UUID,
         expected_revision: Annotated[int, Field(ge=0)],
         approval_hash: Annotated[str, Field(min_length=64, max_length=64)],
+        expected_account_ref: str | None = None,
     ) -> McpResultV2:
-        args = {
+        args: dict[str, Any] = {
             "plan_id": str(plan_id),
             "proposal_id": str(proposal_id),
             "expected_revision": expected_revision,
@@ -1820,6 +1889,7 @@ def _register_v2_tools(
                 ),
             )
 
+        args["expected_account_ref"] = expected_account_ref
         return _as_v2_result(await execute_write("apply_plan_revision", ctx, scope, args, command))
 
     @server.tool(
@@ -1844,8 +1914,9 @@ def _register_v2_tools(
         valid_from: LocalDate | None = None,
         valid_until: LocalDate | None = None,
         evidence_activity_ids: list[UUID] | None = None,
+        expected_account_ref: str | None = None,
     ) -> McpResultV2:
-        args = {
+        args: dict[str, Any] = {
             "plan_id": str(plan_id),
             "scope_type": scope_type,
             "scope_ref": scope_ref,
@@ -1885,21 +1956,23 @@ def _register_v2_tools(
                 human_summary="Added the structured plan note.",
             )
 
+        args["expected_account_ref"] = expected_account_ref
         return _as_v2_result(await execute_write("add_plan_note", ctx, scope, args, command))
 
     @server.tool(
         name="set_training_plan_status",
-        title="Pause or resume a training cycle",
-        description="Explicitly pause or resume the selected plan without changing Garmin.",
+        title="Change training cycle status",
+        description=("Pause, resume, complete or cancel a cycle; preserve history and Garmin."),
         annotations=LOCAL_WRITE,
         structured_output=True,
     )
     async def set_training_plan_status(
         ctx: Context[Any, Any, Any],
         plan_id: UUID,
-        status: Literal["ACTIVE", "PAUSED"],
+        status: Literal["ACTIVE", "PAUSED", "COMPLETED", "CANCELLED"],
+        expected_account_ref: str | None = None,
     ) -> McpResultV2:
-        args = {"plan_id": str(plan_id), "status": status}
+        args: dict[str, Any] = {"plan_id": str(plan_id), "status": status}
 
         async def command(
             principal: McpPrincipal, request_id: str, correlation_id: CorrelationId
@@ -1918,6 +1991,7 @@ def _register_v2_tools(
                 human_summary=f"Training plan is now {applied.value}.",
             )
 
+        args["expected_account_ref"] = expected_account_ref
         return _as_v2_result(
             await execute_write("set_training_plan_status", ctx, scope, args, command)
         )
@@ -1930,9 +2004,15 @@ def _register_v2_tools(
         structured_output=True,
     )
     async def skip_plan_session(
-        ctx: Context[Any, Any, Any], plan_id: UUID, session_intent_id: UUID
+        ctx: Context[Any, Any, Any],
+        plan_id: UUID,
+        session_intent_id: UUID,
+        expected_account_ref: str | None = None,
     ) -> McpResultV2:
-        args = {"plan_id": str(plan_id), "session_intent_id": str(session_intent_id)}
+        args: dict[str, Any] = {
+            "plan_id": str(plan_id),
+            "session_intent_id": str(session_intent_id),
+        }
 
         async def command(
             principal: McpPrincipal, request_id: str, correlation_id: CorrelationId
@@ -1954,6 +2034,7 @@ def _register_v2_tools(
                 human_summary="Marked the plan session as skipped.",
             )
 
+        args["expected_account_ref"] = expected_account_ref
         return _as_v2_result(await execute_write("skip_plan_session", ctx, scope, args, command))
 
     @server.tool(
@@ -1970,7 +2051,7 @@ def _register_v2_tools(
         week_start: LocalDate | None = None,
         include_steps: bool = True,
     ) -> McpResultV2:
-        args = {
+        args: dict[str, Any] = {
             "workout_id": str(workout_id) if workout_id else None,
             "date": date.isoformat() if date else None,
             "week_start": week_start.isoformat() if week_start else None,
@@ -2006,7 +2087,7 @@ def _register_v2_tools(
         limit: Annotated[int, Field(ge=1, le=20)] = 5,
         include_intervals: bool = True,
     ) -> McpResultV2:
-        args = {
+        args: dict[str, Any] = {
             "activity_id": str(activity_id) if activity_id else None,
             "limit": limit,
             "include_intervals": include_intervals,
@@ -2050,8 +2131,10 @@ def _register_v2_tools(
         scheduled_date: LocalDate | None = None,
         scheduled_start_time: time | None = None,
         change_reason: Annotated[str | None, Field(max_length=500)] = None,
+        expected_account_ref: str | None = None,
+        origin: Literal["AD_HOC", "CONTINGENCY"] = "AD_HOC",
     ) -> McpResultV2:
-        args = {
+        args: dict[str, Any] = {
             "workout_id": str(workout_id) if workout_id else None,
             "pool_id": str(pool_id) if pool_id else None,
             "scheduled_date": scheduled_date.isoformat() if scheduled_date else None,
@@ -2060,6 +2143,7 @@ def _register_v2_tools(
             else None,
             "definition": definition.model_dump(mode="json"),
             "change_reason": change_reason,
+            "origin": origin,
         }
 
         async def command(
@@ -2074,6 +2158,7 @@ def _register_v2_tools(
                 scheduled_start_time=scheduled_start_time,
                 change_reason=change_reason,
                 correlation_id=correlation_id,
+                origin=origin,
             )
             revision = detail.current_revision
             return McpResult(
@@ -2097,6 +2182,7 @@ def _register_v2_tools(
                 human_summary=f"Saved {detail.workout.title} locally.",
             )
 
+        args["expected_account_ref"] = expected_account_ref
         return _as_v2_result(await execute_write("save_workout", ctx, scope, args, command))
 
     @server.tool(
@@ -2115,8 +2201,9 @@ def _register_v2_tools(
         scheduled_date: LocalDate | None = None,
         scheduled_start_time: time | None = None,
         target_device_id: UUID | None = None,
+        expected_account_ref: str | None = None,
     ) -> McpResultV2:
-        args = {
+        args: dict[str, Any] = {
             "workout_id": str(workout_id),
             "scheduled_date": scheduled_date.isoformat() if scheduled_date else None,
             "scheduled_start_time": scheduled_start_time.isoformat()
@@ -2146,15 +2233,21 @@ def _register_v2_tools(
                     "status": result.status,
                     "job_id": str(result.job_id) if result.job_id else None,
                     "replayed": result.replayed,
+                    "remote_confirmed": result.status == "published",
                 },
                 warnings=[_garmin_warning(code) for code in result.warnings],
-                human_summary=(
-                    "Garmin publication is queued."
-                    if result.job_id
-                    else "This workout is already current on Garmin."
+                human_summary={
+                    "published": "This workout is already current on Garmin.",
+                    "queued": "Garmin publication is queued.",
+                    "processing": "Garmin publication is processing.",
+                    "retrying": "Garmin publication is awaiting a retry.",
+                }.get(
+                    result.status,
+                    "Garmin publication needs attention; inspect its status before retrying.",
                 ),
             )
 
+        args["expected_account_ref"] = expected_account_ref
         return _as_v2_result(await execute_write("publish_workout", ctx, scope, args, command))
 
     @server.tool(
@@ -2170,8 +2263,9 @@ def _register_v2_tools(
     async def delete_workout(
         workout_id: UUID,
         ctx: Context[Any, Any, Any],
+        expected_account_ref: str | None = None,
     ) -> McpResultV2:
-        args = {"workout_id": str(workout_id)}
+        args: dict[str, Any] = {"workout_id": str(workout_id)}
 
         async def command(
             principal: McpPrincipal, request_id: str, correlation_id: CorrelationId
@@ -2199,6 +2293,7 @@ def _register_v2_tools(
                 ),
             )
 
+        args["expected_account_ref"] = expected_account_ref
         return _as_v2_result(await execute_write("delete_workout", ctx, scope, args, command))
 
     @server.tool(
@@ -2216,8 +2311,9 @@ def _register_v2_tools(
         plan_id: UUID,
         expected_revision: Annotated[int, Field(ge=1)],
         week_number: Annotated[int, Field(ge=1, le=16)],
+        expected_account_ref: str | None = None,
     ) -> McpResultV2:
-        args = {
+        args: dict[str, Any] = {
             "plan_id": str(plan_id),
             "expected_revision": expected_revision,
             "week_number": week_number,
@@ -2250,6 +2346,7 @@ def _register_v2_tools(
                 human_summary=f"Saved {len(result.workout_ids)} workouts for the week.",
             )
 
+        args["expected_account_ref"] = expected_account_ref
         return _as_v2_result(
             await execute_write("materialize_plan_week", ctx, scope, args, command)
         )
@@ -2265,8 +2362,12 @@ def _register_v2_tools(
         ctx: Context[Any, Any, Any],
         from_date: LocalDate | None = None,
         force: bool = False,
+        expected_account_ref: str | None = None,
     ) -> McpResultV2:
-        args = {"from_date": from_date.isoformat() if from_date else None, "force": force}
+        args: dict[str, Any] = {
+            "from_date": from_date.isoformat() if from_date else None,
+            "force": force,
+        }
 
         async def command(
             principal: McpPrincipal, request_id: str, correlation_id: CorrelationId
@@ -2281,6 +2382,7 @@ def _register_v2_tools(
                 idempotency_key=f"coach-sync:{bucket}:{from_date}:{force}",
             )
 
+        args["expected_account_ref"] = expected_account_ref
         return _as_v2_result(await execute_write("sync_garmin", ctx, scope, args, command))
 
     @server.tool(
@@ -2306,8 +2408,9 @@ def _register_v2_tools(
         pain_intensity: Annotated[int | None, Field(ge=1, le=10)] = None,
         notes: Annotated[str | None, Field(max_length=2000)] = None,
         check_in: SwimCheckIn | None = None,
+        expected_account_ref: str | None = None,
     ) -> McpResultV2:
-        args = {
+        args: dict[str, Any] = {
             "activity_id": str(activity_id),
             "rpe": rpe,
             "technique": technique,
@@ -2345,7 +2448,397 @@ def _register_v2_tools(
                 check_in=check_in,
             )
 
+        args["expected_account_ref"] = expected_account_ref
         return _as_v2_result(await execute_write("save_feedback", ctx, scope, args, command))
+
+    @server.tool(
+        name="get_coach_operations",
+        title="Get current goal, next workout and pending operations",
+        description=(
+            "Return account preflight, current goal, cycle lifecycle, agenda, "
+            "provenance and pending jobs."
+        ),
+        annotations=READ_ONLY,
+        structured_output=True,
+    )
+    async def get_coach_operations(ctx: Context[Any, Any, Any]) -> McpResultV2:
+        async def query(principal: McpPrincipal, request_id: str) -> McpResult:
+            return McpResult(
+                request_id=request_id,
+                status="OK",
+                data=await coach_service.operations.overview(principal.user_id),
+                human_summary="Loaded current goal, cycles, next session and pending operations.",
+            )
+
+        return _as_v2_result(await execute("get_coach_operations", ctx, scope, {}, query))
+
+    @server.tool(
+        name="preview_calendar",
+        title="Preview absolute local swim dates",
+        description=(
+            "Resolve TODAY, TOMORROW, THIS_WEEK, NEXT_WEEK or NEXT_OCCURRENCE using an "
+            "explicit weekday and timezone. Read-only; returns conflicts and calendar "
+            "hash."
+        ),
+        annotations=READ_ONLY,
+        structured_output=True,
+    )
+    async def preview_calendar(
+        ctx: Context[Any, Any, Any],
+        requests: Annotated[list[CalendarRequest], Field(min_length=1, max_length=14)],
+        reference: datetime | None = None,
+        timezone: str | None = None,
+        start: time | None = None,
+        workout_id: UUID | None = None,
+    ) -> McpResultV2:
+        args: dict[str, Any] = {
+            "requests": [r.model_dump(mode="json") for r in requests],
+            "reference": reference.isoformat() if reference else None,
+            "timezone": timezone,
+            "start": start.isoformat() if start else None,
+            "workout_id": str(workout_id) if workout_id else None,
+        }
+
+        async def query(principal: McpPrincipal, request_id: str) -> McpResult:
+            data = await coach_service.operations.preview(
+                principal.user_id,
+                requests=requests,
+                reference=reference,
+                timezone=timezone,
+                start=start,
+                workout_id=EntityId(workout_id) if workout_id else None,
+            )
+            return McpResult(
+                request_id=request_id,
+                status="OK",
+                data=data,
+                human_summary="Review the absolute dates and availability before saving.",
+            )
+
+        return _as_v2_result(await execute("preview_calendar", ctx, scope, args, query))
+
+    @server.tool(
+        name="get_publication_status",
+        title="Check Garmin publication confirmation",
+        description=(
+            "Return local, job and remote confirmation separately for each workout. "
+            "Queued never means published."
+        ),
+        annotations=READ_ONLY,
+        structured_output=True,
+    )
+    async def get_publication_status(
+        ctx: Context[Any, Any, Any],
+        workout_ids: Annotated[list[UUID], Field(min_length=1, max_length=20)],
+    ) -> McpResultV2:
+        args: dict[str, Any] = {"workout_ids": [str(w) for w in workout_ids]}
+
+        async def query(principal: McpPrincipal, request_id: str) -> McpResult:
+            data = await coach_service.operations.publication_status(
+                principal.user_id, [EntityId(w) for w in workout_ids]
+            )
+            return McpResult(
+                request_id=request_id,
+                status="OK",
+                data=data,
+                warnings=[
+                    _garmin_warning(code)
+                    for code in dict.fromkeys(
+                        code for item in data["items"] for code in item.get("warnings", [])
+                    )
+                ],
+                human_summary="Garmin publication confirmed."
+                if data["all_published"]
+                else "Some workouts still need publication or reconciliation.",
+            )
+
+        return _as_v2_result(await execute("get_publication_status", ctx, scope, args, query))
+
+    @server.tool(
+        name="reschedule_workout",
+        title="Move a workout and reconcile Garmin",
+        description=(
+            "Atomically revise a local ad-hoc workout and queue reconciliation of an "
+            "existing Garmin publication. Use preview_calendar first. A prescribed "
+            "session needs a RESCHEDULE plan proposal."
+        ),
+        annotations=OPEN_WORLD_WRITE,
+        structured_output=True,
+    )
+    async def reschedule_workout(
+        ctx: Context[Any, Any, Any],
+        workout_id: UUID,
+        request: CalendarRequest,
+        expected_version: int,
+        expected_calendar_hash: str,
+        expected_account_ref: str,
+        start: time | None = None,
+    ) -> McpResultV2:
+        args: dict[str, Any] = {
+            "workout_id": str(workout_id),
+            "request": request.model_dump(mode="json"),
+            "expected_version": expected_version,
+            "expected_calendar_hash": expected_calendar_hash,
+            "expected_account_ref": expected_account_ref,
+            "start": start.isoformat() if start else None,
+        }
+
+        async def command(
+            principal: McpPrincipal, request_id: str, correlation_id: CorrelationId
+        ) -> McpResult:
+            if expected_account_ref != account_ref(principal.user_id):
+                raise DomainError("ACCOUNT_MISMATCH", "Select the account used in the preview.")
+            data = await coach_service.operations.reschedule(
+                principal.user_id,
+                EntityId(workout_id),
+                request=request,
+                start=start,
+                expected_version=expected_version,
+                expected_calendar_hash=expected_calendar_hash,
+                correlation_id=correlation_id,
+            )
+            return McpResult(
+                request_id=request_id,
+                status="OK",
+                data=data,
+                human_summary=(
+                    "Local calendar updated. Check publication status for remote confirmation."
+                ),
+            )
+
+        return _as_v2_result(await execute_write("reschedule_workout", ctx, scope, args, command))
+
+    @server.tool(
+        name="set_current_goal",
+        title="Set the current swimming goal",
+        description=(
+            "Create a new current goal while retaining the previous goal as a future "
+            "objective. Does not revise a cycle or publish Garmin workouts."
+        ),
+        annotations=LOCAL_WRITE,
+        structured_output=True,
+    )
+    async def set_current_goal(
+        ctx: Context[Any, Any, Any],
+        title: Annotated[str, Field(min_length=1, max_length=160)],
+        distance_m: Annotated[int, Field(ge=1, le=50000)],
+        duration_seconds: Annotated[int, Field(ge=1, le=86400)],
+        expected_goal_version: int,
+        expected_account_ref: str,
+    ) -> McpResultV2:
+        args: dict[str, Any] = {
+            "title": title,
+            "distance_m": distance_m,
+            "duration_seconds": duration_seconds,
+            "expected_goal_version": expected_goal_version,
+            "expected_account_ref": expected_account_ref,
+        }
+
+        async def command(
+            principal: McpPrincipal, request_id: str, correlation_id: CorrelationId
+        ) -> McpResult:
+            data = await coach_service.operations.set_goal(
+                principal.user_id,
+                title=title,
+                distance_m=distance_m,
+                duration_seconds=duration_seconds,
+                expected_goal_version=expected_goal_version,
+                correlation_id=correlation_id,
+            )
+            return McpResult(
+                request_id=request_id,
+                status="OK",
+                data=data,
+                human_summary=(
+                    "Current goal updated; the previous goal and cycle history are preserved. "
+                    "Propose a successor to change the cycle."
+                ),
+            )
+
+        return _as_v2_result(await execute_write("set_current_goal", ctx, scope, args, command))
+
+    @server.tool(
+        name="associate_workout_to_plan",
+        title="Associate an existing workout with an approved intention",
+        description=(
+            "Adopt an exact matching ad-hoc workout into an approved detailed session "
+            "without changing its identity or publishing again."
+        ),
+        annotations=LOCAL_WRITE,
+        structured_output=True,
+    )
+    async def associate_workout_to_plan(
+        ctx: Context[Any, Any, Any],
+        workout_id: UUID,
+        plan_id: UUID,
+        session_intent_id: UUID,
+        expected_revision: int,
+        expected_account_ref: str,
+    ) -> McpResultV2:
+        args: dict[str, Any] = {
+            "workout_id": str(workout_id),
+            "plan_id": str(plan_id),
+            "session_intent_id": str(session_intent_id),
+            "expected_revision": expected_revision,
+            "expected_account_ref": expected_account_ref,
+        }
+
+        async def command(
+            principal: McpPrincipal, request_id: str, correlation_id: CorrelationId
+        ) -> McpResult:
+            data = await coach_service.operations.associate(
+                principal.user_id,
+                EntityId(workout_id),
+                plan_id=EntityId(plan_id),
+                session_intent_id=EntityId(session_intent_id),
+                expected_revision=expected_revision,
+                correlation_id=correlation_id,
+            )
+            return McpResult(
+                request_id=request_id,
+                status="OK",
+                data=data,
+                human_summary="Workout associated with the approved session; Garmin was unchanged.",
+            )
+
+        return _as_v2_result(
+            await execute_write("associate_workout_to_plan", ctx, scope, args, command)
+        )
+
+    @server.tool(
+        name="publish_workouts",
+        title="Publish a requested batch to Garmin",
+        description=(
+            "Publish only explicitly requested workouts. Returns partial progress per "
+            "item; use get_publication_status to confirm completion."
+        ),
+        annotations=OPEN_WORLD_WRITE,
+        structured_output=True,
+    )
+    async def publish_workouts(
+        ctx: Context[Any, Any, Any],
+        workout_ids: Annotated[list[UUID], Field(min_length=1, max_length=14)],
+        expected_account_ref: str,
+    ) -> McpResultV2:
+        args: dict[str, Any] = {
+            "workout_ids": [str(w) for w in workout_ids],
+            "expected_account_ref": expected_account_ref,
+        }
+
+        async def command(
+            principal: McpPrincipal, request_id: str, correlation_id: CorrelationId
+        ) -> McpResult:
+            items: list[dict[str, Any]] = []
+            for wid in dict.fromkeys(workout_ids):
+                try:
+                    result = await coach_service.publish_workout(
+                        principal.user_id,
+                        EntityId(wid),
+                        scheduled_date=None,
+                        scheduled_start_time=None,
+                        device_id=None,
+                        correlation_id=correlation_id,
+                    )
+                    items.append(
+                        {
+                            "workout_id": str(wid),
+                            "status": result.status,
+                            "job_id": str(result.job_id) if result.job_id else None,
+                            "warnings": list(result.warnings),
+                        }
+                    )
+                except DomainError as error:
+                    items.append(
+                        {
+                            "workout_id": str(wid),
+                            "status": "failed",
+                            "error": {"code": error.code, "message": error.message},
+                        }
+                    )
+            return McpResult(
+                request_id=request_id,
+                status="PARTIAL" if any(i["status"] == "failed" for i in items) else "OK",
+                data={"items": items, "next_tool": "get_publication_status"},
+                human_summary=(
+                    "Publication requested per workout. Check remote confirmation before "
+                    "reporting completion."
+                ),
+            )
+
+        return _as_v2_result(await execute_write("publish_workouts", ctx, scope, args, command))
+
+    @server.tool(
+        name="validate_training_plan",
+        title="Validate a plan without staging or applying",
+        description=(
+            "Read-only validation of a complete canonical coach-authored plan. Returns "
+            "precise issues and no proposal or external effects."
+        ),
+        annotations=READ_ONLY,
+        structured_output=True,
+    )
+    async def validate_training_plan(
+        ctx: Context[Any, Any, Any], definition: TrainingPlanDocument
+    ) -> McpResultV2:
+        args: dict[str, Any] = {"definition": definition.as_json()}
+
+        async def query(principal: McpPrincipal, request_id: str) -> McpResult:
+            data = await coach_service.validate_plan(principal.user_id, definition)
+            return McpResult(
+                request_id=request_id,
+                status="OK",
+                data=data,
+                human_summary="Plan validation complete; nothing was staged or applied.",
+            )
+
+        return _as_v2_result(await execute("validate_training_plan", ctx, scope, args, query))
+
+    @server.tool(
+        name="diagnose_connection",
+        title="Classify observed connection failures",
+        description="Classify sanitized edge, OAuth, MCP, backend, schema or Garmin HTTP evidence. "
+        "A 403 alone never proves a Garmin error.",
+        annotations=READ_ONLY,
+        structured_output=True,
+    )
+    async def diagnose_connection(
+        ctx: Context[Any, Any, Any],
+        http_status: Annotated[int, Field(ge=100, le=599)],
+        layer: Literal["MCP", "OAUTH", "BACKEND", "GARMIN"],
+        security_source: Literal["firewallCustom"] | None = None,
+        origin_status: int | None = None,
+        ray_id: Annotated[str | None, Field(max_length=80, pattern=r"^[a-zA-Z0-9-]+$")] = None,
+    ) -> McpResultV2:
+        args: dict[str, Any] = {
+            "http_status": http_status,
+            "layer": layer,
+            "security_source": security_source,
+            "origin_status": origin_status,
+            "ray_id": ray_id,
+        }
+
+        async def query(principal: McpPrincipal, request_id: str) -> McpResult:
+            del principal
+            code = classify_failure(
+                http_status=http_status,
+                layer=layer,
+                security_source=security_source,
+                origin_status=origin_status,
+            )
+            return McpResult(
+                request_id=request_id,
+                status="OK",
+                data={
+                    "code": code,
+                    "http_status": http_status,
+                    "ray_id": ray_id,
+                    "correlation_id": request_id,
+                    "origin_reached": False if code == "EDGE_FIREWALL_BLOCKED" else None,
+                },
+                human_summary=f"Observed failure classified as {code}.",
+            )
+
+        return _as_v2_result(await execute("diagnose_connection", ctx, scope, args, query))
 
 
 def _apply_v2_tool_security_schemes(server: SwimCoachFastMCP) -> None:

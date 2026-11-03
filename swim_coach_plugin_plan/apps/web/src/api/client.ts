@@ -1,5 +1,7 @@
 import type {
   AuthConfig,
+  CoachingOverview,
+  PublicationStatus,
   AvailabilityRule,
   Goal,
   GarminConnection,
@@ -80,6 +82,10 @@ async function requestV2<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  coachingOverview: () => request<CoachingOverview>("/coaching/overview"),
+  coachingPublication: (ids: string[]) => request<PublicationStatus>("/coaching/publication-status", { method: "POST", body: JSON.stringify(ids) }),
+  coachingPreview: (payload: unknown) => request<{ calendar_hash: string; sessions: Array<{ scheduled_date: string; conflicts: string[]; available: boolean }> }>("/coaching/calendar/preview", { method: "POST", body: JSON.stringify(payload) }),
+  coachingReschedule: (id: string, payload: unknown) => request<unknown>(`/coaching/workouts/${id}/reschedule`, { method: "POST", body: JSON.stringify(payload) }),
   authConfig: () => request<AuthConfig>("/auth/config"),
   me: () => request<Me>("/me"),
   devLogin: () => request<void>("/auth/dev-login", { method: "POST" }),

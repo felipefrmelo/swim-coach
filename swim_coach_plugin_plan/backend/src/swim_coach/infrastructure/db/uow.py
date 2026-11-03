@@ -345,6 +345,10 @@ def _workout(model: PlannedWorkoutModel) -> PlannedWorkout:
 
 
 def _workout_revision(model: WorkoutRevisionModel) -> WorkoutRevision:
+    from swim_coach.domain.workouts import validate_workout
+
+    definition = CanonicalWorkout.model_validate(model.definition_json)
+    calculated = validate_workout(definition).totals
     totals = WorkoutTotals(
         distance_m=model.total_distance_m,
         distance_steps=model.distance_steps,
@@ -353,12 +357,17 @@ def _workout_revision(model: WorkoutRevisionModel) -> WorkoutRevision:
         active_seconds=float(model.estimated_active_seconds),
         rest_seconds=float(model.estimated_rest_seconds),
         estimated_total_seconds=float(model.estimated_total_seconds),
+        duration_complete=calculated.duration_complete,
+        duration_min_seconds=calculated.duration_min_seconds,
+        duration_max_seconds=calculated.duration_max_seconds,
+        unpaced_distance_m=calculated.unpaced_distance_m,
+        open_ended_steps=calculated.open_ended_steps,
     )
     return WorkoutRevision(
         id=EntityId(model.id),
         workout_id=EntityId(model.workout_id),
         revision_number=model.revision_number,
-        definition=CanonicalWorkout.model_validate(model.definition_json),
+        definition=definition,
         totals=totals,
         validation=dict(model.validation_json),
         content_hash=model.content_hash,
@@ -579,6 +588,10 @@ def _training_plan(model: TrainingPlanModel) -> TrainingPlan:
         id=EntityId(model.id),
         user_id=UserId(model.user_id),
         goal_id=EntityId(model.goal_id),
+        predecessor_plan_id=EntityId(model.predecessor_plan_id)
+        if model.predecessor_plan_id
+        else None,
+        goal_snapshot=model.goal_snapshot,
         title=model.title,
         status=PlanStatus(model.status),
         start_date=model.start_date,
@@ -3062,6 +3075,10 @@ class SqlAlchemyTrainingPlansRepository:
                 id=plan.id.value,
                 user_id=plan.user_id.value,
                 goal_id=plan.goal_id.value,
+                predecessor_plan_id=plan.predecessor_plan_id.value
+                if plan.predecessor_plan_id
+                else None,
+                goal_snapshot=plan.goal_snapshot,
                 title=plan.title,
                 status=plan.status.value,
                 start_date=plan.start_date,

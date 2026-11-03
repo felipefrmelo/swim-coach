@@ -125,4 +125,5 @@ def test_intense_workout_warns_without_warmup_or_cooldown() -> None:
     assert {issue.code for issue in validate_workout(definition).warnings} == {
         "WARMUP_RECOMMENDED",
         "COOLDOWN_RECOMMENDED",
+        "DURATION_INCOMPLETE",
     }

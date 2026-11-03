@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, time
-from typing import Any
+from typing import Any, Literal
 
 from swim_coach.application.ports.repositories import UnitOfWorkFactory
+from swim_coach.application.services.coach_operations import CoachOperations
 from swim_coach.application.services.garmin_upsert import GarminUpsertResult, GarminUpsertService
 from swim_coach.application.services.training_cycles import (
     AppliedPlanRevision,
@@ -56,6 +57,9 @@ class CoachCommandService:
         workout_deletion: WorkoutDeletionService,
         training_cycles: TrainingCycleService | None = None,
     ) -> None:
+        self.operations = CoachOperations(
+            uow_factory, garmin_write_enabled=garmin_upsert.write_enabled
+        )
         self._uow_factory = uow_factory
         self._workouts = workouts
         self._garmin_upsert = garmin_upsert
@@ -70,6 +74,28 @@ class CoachCommandService:
     def planning_enabled(self) -> bool:
         return self._training_cycles is not None
 
+    async def validate_plan(
+        self, user_id: UserId, definition: TrainingPlanDocument
+    ) -> dict[str, Any]:
+        from swim_coach.application.services.training_plan_validator import (
+            TrainingPlanValidationContext,
+            TrainingPlanValidator,
+        )
+
+        async with self._uow_factory() as uow:
+            user = await uow.users.get(user_id)
+            if user is None:
+                raise ResourceNotFoundError("user")
+            pools = tuple(await uow.pools.list(user_id))
+            availability = tuple(await uow.availability.list(user_id))
+        try:
+            TrainingPlanValidator().validate(
+                definition, TrainingPlanValidationContext(user.timezone, pools, availability)
+            )
+        except DomainError as error:
+            return {"valid": False, "code": error.code, "details": error.details}
+        return {"valid": True, "issues": [], "external_effects": []}
+
     async def propose_training_plan(
         self,
         user_id: UserId,
@@ -77,12 +103,16 @@ class CoachCommandService:
         actor_id: str,
         definition: TrainingPlanDocument,
         correlation_id: CorrelationId,
+        predecessor_plan_id: EntityId | None = None,
+        expected_predecessor_version: int | None = None,
     ) -> PlanProposalResult:
         return await self._require_cycles().propose_plan(
             user_id,
             actor_id=actor_id,
             definition=definition,
             correlation_id=correlation_id,
+            predecessor_plan_id=predecessor_plan_id,
+            expected_predecessor_version=expected_predecessor_version,
         )
 
     async def get_training_plan(
@@ -229,6 +259,7 @@ class CoachCommandService:
         scheduled_start_time: time | None,
         change_reason: str | None,
         correlation_id: CorrelationId,
+        origin: Literal["AD_HOC", "CONTINGENCY"] = "AD_HOC",
     ) -> WorkoutDetail:
         selected_pool_id = pool_id
         timezone = "America/Sao_Paulo"
@@ -253,6 +284,7 @@ class CoachCommandService:
                 definition,
                 pool_id=selected_pool_id,
                 correlation_id=correlation_id,
+                source="contingency" if origin == "CONTINGENCY" else "coach_ad_hoc",
             )
         else:
             current = await self._workouts.get_workout(user_id, workout_id)

@@ -80,6 +80,7 @@ class WorkoutService:
         pool_id: EntityId,
         correlation_id: CorrelationId,
         workout_id: EntityId | None = None,
+        source: str = "manual",
     ) -> WorkoutDetail:
         validation = validate_workout(definition)
         workout = PlannedWorkout(
@@ -88,6 +89,7 @@ class WorkoutService:
             title=definition.title,
             purpose=definition.purpose,
             pool_id=pool_id,
+            source=source,
         )
         revision = self._new_revision(workout.id, 1, definition, validation.model_dump(mode="json"))
         async with self._uow_factory() as uow:
@@ -142,6 +144,11 @@ class WorkoutService:
             workout = detail.workout
             if workout.version != expected_version:
                 raise RevisionConflictError(workout.version)
+            if (
+                workout.status is PlannedWorkoutStatus.COMPLETED
+                or await uow.activity_data.get_match_by_workout(user_id, workout_id)
+            ):
+                raise DomainError("PLAN_SESSION_LOCKED", "Completed workouts are immutable.")
             if workout.status in {PlannedWorkoutStatus.CANCELLED, PlannedWorkoutStatus.ARCHIVED}:
                 raise DomainError(
                     "VALIDATION_FAILED", "Cancelled or archived workouts cannot be revised."
@@ -227,10 +234,18 @@ class WorkoutService:
         correlation_id: CorrelationId,
     ) -> WorkoutDetail:
         async with self._uow_factory() as uow:
+            await uow.idempotency.lock("coach-calendar", str(user_id))
             detail = await self._get_detail(uow, user_id, workout_id)
             workout = detail.workout
             if workout.version != expected_version:
                 raise RevisionConflictError(workout.version)
+            if (
+                workout.status is PlannedWorkoutStatus.COMPLETED
+                or await uow.activity_data.get_match_by_workout(user_id, workout_id)
+            ):
+                raise DomainError(
+                    "PLAN_SESSION_LOCKED", "Completed workouts cannot be rescheduled."
+                )
             if workout.approved_revision_id != workout.current_revision_id:
                 raise DomainError(
                     "APPROVAL_REQUIRED", "Approve the current revision before scheduling."

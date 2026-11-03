@@ -218,6 +218,15 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
                         "materialize_plan_week",
                         "sync_garmin",
                         "save_feedback",
+                        "get_coach_operations",
+                        "preview_calendar",
+                        "get_publication_status",
+                        "reschedule_workout",
+                        "set_current_goal",
+                        "associate_workout_to_plan",
+                        "publish_workouts",
+                        "validate_training_plan",
+                        "diagnose_connection",
                     ]
                     revision_tool = next(
                         tool for tool in listed.tools if tool.name == "propose_plan_revision"
@@ -237,6 +246,16 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
                     first_step = nodes[0]
                     assert isinstance(first_step, dict)
                     first_step["target"] = {"type": "rpe", "min": 5, "max": 6}
+                    account_mismatch = await session.call_tool(
+                        "save_workout",
+                        {
+                            "pool_id": str(pools[0].id),
+                            "definition": definition,
+                            "expected_account_ref": "another-account",
+                        },
+                    )
+                    assert account_mismatch.isError
+                    assert "ACCOUNT_MISMATCH" in str(account_mismatch.content)
                     saved = await session.call_tool(
                         "save_workout",
                         {

@@ -400,6 +400,9 @@ class Worker:
         async with self._uow_factory() as uow:
             workout = await uow.workouts.get(job.user_id, workout_id)
             binding = await uow.external_workout_bindings.get(job.user_id, binding_id)
+            local_schedule = await uow.workout_schedules.get(job.user_id, workout_id)
+        if local_schedule is None or local_schedule.scheduled_date != scheduled_date:
+            return await self._finish_failure(job, "GARMIN_JOB_STALE", retryable=False)
         if workout is not None and workout.status is PlannedWorkoutStatus.DELETING:
             async with self._uow_factory() as uow:
                 finished = await uow.jobs.mark_succeeded(job.id, self._worker_id, datetime.now(UTC))
@@ -452,18 +455,6 @@ class Worker:
                     )
                 external_id = updated.external_workout_id
 
-            if (
-                binding.scheduled_date is not None
-                and binding.scheduled_date != scheduled_date
-                and binding.external_schedule_id is not None
-            ):
-                try:
-                    await self._garmin_writer.unschedule_workout(
-                        job.user_id, binding.external_schedule_id
-                    )
-                except GarminProviderError as exc:
-                    return await self._finish_upsert_failure(job, binding_id, exc)
-
             schedule = await self._garmin_writer.find_schedule(
                 job.user_id, external_id, scheduled_date
             )
@@ -483,6 +474,18 @@ class Worker:
                             )
                     else:
                         return await self._finish_upsert_failure(job, binding_id, exc)
+
+            if (
+                binding.scheduled_date is not None
+                and binding.scheduled_date != scheduled_date
+                and binding.external_schedule_id is not None
+            ):
+                try:
+                    await self._garmin_writer.unschedule_workout(
+                        job.user_id, binding.external_schedule_id
+                    )
+                except GarminProviderError as exc:
+                    return await self._finish_upsert_failure(job, binding_id, exc)
 
             now = datetime.now(UTC)
             async with self._uow_factory() as uow:
@@ -512,6 +515,18 @@ class Worker:
                     stored_workout.version += 1
                     await uow.workouts.update(stored_workout, expected_version=workout_version)
                 finished = await uow.jobs.mark_succeeded(job.id, self._worker_id, now)
+                if job.attempts > 1:
+                    await uow.notifications.add_idempotent(
+                        Notification(
+                            id=EntityId.new(),
+                            user_id=job.user_id,
+                            notification_type="GARMIN_RECOVERED",
+                            dedupe_key=f"garmin-recovered:{job.id}",
+                            title="Garmin sincronizado",
+                            body="A publicação foi confirmada após uma nova tentativa.",
+                            link="/operations",
+                        )
+                    )
                 await uow.commit()
             return finished
         except GarminProviderError as exc:
@@ -655,6 +670,21 @@ class Worker:
                     now,
                     error=details,
                     retry_at=retry_at,
+                )
+            if ambiguous or not error.retryable or job.attempts >= job.max_attempts:
+                await uow.notifications.add_idempotent(
+                    Notification(
+                        id=EntityId.new(),
+                        user_id=job.user_id,
+                        notification_type="GARMIN_PUBLICATION_FAILED",
+                        dedupe_key=f"garmin-failed:{job.id}",
+                        title="Publicação Garmin pendente",
+                        body=(
+                            "A agenda local foi preservada. "
+                            "Consulte o diagnóstico para reconciliar o envio."
+                        ),
+                        link="/operations",
+                    )
                 )
             await uow.commit()
         return finished

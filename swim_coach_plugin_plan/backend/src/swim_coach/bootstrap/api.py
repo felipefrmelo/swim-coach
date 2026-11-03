@@ -15,6 +15,7 @@ from swim_coach.interfaces.rest.actions import router as actions_router
 from swim_coach.interfaces.rest.activities import router as activities_router
 from swim_coach.interfaces.rest.activities_v2 import router as activities_v2_router
 from swim_coach.interfaces.rest.auth import router as auth_router
+from swim_coach.interfaces.rest.coaching import router as coaching_router
 from swim_coach.interfaces.rest.context import router as context_router
 from swim_coach.interfaces.rest.garmin import router as garmin_router
 from swim_coach.interfaces.rest.health import router as health_router
@@ -90,6 +91,7 @@ def create_app(
     app.include_router(oauth_router)
     app.include_router(auth_router)
     app.include_router(context_router)
+    app.include_router(coaching_router)
     app.include_router(garmin_router)
     app.include_router(workouts_router)
     if not settings.mcp_v2_enabled:

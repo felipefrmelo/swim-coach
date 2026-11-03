@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, CalendarPlus, Check, Goal as GoalIcon, Link2Off, MapPin, Plus, RefreshCw, ShieldCheck, Sparkles, Trash2, Watch, Waves } from "lucide-react";
 
 import { api } from "../api/client";
+import { CoachingPanel } from "./coaching";
 import { clearFeedbackQueue } from "../offline/feedbackQueue";
 import type { AvailabilityRule, Goal, Me } from "../api/types";
 import { ErrorState, LoadingState, SavedNotice } from "../components/AsyncState";
@@ -41,7 +42,8 @@ export function DashboardPage() {
           {["Perfil local autenticado", `Piscina padrão de ${defaultPool?.length_m ?? "—"} m`, ...(contextComplete ? ["Disponibilidade semanal registrada"] : []), ...(primaryGoal ? [`Meta de ${primaryGoal.target_distance_m.toLocaleString("pt-BR")} m em ${goalDurationMinutes} min`] : [])].map((item) => <p className="check-row" key={item}><Check className="size-4" />{item}</p>)}
         </div>
       </section>
-      <section className="empty-card"><CalendarPlus className="size-7 text-cyan-800" /><div><h2 className="section-title">Crie sua próxima sessão</h2><p className="mt-2 text-sm leading-6 text-slate-600">O editor valida cada distância contra a piscina de 20 m e guarda revisões imutáveis antes de agendar.</p></div></section>
+      <CoachingPanel />
+      <section className="empty-card"><CalendarPlus className="size-7 text-cyan-800" /><div><h2 className="section-title">Crie sua próxima sessão</h2><p className="mt-2 text-sm leading-6 text-slate-600">O editor valida cada distância contra a piscina selecionada e guarda revisões imutáveis antes de agendar.</p></div></section>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 {
   "name": "swim-coach",
-  "version": "3.0.0+codex.20260902024830",
+  "version": "3.0.0+codex.20261103",
   "description": "Use ChatGPT as the prescribing swim coach with validated versioned cycles, direct workouts, Garmin, sync, and feedback commands.",
   "author": {
     "name": "Felipe"

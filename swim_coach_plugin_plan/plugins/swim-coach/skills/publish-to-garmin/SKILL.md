@@ -21,3 +21,22 @@ Never request a Garmin password, MFA code, token, or private provider ID in chat
 Do not claim completion when the tool only reports a queued operation.
 
 Reply in Brazilian Portuguese unless the user uses another language.
+
+## Preflight and confirmation
+
+Use `get_coach_operations` to identify the account and `preview_calendar` for
+relative dates. Keep the connection stable and pass `expected_account_ref`.
+Read `get_publication_status` before publishing to see provider warnings:
+DRILL may be sent as CHOICE with the written exercise instruction preserved.
+Use `publish_workouts` for an explicitly requested batch; report each item.
+After a queued response, call `get_publication_status` with those workout IDs.
+Only remote_confirmed=true supports saying the Garmin calendar is updated.
+Stop bounded polling when an operation needs reconciliation; state what remains.
+
+For an ad-hoc workout already published, use `reschedule_workout` after a preview,
+with the same workout ID, current version and calendar hash. The local revision
+and reconciliation job commit together; Garmin may still be pending. For a plan
+session, propose an approved RESCHEDULE revision, then explicitly republish if
+requested. Never delete completed activities or publish as a side effect of
+plan approval. To undo an unperformed move, preview the original date and move
+that same workout back with its newly read version.
