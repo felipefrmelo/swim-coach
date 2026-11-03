@@ -31,7 +31,10 @@ export function CoachingPanel() {
       const remote = status.data?.items.find((i) => i.workout_id === workout.workout_id);
       return <article className="rounded-xl border border-slate-200 p-4" key={workout.workout_id}>
         <p className="font-semibold">{dateLabel(workout.scheduled_date ?? "")} · {workout.scheduled_start_time ?? "—"} · {workout.title}</p>
-        <p className="mt-1 text-sm">{workout.distance_m ?? "—"} m · piscina {workout.pool_length_m ?? "—"} m · {workout.completed ? "Realizado" : "Planejado"}</p>
+        <p className="mt-1 text-sm">Planejado: {workout.distance_m ?? "—"} m · piscina {workout.pool_length_m ?? "—"} m · {workout.completed ? "Realizado" : "Planejado"}</p>
+        {workout.recorded_distance_m != null && <p className="mt-1 text-sm">Registrado pelo Garmin: {workout.recorded_distance_m} m</p>}
+        {workout.athlete_confirmed_distance_m != null && <p className="mt-1 text-sm">Confirmado pelo atleta: {workout.athlete_confirmed_distance_m} m</p>}
+        {workout.performance_blocked && <p className="mt-1 text-sm text-amber-900">Medição contestada; não usar o ritmo registrado para progressão.</p>}
         <p className="mt-1 text-sm">{workout.provenance === "PLAN_SESSION" ? "Sessão do ciclo" : workout.provenance === "CONTINGENCY" ? "Retomada avulsa aguardando decisão sobre ciclo" : "Treino avulso"}</p>
         {remote && <p className="mt-1 text-sm font-medium">{states[remote.state] ?? remote.state}{remote.last_verified_at && ` · verificado em ${new Date(remote.last_verified_at).toLocaleString("pt-BR", { timeZone: data.timezone })}`}</p>}
         {!workout.completed && workout.provenance !== "PLAN_SESSION" && <Reschedule workout={workout} />}

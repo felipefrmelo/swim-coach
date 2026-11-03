@@ -443,7 +443,7 @@ export interface CoachingOverview {
   local_date: string;
   current_goal: { title: string; distance_m: number; duration_seconds: number; pace_seconds_per_100m: number; version: number } | null;
   cycles: Array<{ plan_id: string; title: string; lifecycle_state: string; status: string; goal_relationship: string; predecessor_plan_id: string | null }>;
-  agenda: Array<{ workout_id: string; title: string; version: number; scheduled_date: string | null; scheduled_start_time: string | null; pool_length_m: number | null; distance_m: number | null; completed: boolean; provenance: string }>;
+  agenda: Array<{ workout_id: string; title: string; version: number; scheduled_date: string | null; scheduled_start_time: string | null; pool_length_m: number | null; distance_m: number | null; recorded_distance_m?: number | null; athlete_confirmed_distance_m?: number | null; performance_blocked?: boolean; completed: boolean; provenance: string }>;
   next_workout: CoachingOverview["agenda"][number] | null;
   pending_jobs: Array<{ job_id: string; state: string; type: string; updated_at: string }>;
 }

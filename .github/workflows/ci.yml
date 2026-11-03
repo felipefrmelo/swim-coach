@@ -39,6 +39,14 @@ jobs:
         run: |
           uv sync --all-groups --frozen
           corepack pnpm install --frozen-lockfile
+      - name: Prepare matching PostgreSQL clients for restore drill
+        run: |
+          client_dir="$(mktemp -d /tmp/swim-pg-clients.XXXXXX)"
+          for client_name in pg_dump pg_restore; do
+            printf '#!/usr/bin/env bash\nexec docker run --rm --network host -v /tmp:/tmp postgres:16.10-alpine %s "$@"\n' "$client_name" > "${client_dir}/${client_name}"
+            chmod +x "${client_dir}/${client_name}"
+          done
+          echo "${client_dir}" >> "${GITHUB_PATH}"
       - name: Run static checks and tests
         run: make check
       - name: Scan dependencies

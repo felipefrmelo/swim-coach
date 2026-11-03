@@ -218,6 +218,15 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
                         "materialize_plan_week",
                         "sync_garmin",
                         "save_feedback",
+                        "get_coach_operations",
+                        "preview_calendar",
+                        "get_publication_status",
+                        "reschedule_workout",
+                        "set_current_goal",
+                        "associate_workout_to_plan",
+                        "publish_workouts",
+                        "validate_training_plan",
+                        "diagnose_connection",
                     ]
                     revision_tool = next(
                         tool for tool in listed.tools if tool.name == "propose_plan_revision"

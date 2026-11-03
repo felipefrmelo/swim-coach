@@ -13,6 +13,7 @@ from swim_coach.application.ports.repositories import UnitOfWorkFactory
 from swim_coach.application.services.garmin_upsert import GarminUpsertService
 from swim_coach.application.services.garmin_workout_compiler import GarminWorkoutCompiler
 from swim_coach.application.services.workouts import WorkoutService
+from swim_coach.domain.activities.checkin import execution_evidence
 from swim_coach.domain.goals import GoalStatus, TrainingGoal
 from swim_coach.domain.operations import AuditEvent, Job, OutboxEvent
 from swim_coach.domain.planning import PlanStatus, canonical_json_hash
@@ -308,6 +309,13 @@ class CoachOperations:
                     else None
                 )
                 match = await uow.activity_data.get_match_by_workout(user_id, workout.id)
+                activity = await uow.activities.get(user_id, match.activity_id) if match else None
+                feedback = (
+                    await uow.activity_data.get_feedback(user_id, match.activity_id)
+                    if match
+                    else None
+                )
+                execution = execution_evidence(feedback.check_in if feedback else None)
                 agenda.append(
                     {
                         "workout_id": str(workout.id),
@@ -325,6 +333,11 @@ class CoachOperations:
                         "timezone": schedule.timezone if schedule else user.timezone,
                         "pool_length_m": revision.definition.pool_length_m if revision else None,
                         "distance_m": revision.totals.distance_m if revision else None,
+                        "recorded_distance_m": activity.distance.meters if activity else None,
+                        "athlete_confirmed_distance_m": execution.get(
+                            "athlete_confirmed_distance_m"
+                        ),
+                        "performance_blocked": execution["performance_blocked"],
                         "provenance": "PLAN_SESSION"
                         if binding
                         else "CONTINGENCY"
@@ -686,6 +699,7 @@ class CoachOperations:
                             "revision_id": str(revision.id),
                             "binding_id": str(external.id),
                             "compiled_hash": compiled.compiled_hash,
+                            "revision_content_hash": revision.content_hash,
                             "source_revision_hash": compiled.source_revision_hash,
                             "compiled_payload": compiled.payload,
                             "scheduled_date": day.isoformat(),

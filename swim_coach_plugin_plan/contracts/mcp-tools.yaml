@@ -625,28 +625,10 @@ tools:
         - 'null'
         maxLength: 2000
       check_in:
-        type:
-        - object
-        - 'null'
-        additionalProperties: false
-        properties:
-          completed_as_planned:
-            type:
-            - boolean
-            - 'null'
-          watch_data_accurate:
-            type:
-            - boolean
-            - 'null'
-          all_freestyle:
-            type:
-            - boolean
-            - 'null'
-          main_difficulty:
-            type:
-            - string
-            - 'null'
-            maxLength: 500
+        anyOf:
+        - $ref: ./swim-check-in.schema.json
+        - type: 'null'
+        default: null
       expected_account_ref:
         anyOf:
         - type: string

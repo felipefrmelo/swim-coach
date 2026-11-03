@@ -1,0 +1,70 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "completed_as_planned": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Completed As Planned"
+    },
+    "watch_data_accurate": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Watch Data Accurate"
+    },
+    "all_freestyle": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "All Freestyle"
+    },
+    "confirmed_distance_m": {
+      "anyOf": [
+        {
+          "maximum": 50000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Confirmed Distance M"
+    },
+    "main_difficulty": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Main Difficulty"
+    }
+  },
+  "title": "SwimCheckIn",
+  "type": "object"
+}

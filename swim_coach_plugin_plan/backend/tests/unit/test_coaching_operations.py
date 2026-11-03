@@ -42,7 +42,7 @@ def test_local_tomorrow_across_month_year_and_travel(reference, zone, expected) 
     )
 
 
-@pytest.mark.parametrize("day", [date(2026, 3, 8), date(2026, 11, 1)])
+@pytest.mark.parametrize("day", [date(2024, 3, 10), date(2024, 11, 3)])
 def test_dst_gap_and_fold_require_an_explicit_unambiguous_time(day) -> None:
     with pytest.raises(DomainError, match="unambiguous"):
         local_instant(day, time(2, 30) if day.month == 3 else time(1, 30), "America/Vancouver")
@@ -165,3 +165,15 @@ def test_schema_repairs_name_the_precise_fields_and_do_not_echo_values() -> None
     }
     assert "PRIVATE" not in str(details)
     assert details["recovery"]["max_automatic_retries"] == 1
+
+
+def test_athlete_confirmed_distance_is_separate_from_watch_performance() -> None:
+    from swim_coach.domain.activities.checkin import SwimCheckIn, execution_evidence
+
+    result = execution_evidence(
+        SwimCheckIn(confirmed_distance_m=600, completed_as_planned=True, watch_data_accurate=False)
+    )
+    assert result["athlete_confirmed_distance_m"] == 600
+    assert result["source"] == "ATHLETE"
+    assert result["performance_blocked"] is True
+    assert "pace" not in result
