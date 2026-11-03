@@ -90,15 +90,15 @@ Eventos de borda só podem ser medidos no Cloudflare; ver o runbook.
 ## Rollback e limites operacionais
 
 O pipeline existente faz dump PostgreSQL, verifica o catálogo com pg_restore,
-retém imagens anteriores e somente então migra. Para rollback imediato antes do uso dos novos estados,
-manter o schema aditivo 000018 e restaurar imagens anteriores conforme
-`ops/deploy-vm.sh`. Depois de gravar SUPERSEDED/RESCHEDULE, o binário antigo
-não entende esses valores: preferir correção para frente; qualquer recuperação
-por backup exige validação isolada e decisão explícita sobre dados posteriores.
-Downgrade de schema recusa execução quando há snapshots,
-linhagem ou revisões RESCHEDULE: restaurar um backup verificado em ambiente
-isolado e validar antes de qualquer recuperação de dados. Não descartar esses
-dados para satisfazer uma constraint antiga.
+retém imagens anteriores e registra a revisão de schema antes de migrar. Em
+falha após parar os serviços, o rollback congela escritas e compara o schema.
+Se necessário, executa o downgrade protegido usando a imagem de migração nova;
+somente após sucesso restaura imagens antigas, que exigem o schema anterior.
+O downgrade recusa snapshots/linhagem, RESCHEDULE, distância confirmada e novos
+metadados de revisão de treino incompatíveis com o binário antigo. Nesse caso,
+os serviços permanecem parados: não restaurar backup sobre dados recentes sem
+avaliar a recuperação em ambiente isolado. Preservar o banco para correção para
+frente é preferível a perder novas gravações.
 
 A regra Cloudflare real não vive neste repositório e não pode ser alterada por
 uma mudança de backend. Não há credencial Cloudflare no fluxo de release. O

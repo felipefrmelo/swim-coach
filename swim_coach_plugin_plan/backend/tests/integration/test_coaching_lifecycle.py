@@ -1,8 +1,12 @@
 """Synthetic journeys for successor cycles, calendar repair and external confirmation."""
 
+import asyncio
 from datetime import UTC, date, datetime, time
+from pathlib import Path
 
 import pytest
+from alembic import command
+from alembic.config import Config
 from sqlalchemy import select, update
 
 from swim_coach.application.ports.garmin import GarminErrorCategory, GarminProviderError
@@ -19,6 +23,8 @@ from swim_coach.infrastructure.garmin import FakeGarminWorkoutProvider
 from swim_coach.interfaces.worker.main import Worker
 
 from .test_chatgpt_first_v2 import coach_plan_definition, plan_workout
+
+ROOT = Path(__file__).resolve().parents[3]
 
 
 async def setup_coach(database, settings):
@@ -347,3 +353,24 @@ async def test_adopt_exact_adhoc_preserves_identity_and_replays_materialization(
     agenda = (await services.coach_commands.operations.overview(uid))["agenda"]
     assert len(agenda) == 2
     assert all(w["provenance"] == "PLAN_SESSION" for w in agenda)
+
+
+async def test_schema_rollback_refuses_workout_metadata_unreadable_by_previous_images(
+    database, app_settings
+):
+    services, uid, pool = await setup_coach(database, app_settings)
+    await services.coach_commands.save_workout(
+        uid,
+        CanonicalWorkout.model_validate(plan_workout(1000, "BASE")),
+        workout_id=None,
+        pool_id=pool.id,
+        scheduled_date=None,
+        scheduled_start_time=None,
+        change_reason=None,
+        correlation_id=CorrelationId.new(),
+    )
+    config = Config(str(ROOT / "backend/alembic.ini"))
+    config.attributes["database_url"] = str(app_settings.database_url)
+    with pytest.raises(RuntimeError, match="Lifecycle data exists"):
+        await asyncio.to_thread(command.downgrade, config, "000017")
+    assert await database.revision() == "000018"

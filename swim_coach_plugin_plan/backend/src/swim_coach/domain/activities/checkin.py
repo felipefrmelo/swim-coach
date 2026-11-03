@@ -17,7 +17,10 @@ class SwimCheckIn(BaseModel):
     main_difficulty: str | None = Field(default=None, max_length=500)
 
     def as_json(self) -> JsonObject:
-        return cast(JsonObject, self.model_dump(mode="json"))
+        value = self.model_dump(mode="json")
+        if self.confirmed_distance_m is None:
+            value.pop("confirmed_distance_m")
+        return cast(JsonObject, value)
 
     def as_patch(self) -> JsonObject:
         return cast(JsonObject, self.model_dump(mode="json", exclude_unset=True))

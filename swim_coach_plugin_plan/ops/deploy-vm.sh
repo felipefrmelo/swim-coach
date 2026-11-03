@@ -19,9 +19,16 @@ services=(api worker web)
 services_stopped=false
 deployment_succeeded=false
 current_deployed=""
+previous_schema=""
+backup_path=""
 
 compose() {
   docker compose -p "${compose_project}" "${compose_files[@]}" "$@"
+}
+
+database_schema() {
+  compose exec -T postgres psql -U swim_coach -d swim_coach -Atqc \
+    'SELECT version_num FROM alembic_version'
 }
 
 available_disk_kb() {
@@ -35,6 +42,17 @@ rollback_application() {
   if [[ "${services_stopped}" == "true" && "${deployment_succeeded}" != "true" ]]; then
     echo "Deployment failed after services stopped; attempting application rollback." >&2
     cd "${application_root}"
+    # Freeze writes before checking whether a schema rollback is lossless.
+    compose stop worker api web || true
+    observed_schema="$(database_schema)"
+    if [[ "${observed_schema}" != "${previous_schema}" ]]; then
+      if [[ ! "${previous_schema}" =~ ^[0-9]{6}$ ]] || ! compose run --rm migrate \
+        alembic -c backend/alembic.ini downgrade "${previous_schema}"; then
+        echo "Schema rollback refused; services remain stopped to preserve new data." >&2
+        echo "Use the verified backup ${backup_path} for an isolated recovery assessment." >&2
+        exit "${status}"
+      fi
+    fi
     for service in "${services[@]}"; do
       rollback_ref="swim-coach-rollback-${service}:${current_deployed}"
       if docker image inspect "${rollback_ref}" > /dev/null 2>&1; then
@@ -110,6 +128,11 @@ fi
 cd "${application_root}"
 mkdir -p "${backup_root}"
 umask 077
+previous_schema="$(database_schema)"
+if [[ ! "${previous_schema}" =~ ^[0-9]{6}$ ]]; then
+  echo "Deploy refused: cannot verify the pre-deploy schema." >&2
+  exit 1
+fi
 backup_path="${backup_root}/predeploy-$(date -u +%Y%m%dT%H%M%SZ).dump"
 compose exec -T postgres pg_dump -U swim_coach -d swim_coach -Fc > "${backup_path}"
 chmod 600 "${backup_path}"

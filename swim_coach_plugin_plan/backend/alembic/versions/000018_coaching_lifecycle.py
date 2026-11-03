@@ -39,7 +39,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Refuse loss of lineage/snapshots: application rollback can keep this additive schema.
+    # Older images require schema 000017 and cannot read new persisted enum/JSON fields.
     count = op.get_bind().scalar(
         sa.text(
             "SELECT count(*) FROM training_plan WHERE "
@@ -49,7 +49,19 @@ def downgrade() -> None:
     revisions = op.get_bind().scalar(
         sa.text("SELECT count(*) FROM training_plan_revision WHERE revision_kind='RESCHEDULE'")
     )
-    if count or revisions:
+    check_ins = op.get_bind().scalar(
+        sa.text(
+            "SELECT count(*) FROM session_feedback "
+            "WHERE check_in_json ->> 'confirmed_distance_m' IS NOT NULL"
+        )
+    )
+    workout_metadata = op.get_bind().scalar(
+        sa.text(
+            "SELECT count(*) FROM workout_revision "
+            "WHERE validation_json -> 'totals' ? 'duration_complete'"
+        )
+    )
+    if count or revisions or check_ins or workout_metadata:
         raise RuntimeError(
             "Lifecycle data exists; retain schema and restore a verified backup if required."
         )
