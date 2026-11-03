@@ -2233,12 +2233,17 @@ def _register_v2_tools(
                     "status": result.status,
                     "job_id": str(result.job_id) if result.job_id else None,
                     "replayed": result.replayed,
+                    "remote_confirmed": result.status == "published",
                 },
                 warnings=[_garmin_warning(code) for code in result.warnings],
-                human_summary=(
-                    "Garmin publication is queued."
-                    if result.job_id
-                    else "This workout is already current on Garmin."
+                human_summary={
+                    "published": "This workout is already current on Garmin.",
+                    "queued": "Garmin publication is queued.",
+                    "processing": "Garmin publication is processing.",
+                    "retrying": "Garmin publication is awaiting a retry.",
+                }.get(
+                    result.status,
+                    "Garmin publication needs attention; inspect its status before retrying.",
                 ),
             )
 
@@ -2536,6 +2541,12 @@ def _register_v2_tools(
                 request_id=request_id,
                 status="OK",
                 data=data,
+                warnings=[
+                    _garmin_warning(code)
+                    for code in dict.fromkeys(
+                        code for item in data["items"] for code in item.get("warnings", [])
+                    )
+                ],
                 human_summary="Garmin publication confirmed."
                 if data["all_published"]
                 else "Some workouts still need publication or reconciliation.",

@@ -3,8 +3,9 @@
 from datetime import UTC, date, datetime, time
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 
+from swim_coach.application.ports.garmin import GarminErrorCategory, GarminProviderError
 from swim_coach.application.services.context import AvailabilityInput
 from swim_coach.bootstrap.container import build_services
 from swim_coach.domain.planning import PlanStatus, TrainingPlanDocument
@@ -13,7 +14,7 @@ from swim_coach.domain.shared.errors import DomainError
 from swim_coach.domain.shared.value_objects import EntityId
 from swim_coach.domain.workouts import CanonicalWorkout
 from swim_coach.domain.workouts.calendar import CalendarRequest
-from swim_coach.infrastructure.db.models import ExternalWorkoutBindingModel
+from swim_coach.infrastructure.db.models import ExternalWorkoutBindingModel, JobModel
 from swim_coach.infrastructure.garmin import FakeGarminWorkoutProvider
 from swim_coach.interfaces.worker.main import Worker
 
@@ -152,8 +153,9 @@ async def test_ended_or_paused_cycle_rolls_over_after_exact_approval(
         assert all(j.job_type != "workout.upsert_garmin" for j in await uow.jobs.list_recent(uid))
 
 
+@pytest.mark.parametrize("fail_cleanup", [False, True])
 async def test_calendar_preview_and_published_move_keep_identity_and_confirm_remote(
-    database, app_settings
+    database, app_settings, monkeypatch, fail_cleanup
 ):
     services, uid, pool = await setup_coach(database, app_settings)
     operations = services.coach_commands.operations
@@ -215,11 +217,34 @@ async def test_calendar_preview_and_published_move_keep_identity_and_confirm_rem
         correlation_id=CorrelationId.new(),
     )
     assert moved["state"] == "QUEUED" and not moved["remote_confirmed"]
+    original_unschedule = writer.unschedule_workout
+    if fail_cleanup:
+
+        async def fail_old_entry_once(user_id, schedule_id):
+            monkeypatch.setattr(writer, "unschedule_workout", original_unschedule)
+            raise GarminProviderError(GarminErrorCategory.NETWORK, retryable=True)
+
+        monkeypatch.setattr(writer, "unschedule_workout", fail_old_entry_once)
     assert await worker.run_once()
+    if fail_cleanup:
+        partial = await operations.publication_status(uid, [saved.workout.id])
+        assert not partial["all_published"]
+        assert partial["items"][0]["state"] == "RETRYING"
+        async with database.engine.begin() as connection:
+            await connection.execute(
+                update(JobModel)
+                .where(JobModel.id == EntityId.parse(moved["job_id"]).value)
+                .values(available_at=datetime.now(UTC))
+            )
+        assert await worker.run_once()
     status = await operations.publication_status(uid, [saved.workout.id])
     assert status["all_published"]
     assert status["items"][0]["remote_date"] == "2026-11-03"
     assert writer.unschedule_calls == 1
+    assert writer.create_calls == 1
+    assert (
+        writer.schedule_calls == 2
+    )  # Retry reconciles the new entry instead of creating it again.
     after = await services.workouts.get_workout(uid, saved.workout.id)
     assert after.workout.id == saved.workout.id
     assert len(after.revisions) == 2
@@ -263,3 +288,62 @@ async def test_successor_detects_predecessor_version_change_before_application(
     )
     with pytest.raises(DomainError, match="predecessor changed"):
         await apply(services, uid, successor)
+
+
+async def test_adopt_exact_adhoc_preserves_identity_and_replays_materialization(
+    database, app_settings
+):
+    services, uid, pool = await setup_coach(database, app_settings)
+    goal = (await services.context.list_goals(uid))[0]
+    proposed = await services.coach_commands.propose_training_plan(
+        uid,
+        actor_id="synthetic",
+        definition=TrainingPlanDocument.model_validate(
+            coach_plan_definition(goal_id=goal.id, start_date=date(2026, 11, 2), pool_id=pool.id)
+        ),
+        correlation_id=CorrelationId.new(),
+    )
+    intent = proposed.document.weeks[0].sessions[0]
+    saved = await services.coach_commands.save_workout(
+        uid,
+        intent.workout,
+        workout_id=None,
+        pool_id=pool.id,
+        scheduled_date=intent.scheduled_date,
+        scheduled_start_time=intent.scheduled_start_time,
+        change_reason=None,
+        correlation_id=CorrelationId.new(),
+        origin="CONTINGENCY",
+    )
+    await apply(services, uid, proposed)
+    await services.coach_commands.materialize_plan_week(
+        uid,
+        plan_id=proposed.plan.id,
+        expected_revision=1,
+        week_number=1,
+        correlation_id=CorrelationId.new(),
+    )
+    await services.coach_commands.operations.associate(
+        uid,
+        saved.workout.id,
+        plan_id=proposed.plan.id,
+        session_intent_id=EntityId.parse(intent.session_intent_id),
+        expected_revision=1,
+        correlation_id=CorrelationId.new(),
+    )
+    replay = await services.coach_commands.materialize_plan_week(
+        uid,
+        plan_id=proposed.plan.id,
+        expected_revision=1,
+        week_number=1,
+        correlation_id=CorrelationId.new(),
+    )
+    assert saved.workout.id in replay.workout_ids
+    detail = await services.coach_commands.get_training_plan(uid, proposed.plan.id)
+    binding = next(
+        b for b in detail.bindings if str(b.session_intent_id) == intent.session_intent_id
+    )
+    assert binding.workout_id == saved.workout.id
+    agenda = (await services.coach_commands.operations.overview(uid))["agenda"]
+    assert len(agenda) == 2
+    assert all(w["provenance"] == "PLAN_SESSION" for w in agenda)

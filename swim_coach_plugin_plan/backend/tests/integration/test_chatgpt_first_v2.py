@@ -246,6 +246,16 @@ async def test_mcp_v2_calls_direct_save_without_protocol_fields(
                     first_step = nodes[0]
                     assert isinstance(first_step, dict)
                     first_step["target"] = {"type": "rpe", "min": 5, "max": 6}
+                    account_mismatch = await session.call_tool(
+                        "save_workout",
+                        {
+                            "pool_id": str(pools[0].id),
+                            "definition": definition,
+                            "expected_account_ref": "another-account",
+                        },
+                    )
+                    assert account_mismatch.isError
+                    assert "ACCOUNT_MISMATCH" in str(account_mismatch.content)
                     saved = await session.call_tool(
                         "save_workout",
                         {
