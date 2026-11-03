@@ -52,7 +52,7 @@ def downgrade() -> None:
     check_ins = op.get_bind().scalar(
         sa.text(
             "SELECT count(*) FROM session_feedback "
-            "WHERE check_in_json ->> 'confirmed_distance_m' IS NOT NULL"
+            "WHERE check_in ->> 'confirmed_distance_m' IS NOT NULL"
         )
     )
     workout_metadata = op.get_bind().scalar(
