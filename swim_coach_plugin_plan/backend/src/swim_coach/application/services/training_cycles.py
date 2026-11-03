@@ -117,6 +117,8 @@ class TrainingCycleService:
         actor_id: str,
         definition: TrainingPlanDocument,
         correlation_id: CorrelationId,
+        predecessor_plan_id: EntityId | None = None,
+        expected_predecessor_version: int | None = None,
     ) -> PlanProposalResult:
         if definition.schema_version != "2.0":
             raise DomainError(
@@ -127,10 +129,38 @@ class TrainingCycleService:
             raise DomainError("PLAN_VALIDATION_FAILED", "The plan definition is incomplete.")
         goal_id = EntityId.parse(definition.goal_id)
         async with self._uow_factory() as uow:
-            if await uow.training_plans.get_live(user_id) is not None:
+            live = await uow.training_plans.get_live(user_id)
+            predecessor = (
+                await uow.training_plans.get(user_id, predecessor_plan_id)
+                if predecessor_plan_id
+                else None
+            )
+            if predecessor_plan_id and predecessor is None:
+                raise ResourceNotFoundError("training_plan")
+            if predecessor is not None and predecessor.version != expected_predecessor_version:
+                raise DomainError(
+                    "PLAN_REVISION_CONFLICT", "Reload the predecessor and its version."
+                )
+            if live is not None and (predecessor is None or live.id != predecessor.id):
                 raise DomainError(
                     "ACTIVE_PLAN_EXISTS",
-                    "Pause, complete, or cancel the current plan before starting another cycle.",
+                    "Propose a linked successor or explicitly complete the current cycle.",
+                    details={
+                        "plan_id": str(live.id),
+                        "version": live.version,
+                        "recovery": {
+                            "next_tool": "propose_training_plan",
+                            "max_automatic_retries": 1,
+                            "instructions": [
+                                (
+                                    "Supply predecessor_plan_id and "
+                                    "expected_predecessor_version with the "
+                                    "complete successor definition. Show the "
+                                    "rollover diff and obtain approval."
+                                )
+                            ],
+                        },
+                    },
                 )
             goals = await uow.goals.list(user_id)
             selected_goal = next((item for item in goals if item.id == goal_id), None)
@@ -141,9 +171,23 @@ class TrainingCycleService:
             raise DomainError("GOAL_REQUIRED", "Choose an active goal before creating a plan.")
         if user is None:
             raise ResourceNotFoundError("user")
+        plan_identity = EntityId(
+            uuid5(
+                user_id.value,
+                canonical_json_hash(
+                    {
+                        "definition": definition.as_json(),
+                        "predecessor": str(predecessor_plan_id),
+                        "predecessor_version": expected_predecessor_version,
+                        "goal_version": selected_goal.version,
+                    }
+                ),
+            )
+        )
         document = self._normalize_definition(
             definition,
             timezone=user.timezone,
+            identity_namespace=plan_identity,
         )
         if document.title is None or document.start_date is None:
             raise DomainError("PLAN_VALIDATION_FAILED", "The plan definition is incomplete.")
@@ -153,10 +197,20 @@ class TrainingCycleService:
         )
         now = datetime.now(UTC).replace(microsecond=0)
         plan = TrainingPlan(
-            id=EntityId.new(),
+            id=plan_identity,
             user_id=user_id,
             goal_id=selected_goal.id,
             title=document.title,
+            predecessor_plan_id=predecessor_plan_id,
+            goal_snapshot={
+                "goal_id": str(selected_goal.id),
+                "title": selected_goal.title,
+                "distance_m": selected_goal.target_distance.meters,
+                "duration_seconds": float(selected_goal.target_duration.seconds),
+                "pace_seconds_per_100m": float(selected_goal.target_pace.seconds_per_100m),
+                "version": selected_goal.version,
+                "effective_at": selected_goal.updated_at.isoformat(),
+            },
             start_date=document.start_date,
             end_date=document.start_date + timedelta(days=document.duration_weeks * 7 - 1),
             duration_weeks=document.duration_weeks,
@@ -165,6 +219,19 @@ class TrainingCycleService:
             updated_at=now,
         )
         diff = plan_document_diff(None, document)
+        if predecessor is not None:
+            diff["rollover"] = {
+                "predecessor_plan_id": str(predecessor.id),
+                "title": predecessor.title,
+                "status_before": predecessor.status.value,
+                "status_after": "COMPLETED"
+                if predecessor.end_date < document.start_date
+                else "SUPERSEDED",
+                "history_preserved": True,
+                "future_local_sessions": "SUPERSEDE_AND_UNSCHEDULE_FROM_SUCCESSOR_START",
+                "remote_cleanup": "Existing remote entries require an explicit Garmin action",
+                "garmin_changed": False,
+            }
         proposal = ActionProposal.ready_for_review(
             id=EntityId.new(),
             user_id=user_id,
@@ -176,6 +243,9 @@ class TrainingCycleService:
                 JsonObject,
                 {
                     "expected_revision": 0,
+                    "predecessor_plan_id": str(predecessor.id) if predecessor else None,
+                    "expected_predecessor_version": predecessor.version if predecessor else None,
+                    "goal_snapshot": plan.goal_snapshot,
                     "document": document.as_json(),
                     "reason": "Criação do ciclo",
                     "evidence": {},
@@ -197,6 +267,13 @@ class TrainingCycleService:
             created_at=now,
         )
         async with self._uow_factory() as uow:
+            await uow.idempotency.lock("plan-propose", str(plan.id))
+            existing = await uow.training_plans.get(user_id, plan.id)
+            if existing is not None:
+                staged = await uow.action_proposals.get_by_hash(user_id, proposal.action_hash)
+                if staged is not None:
+                    return PlanProposalResult(existing, staged, document)
+                raise DomainError("PLAN_REVISION_CONFLICT", "Reload the existing proposal.")
             await uow.training_plans.add(plan)
             await uow.action_proposals.add(proposal)
             await uow.audit.add(
@@ -249,7 +326,19 @@ class TrainingCycleService:
         if week.detail_level is not PlanDetailLevel.DETAILED:
             raise DomainError(
                 "PLAN_WEEK_NOT_DETAILED",
-                "Only the current detailed week can be reviewed for adaptation.",
+                "This week has no detailed prescription to review. "
+                "Read recent activities and propose a successor if the cycle has ended.",
+                details={
+                    "recovery": {
+                        "next_tool": "get_coach_context",
+                        "max_automatic_retries": 0,
+                        "alternatives": [
+                            "PROPOSE_SUCCESSOR",
+                            "MATERIALIZE_FUTURE_WEEK",
+                            "RESCHEDULE_FUTURE_SESSIONS",
+                        ],
+                    }
+                },
             )
         current_week_intents = {
             item.session_intent_id for item in week.sessions if item.session_intent_id is not None
@@ -575,6 +664,7 @@ class TrainingCycleService:
         candidate = self._normalize_definition(
             revision_definition.definition,
             timezone=user.timezone,
+            identity_namespace=plan.id,
         )
         identity_issues: list[JsonObject] = []
         for field_name, value, expected in (
@@ -714,6 +804,8 @@ class TrainingCycleService:
                 plan.status is PlanStatus.DRAFT
                 and live_plan is not None
                 and live_plan.id != plan.id
+                and str(live_plan.id)
+                != (proposal.payload.get("predecessor_plan_id") if proposal else None)
             ):
                 raise DomainError(
                     "ACTIVE_PLAN_EXISTS",
@@ -725,6 +817,16 @@ class TrainingCycleService:
                 or proposal.action_type != self.ACTION_TYPE
             ):
                 raise ResourceNotFoundError("action_proposal")
+            if (
+                proposal.status.value == "SUCCEEDED"
+                and proposal.action_hash == approval_hash
+                and plan.current_revision == expected_revision + 1
+            ):
+                applied = await uow.training_plan_revisions.get(
+                    user_id, plan.id, plan.current_revision
+                )
+                if applied is not None and applied.proposal_id == proposal.id:
+                    return AppliedPlanRevision(plan, applied)
             payload_revision = proposal.payload.get("expected_revision")
             if (
                 not isinstance(payload_revision, int)
@@ -770,6 +872,84 @@ class TrainingCycleService:
                 revision_kind=str(proposal.payload.get("revision_kind") or "CREATION"),
                 local_today=now.astimezone(ZoneInfo(user.timezone)).date(),
             )
+            goals = await uow.goals.list(user_id)
+            goal = next((g for g in goals if g.id == plan.goal_id), None)
+            if expected_revision == 0 and (
+                goal is None
+                or goal.status is not GoalStatus.ACTIVE
+                or goal.version != plan.goal_snapshot.get("version")
+            ):
+                raise DomainError(
+                    "PLAN_REVISION_CONFLICT", "The goal changed after the proposal. Propose again."
+                )
+            raw_predecessor = proposal.payload.get("predecessor_plan_id")
+            if expected_revision == 0 and isinstance(raw_predecessor, str):
+                predecessor = await uow.training_plans.get_for_update(
+                    user_id, EntityId.parse(raw_predecessor)
+                )
+                if predecessor is None or predecessor.version != proposal.payload.get(
+                    "expected_predecessor_version"
+                ):
+                    raise DomainError(
+                        "PLAN_REVISION_CONFLICT", "The predecessor changed. Propose again."
+                    )
+                if predecessor.status in {PlanStatus.ACTIVE, PlanStatus.PAUSED}:
+                    previous_version = predecessor.version
+                    predecessor.set_status(
+                        PlanStatus.COMPLETED
+                        if predecessor.end_date < plan.start_date
+                        else PlanStatus.SUPERSEDED,
+                        now,
+                    )
+                    await uow.training_plans.update(predecessor, expected_version=previous_version)
+                    for old_binding in await uow.plan_session_bindings.list_for_plan(
+                        user_id, predecessor.id
+                    ):
+                        if old_binding.locked or old_binding.workout_id is None:
+                            continue
+                        schedule = await uow.workout_schedules.get(user_id, old_binding.workout_id)
+                        if schedule is None or schedule.scheduled_date < plan.start_date:
+                            continue
+                        if await uow.activity_data.get_match_by_workout(
+                            user_id, old_binding.workout_id
+                        ):
+                            continue
+                        old_workout = await uow.workouts.get(user_id, old_binding.workout_id)
+                        if (
+                            old_workout is None
+                            or old_workout.status is PlannedWorkoutStatus.COMPLETED
+                        ):
+                            continue
+                        binding_version = old_binding.version
+                        old_binding.state = PlanSessionState.SUPERSEDED
+                        old_binding.version += 1
+                        old_binding.updated_at = now
+                        await uow.plan_session_bindings.update(
+                            old_binding, expected_version=binding_version
+                        )
+                        await uow.workout_schedules.delete(user_id, old_workout.id)
+                        workout_version = old_workout.version
+                        old_workout.status = PlannedWorkoutStatus.APPROVED
+                        old_workout.version += 1
+                        old_workout.updated_at = now
+                        await uow.workouts.update(old_workout, expected_version=workout_version)
+                    await uow.flush()
+                    await uow.audit.add(
+                        AuditEvent(
+                            id=EntityId.new(),
+                            user_id=user_id,
+                            actor_type="user",
+                            actor_id=actor_id,
+                            action="training_plan.rollover",
+                            entity_type="TrainingPlan",
+                            entity_id=predecessor.id,
+                            correlation_id=correlation_id,
+                            after={
+                                "status": predecessor.status.value,
+                                "successor_plan_id": str(plan.id),
+                            },
+                        )
+                    )
             expected_plan_version = plan.version
             expected_proposal_version = proposal.version
             proposal.approve(action_hash=approval_hash, now=now)
@@ -994,6 +1174,26 @@ class TrainingCycleService:
         week_number: int,
         correlation_id: CorrelationId,
     ) -> MaterializationResult:
+        # Serialize approval, adoption and materialization while reusing existing services.
+        async with self._uow_factory() as lock_uow:
+            await lock_uow.idempotency.lock("training-plan-live", str(user_id))
+            return await self._materialize_week_locked(
+                user_id,
+                plan_id=plan_id,
+                expected_revision=expected_revision,
+                week_number=week_number,
+                correlation_id=correlation_id,
+            )
+
+    async def _materialize_week_locked(
+        self,
+        user_id: UserId,
+        *,
+        plan_id: EntityId,
+        expected_revision: int,
+        week_number: int,
+        correlation_id: CorrelationId,
+    ) -> MaterializationResult:
         detail = await self.get_plan(user_id, plan_id)
         if detail.revision is None or detail.plan.current_revision != expected_revision:
             raise DomainError("PLAN_REVISION_CONFLICT", "The plan revision changed.")
@@ -1055,6 +1255,7 @@ class TrainingCycleService:
                     pool_id=pool.id,
                     correlation_id=correlation_id,
                     workout_id=EntityId(uuid5(plan_id.value, str(intent_id))),
+                    source="plan_session",
                 )
             else:
                 workout = await self._workouts.get_workout(user_id, workout_id)
@@ -1259,13 +1460,27 @@ class TrainingCycleService:
         status: PlanStatus,
         correlation_id: CorrelationId,
     ) -> TrainingPlan:
-        if status not in {PlanStatus.ACTIVE, PlanStatus.PAUSED}:
-            raise DomainError("VALIDATION_FAILED", "Only pause and resume are exposed here.")
+        if status not in {
+            PlanStatus.ACTIVE,
+            PlanStatus.PAUSED,
+            PlanStatus.COMPLETED,
+            PlanStatus.CANCELLED,
+        }:
+            raise DomainError("VALIDATION_FAILED", "Unsupported plan transition.")
         now = datetime.now(UTC)
         async with self._uow_factory() as uow:
+            await uow.idempotency.lock("training-plan-live", str(user_id))
             plan = await uow.training_plans.get_for_update(user_id, plan_id)
             if plan is None:
                 raise ResourceNotFoundError("training_plan")
+            if plan.status is status:
+                return plan
+            if status is PlanStatus.ACTIVE:
+                live = await uow.training_plans.get_live(user_id)
+                if live is not None and live.id != plan.id:
+                    raise DomainError(
+                        "ACTIVE_PLAN_EXISTS", "Complete the other cycle or propose a successor."
+                    )
             previous = plan.version
             plan.set_status(status, now)
             await uow.training_plans.update(plan, expected_version=previous)
@@ -1324,6 +1539,7 @@ class TrainingCycleService:
         definition: TrainingPlanDocument,
         *,
         timezone: str,
+        identity_namespace: EntityId | None = None,
     ) -> TrainingPlanDocument:
         weeks: list[PlanWeek] = []
         for week in definition.weeks:
@@ -1332,7 +1548,17 @@ class TrainingCycleService:
                 sessions.append(
                     session.model_copy(
                         update={
-                            "session_intent_id": session.session_intent_id or str(EntityId.new()),
+                            "session_intent_id": session.session_intent_id
+                            or str(
+                                EntityId(
+                                    uuid5(
+                                        identity_namespace.value,
+                                        f"{week.week_number}:{session.session_number}",
+                                    )
+                                )
+                                if identity_namespace
+                                else EntityId.new()
+                            ),
                         }
                     )
                 )

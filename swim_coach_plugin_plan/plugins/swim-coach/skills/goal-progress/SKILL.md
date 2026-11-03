@@ -1,6 +1,6 @@
 ---
 name: goal-progress
-description: Explain evidence-based progress toward the user's active swimming goal with Swim Coach read-only data. Use for English or Portuguese questions about goal status, pace or endurance gaps, trends, distance remaining, sample quality, or progress toward targets such as 2,000 meters in 45 minutes.
+description: Explain evidence-based progress toward the user's active swimming goal with Swim Coach read-only data. Use for English or Portuguese questions about goal status, pace or endurance gaps, trends, distance remaining, sample quality, or progress toward the configured current distance and time target.
 ---
 
 # Explain swimming goal progress
@@ -19,3 +19,8 @@ date of achievement.
 Reply in Brazilian Portuguese unless the user uses another language. Keep the
 answer compact and evidence-led. Do not change training data unless the user
 also asks for a concrete change.
+
+Read `operations.current_goal` for distance, duration, derived pace, version and
+effective date. Old cycle titles and their immutable snapshots remain history.
+A goal of 1,000 m / 1,380 s derives 138 s/100 m; never treat the initial 2,000 m
+bootstrap example as a permanent rule. A new goal may need a successor cycle.

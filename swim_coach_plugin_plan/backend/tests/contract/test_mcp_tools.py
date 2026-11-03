@@ -69,7 +69,13 @@ async def test_v2_announces_training_cycle_intent_tools_with_one_scope() -> None
 
     registered = server._tool_manager._tools
     assert list(registered) == list(expected)
-    assert len(registered) == 17
+    assert len(registered) == len(expected)
+    assert {
+        "preview_calendar",
+        "reschedule_workout",
+        "get_publication_status",
+        "set_current_goal",
+    } <= set(registered)
     assert "approval-gated training cycles" in server.instructions
     assert "delete_workout" in server.instructions
     listed = {tool.name: tool for tool in await server.list_tools()}

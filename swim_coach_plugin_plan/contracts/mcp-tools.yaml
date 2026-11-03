@@ -1,233 +1,970 @@
-schema_version: "2.0"
+schema_version: '2.0'
 server:
   name: swim-coach
   transport: streamable-http
   path: /mcp
   auth: oauth-2.1
-  scopes: [coach]
+  scopes:
+  - coach
 result_envelope: ./tool-result-envelope-v2.schema.json
 tools:
-  - name: get_coach_context
-    title: Get swim coach context
-    description: Return profile, timezone, goal, pools, explicit availability, constraints, recent deterministic training evidence, active plan, notes, Garmin health, and capabilities before prescribing.
-    scopes: [coach]
-    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
-    input: {type: object, additionalProperties: false, properties: {include_constraints: {type: boolean, default: true}}}
-  - name: propose_training_plan
-    title: Validate a coach-authored training cycle
-    description: Validate and stage a complete coach-authored training plan definition. This tool never generates or changes training content.
-    scopes: [coach]
-    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
-    input:
-      type: object
-      additionalProperties: false
-      required: [definition]
-      properties:
-        definition: {$ref: ./training-plan-definition.schema.json}
-  - name: get_training_plan
-    title: Get a training cycle
-    description: Return the live or selected cycle, coach rationale, immutable revision history, session bindings, materialized workout definitions, reviews, and notes.
-    scopes: [coach]
-    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
-    input:
-      type: object
-      additionalProperties: false
-      properties:
-        plan_id: {type: [string, "null"], format: uuid}
-  - name: review_training_plan
-    title: Review one plan week
-    description: Return deterministic evidence for coach review. This tool never changes the plan or chooses a decision.
-    scopes: [coach]
-    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
-    input:
-      type: object
-      additionalProperties: false
-      required: [plan_id, week_number]
-      properties:
-        plan_id: {type: string, format: uuid}
-        week_number: {type: integer, minimum: 1, maximum: 16}
-  - name: propose_plan_revision
-    title: Validate a coach-authored plan revision
-    description: Validate and stage a coach-authored revision built by deep-copying the current data.revision, preserving past or reviewed weeks and locked sessions exactly, and editing only eligible future weeks. Validation failures include structured recovery guidance and changed paths. This tool never chooses the adaptation decision, applies a proposal, or writes to Garmin.
-    scopes: [coach]
-    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
-    input:
-      type: object
-      additionalProperties: false
-      required: [plan_id, expected_revision, revision_definition]
-      properties:
-        plan_id: {type: string, format: uuid}
-        expected_revision: {type: integer, minimum: 1}
-        revision_definition: {$ref: ./training-plan-revision-definition.schema.json}
-  - name: apply_plan_revision
-    title: Apply an approved plan revision
-    description: Apply one exact proposed revision with optimistic concurrency, queue changed DETAILED weeks, and locally unschedule explicitly removed future sessions without changing Garmin.
-    scopes: [coach]
-    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
-    input:
-      type: object
-      additionalProperties: false
-      required: [plan_id, proposal_id, expected_revision, approval_hash]
-      properties:
-        plan_id: {type: string, format: uuid}
-        proposal_id: {type: string, format: uuid}
-        expected_revision: {type: integer, minimum: 0}
-        approval_hash: {type: string, minLength: 64, maxLength: 64}
-  - name: add_plan_note
-    title: Add a structured plan note
-    description: Attach bounded reusable context to a plan, week, session, or activity.
-    scopes: [coach]
-    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
-    input:
-      type: object
-      additionalProperties: false
-      required: [plan_id, scope_type, scope_ref, category, text]
-      properties:
-        plan_id: {type: string, format: uuid}
-        scope_type: {type: string, enum: [PLAN, WEEK, SESSION, ACTIVITY]}
-        scope_ref: {type: string, minLength: 1, maxLength: 255}
-        category: {type: string, enum: [PERFORMANCE, TECHNIQUE, PAIN, RECOVERY, SCHEDULE, DECISION, DATA_QUALITY]}
-        text: {type: string, minLength: 1, maxLength: 2000}
-        author_type: {type: string, enum: [ATHLETE, COACH], default: ATHLETE}
-        importance: {type: string, enum: [LOW, MEDIUM, HIGH], default: MEDIUM}
-        affects_adaptation: {type: boolean, default: true}
-        valid_from: {type: [string, "null"], format: date}
-        valid_until: {type: [string, "null"], format: date}
-        evidence_activity_ids:
-          type: [array, "null"]
-          items: {type: string, format: uuid}
-  - name: set_training_plan_status
-    title: Pause or resume a training cycle
-    description: Explicitly pause or resume the selected plan without changing Garmin.
-    scopes: [coach]
-    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
-    input:
-      type: object
-      additionalProperties: false
-      required: [plan_id, status]
-      properties:
-        plan_id: {type: string, format: uuid}
-        status: {type: string, enum: [ACTIVE, PAUSED]}
-  - name: skip_plan_session
-    title: Skip a plan session
-    description: Resolve one uncompleted plan session as intentionally skipped.
-    scopes: [coach]
-    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
-    input:
-      type: object
-      additionalProperties: false
-      required: [plan_id, session_intent_id]
-      properties:
-        plan_id: {type: string, format: uuid}
-        session_intent_id: {type: string, format: uuid}
-  - name: get_workouts
-    title: Get swim workouts
-    description: Return one workout or the workouts for a day or week, including schedule, steps, revision, and Garmin status.
-    scopes: [coach]
-    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
-    input:
-      type: object
-      additionalProperties: false
-      properties:
-        workout_id: {type: [string, "null"], format: uuid}
-        date: {type: [string, "null"], format: date}
-        week_start: {type: [string, "null"], format: date}
-        include_steps: {type: boolean, default: true}
-  - name: get_swims
-    title: Get pool swims
-    description: Return one analyzed pool swim or a concise recent list with data quality and planned-workout matching.
-    scopes: [coach]
-    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false}
-    input:
-      type: object
-      additionalProperties: false
-      properties:
-        activity_id: {type: [string, "null"], format: uuid}
-        limit: {type: integer, minimum: 1, maximum: 20, default: 5}
-        include_intervals: {type: boolean, default: true}
-  - name: save_workout
-    title: Save and schedule a swim workout
-    description: Create or edit a canonical pool workout and optionally schedule it locally in one call; the server manages revisions and concurrency.
-    scopes: [coach]
-    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
-    input:
-      type: object
-      additionalProperties: false
-      required: [definition]
-      properties:
-        workout_id: {type: [string, "null"], format: uuid}
-        definition: {$ref: ./canonical-workout.schema.json}
-        pool_id: {type: [string, "null"], format: uuid}
-        scheduled_date: {type: [string, "null"], format: date}
-        scheduled_start_time: {type: [string, "null"]}
-        change_reason: {type: [string, "null"], maxLength: 500}
-  - name: publish_workout
-    title: Publish a swim workout to Garmin
-    description: Create or update the Garmin workout and its calendar date idempotently; returns the operation state without exposing workflow internals.
-    scopes: [coach]
-    annotations: {readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true}
-    input:
-      type: object
-      additionalProperties: false
-      required: [workout_id]
-      properties:
-        workout_id: {type: string, format: uuid}
-        scheduled_date: {type: [string, "null"], format: date}
-        scheduled_start_time: {type: [string, "null"]}
-        target_device_id: {type: [string, "null"], format: uuid}
-  - name: delete_workout
-    title: Delete a swim workout everywhere
-    description: Remove a planned workout, its local calendar entry, Garmin schedule, and Garmin workout template; completed or activity-matched workouts are protected.
-    scopes: [coach]
-    annotations: {readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true}
-    input:
-      type: object
-      additionalProperties: false
-      required: [workout_id]
-      properties:
-        workout_id: {type: string, format: uuid}
-  - name: materialize_plan_week
-    title: Materialize an approved plan week
-    description: Idempotently create local workouts from an approved DETAILED week without generating content or publishing to Garmin.
-    scopes: [coach]
-    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
-    input:
-      type: object
-      additionalProperties: false
-      required: [plan_id, expected_revision, week_number]
-      properties:
-        plan_id: {type: string, format: uuid}
-        expected_revision: {type: integer, minimum: 1}
-        week_number: {type: integer, minimum: 1, maximum: 16}
-  - name: sync_garmin
-    title: Sync Garmin activities
-    description: Queue an idempotent Garmin activity sync and return its current job state.
-    scopes: [coach]
-    annotations: {readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true}
-    input: {type: object, additionalProperties: false, properties: {from_date: {type: [string, "null"], format: date}, force: {type: boolean, default: false}}}
-  - name: save_feedback
-    title: Save post-swim feedback
-    description: Store optional feedback and structured check_in. Ask only missing relevant context. A check_in-only save preserves assessment and merges provided check-in fields. Watch errors exclude performance from weekly adaptation, never imply completion. Garmin remains unchanged.
-    scopes: [coach]
-    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false}
-    input:
-      type: object
-      additionalProperties: false
-      required: [activity_id]
-      properties:
-        activity_id: {type: string, format: uuid}
-        rpe: {type: integer, minimum: 1, maximum: 10}
-        feeling_score: {type: integer, minimum: 0, maximum: 100}
-        technique: {type: [string, "null"]}
-        pain_present: {type: boolean, default: false}
-        pain_location: {type: [string, "null"], maxLength: 120}
-        pain_intensity: {type: [integer, "null"], minimum: 1, maximum: 10}
-        notes: {type: [string, "null"], maxLength: 2000}
-        check_in:
-          type: [object, "null"]
-          additionalProperties: false
-          properties:
-            completed_as_planned: {type: [boolean, "null"]}
-            watch_data_accurate: {type: [boolean, "null"]}
-            all_freestyle: {type: [boolean, "null"]}
-            main_difficulty: {type: [string, "null"], maxLength: 500}
+- name: get_coach_context
+  title: Get swim coach context
+  description: Return profile, timezone, goal, pools, explicit availability, constraints, recent deterministic
+    training evidence, active plan, notes, and capabilities.
+  scopes:
+  - coach
+  annotations:
+    readOnlyHint: true
+    destructiveHint: false
+    openWorldHint: false
+  input:
+    type: object
+    additionalProperties: false
+    properties:
+      include_constraints:
+        type: boolean
+        default: true
+- name: propose_training_plan
+  title: Validate a coach-authored training cycle
+  description: Validate and stage a complete coach-authored training plan definition. This tool never
+    generates or changes training content.
+  scopes:
+  - coach
+  annotations:
+    readOnlyHint: false
+    destructiveHint: false
+    openWorldHint: false
+  input:
+    type: object
+    additionalProperties: false
+    required:
+    - definition
+    properties:
+      definition:
+        $ref: ./training-plan-definition.schema.json
+      predecessor_plan_id:
+        anyOf:
+        - format: uuid
+          type: string
+        - type: 'null'
+        default: null
+        title: Predecessor Plan Id
+      expected_predecessor_version:
+        anyOf:
+        - type: integer
+        - type: 'null'
+        default: null
+        title: Expected Predecessor Version
+      expected_account_ref:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        title: Expected Account Ref
+- name: get_training_plan
+  title: Get a training cycle
+  description: Return the live or selected cycle, current revision, bindings, reviews, and notes.
+  scopes:
+  - coach
+  annotations:
+    readOnlyHint: true
+    destructiveHint: false
+    openWorldHint: false
+  input:
+    type: object
+    additionalProperties: false
+    properties:
+      plan_id:
+        type:
+        - string
+        - 'null'
+        format: uuid
+- name: review_training_plan
+  title: Review one plan week
+  description: 'Return and persist an immutable deterministic evidence snapshot for an ended or resolved
+    plan week. Includes coach_checkpoint: execution, athlete response, measurement reliability and missing
+    context. Explain what the next session should change and why; request explicit revision approval.
+    Never chooses a decision, changes the plan or publishes to Garmin.'
+  scopes:
+  - coach
+  annotations:
+    readOnlyHint: false
+    destructiveHint: false
+    openWorldHint: false
+  input:
+    type: object
+    additionalProperties: false
+    required:
+    - plan_id
+    - week_number
+    properties:
+      plan_id:
+        type: string
+        format: uuid
+      week_number:
+        type: integer
+        minimum: 1
+        maximum: 16
+      expected_account_ref:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        title: Expected Account Ref
+- name: propose_plan_revision
+  title: Validate a coach-authored plan revision
+  description: Validate and stage a coach-authored adaptation or materialization revision. Build definition
+    by deep-copying data.revision from a fresh get_training_plan call, preserve past/reviewed weeks and
+    locked sessions exactly (including IDs, workouts, and nulls), and edit only eligible future weeks.
+    On validation failure, follow error.details.recovery and issue changed_paths before retrying. This
+    tool never chooses the adaptation decision, changes its prescription, applies a proposal, or writes
+    to Garmin.
+  scopes:
+  - coach
+  annotations:
+    readOnlyHint: false
+    destructiveHint: false
+    openWorldHint: false
+  input:
+    type: object
+    additionalProperties: false
+    required:
+    - plan_id
+    - expected_revision
+    - revision_definition
+    properties:
+      plan_id:
+        type: string
+        format: uuid
+      expected_revision:
+        type: integer
+        minimum: 1
+      revision_definition:
+        $ref: ./training-plan-revision-definition.schema.json
+      expected_account_ref:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        title: Expected Account Ref
+- name: apply_plan_revision
+  title: Apply an approved plan revision
+  description: Apply the exact proposed revision with optimistic concurrency, queue changed DETAILED weeks,
+    and locally unschedule explicitly removed future sessions. Garmin is never changed by this tool.
+  scopes:
+  - coach
+  annotations:
+    readOnlyHint: false
+    destructiveHint: false
+    openWorldHint: false
+  input:
+    type: object
+    additionalProperties: false
+    required:
+    - plan_id
+    - proposal_id
+    - expected_revision
+    - approval_hash
+    properties:
+      plan_id:
+        type: string
+        format: uuid
+      proposal_id:
+        type: string
+        format: uuid
+      expected_revision:
+        type: integer
+        minimum: 0
+      approval_hash:
+        type: string
+        minLength: 64
+        maxLength: 64
+      expected_account_ref:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        title: Expected Account Ref
+- name: add_plan_note
+  title: Add a structured plan note
+  description: Attach bounded, reusable context to a plan, week, session, or activity.
+  scopes:
+  - coach
+  annotations:
+    readOnlyHint: false
+    destructiveHint: false
+    openWorldHint: false
+  input:
+    type: object
+    additionalProperties: false
+    required:
+    - plan_id
+    - scope_type
+    - scope_ref
+    - category
+    - text
+    properties:
+      plan_id:
+        type: string
+        format: uuid
+      scope_type:
+        type: string
+        enum:
+        - PLAN
+        - WEEK
+        - SESSION
+        - ACTIVITY
+      scope_ref:
+        type: string
+        minLength: 1
+        maxLength: 255
+      category:
+        type: string
+        enum:
+        - PERFORMANCE
+        - TECHNIQUE
+        - PAIN
+        - RECOVERY
+        - SCHEDULE
+        - DECISION
+        - DATA_QUALITY
+      text:
+        type: string
+        minLength: 1
+        maxLength: 2000
+      author_type:
+        type: string
+        enum:
+        - ATHLETE
+        - COACH
+        default: ATHLETE
+      importance:
+        type: string
+        enum:
+        - LOW
+        - MEDIUM
+        - HIGH
+        default: MEDIUM
+      affects_adaptation:
+        type: boolean
+        default: true
+      valid_from:
+        type:
+        - string
+        - 'null'
+        format: date
+      valid_until:
+        type:
+        - string
+        - 'null'
+        format: date
+      evidence_activity_ids:
+        type:
+        - array
+        - 'null'
+        items:
+          type: string
+          format: uuid
+      expected_account_ref:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        title: Expected Account Ref
+- name: set_training_plan_status
+  title: Pause or resume a training cycle
+  description: Pause, resume, complete or cancel a cycle; preserve history and Garmin.
+  scopes:
+  - coach
+  annotations:
+    readOnlyHint: false
+    destructiveHint: false
+    openWorldHint: false
+  input:
+    type: object
+    additionalProperties: false
+    required:
+    - plan_id
+    - status
+    properties:
+      plan_id:
+        type: string
+        format: uuid
+      status:
+        type: string
+        enum:
+        - ACTIVE
+        - PAUSED
+        - COMPLETED
+        - CANCELLED
+      expected_account_ref:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        title: Expected Account Ref
+- name: skip_plan_session
+  title: Skip a plan session
+  description: Resolve one uncompleted plan session as intentionally skipped.
+  scopes:
+  - coach
+  annotations:
+    readOnlyHint: false
+    destructiveHint: false
+    openWorldHint: false
+  input:
+    type: object
+    additionalProperties: false
+    required:
+    - plan_id
+    - session_intent_id
+    properties:
+      plan_id:
+        type: string
+        format: uuid
+      session_intent_id:
+        type: string
+        format: uuid
+      expected_account_ref:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        title: Expected Account Ref
+- name: get_workouts
+  title: Get swim workouts
+  description: Return one workout or workouts for a date or week with schedule and steps.
+  scopes:
+  - coach
+  annotations:
+    readOnlyHint: true
+    destructiveHint: false
+    openWorldHint: false
+  input:
+    type: object
+    additionalProperties: false
+    properties:
+      workout_id:
+        type:
+        - string
+        - 'null'
+        format: uuid
+      date:
+        type:
+        - string
+        - 'null'
+        format: date
+      week_start:
+        type:
+        - string
+        - 'null'
+        format: date
+      include_steps:
+        type: boolean
+        default: true
+- name: get_swims
+  title: Get pool swims
+  description: Return one analyzed pool swim or a concise recent list.
+  scopes:
+  - coach
+  annotations:
+    readOnlyHint: true
+    destructiveHint: false
+    openWorldHint: false
+  input:
+    type: object
+    additionalProperties: false
+    properties:
+      activity_id:
+        type:
+        - string
+        - 'null'
+        format: uuid
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 20
+        default: 5
+      include_intervals:
+        type: boolean
+        default: true
+- name: save_workout
+  title: Save and schedule a swim workout
+  description: Create or edit a canonical pool workout and optionally schedule it locally in one call.
+    Revisions and concurrency are managed by the server.
+  scopes:
+  - coach
+  annotations:
+    readOnlyHint: false
+    destructiveHint: false
+    openWorldHint: false
+  input:
+    type: object
+    additionalProperties: false
+    required:
+    - definition
+    properties:
+      workout_id:
+        type:
+        - string
+        - 'null'
+        format: uuid
+      definition:
+        $ref: ./canonical-workout.schema.json
+      pool_id:
+        type:
+        - string
+        - 'null'
+        format: uuid
+      scheduled_date:
+        type:
+        - string
+        - 'null'
+        format: date
+      scheduled_start_time:
+        type:
+        - string
+        - 'null'
+      change_reason:
+        type:
+        - string
+        - 'null'
+        maxLength: 500
+      expected_account_ref:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        title: Expected Account Ref
+      origin:
+        default: AD_HOC
+        enum:
+        - AD_HOC
+        - CONTINGENCY
+        title: Origin
+        type: string
+- name: publish_workout
+  title: Publish a swim workout to Garmin
+  description: Create or update the Garmin workout and calendar date idempotently. Use when the user asks
+    to send or publish a workout.
+  scopes:
+  - coach
+  annotations:
+    readOnlyHint: false
+    destructiveHint: false
+    idempotentHint: true
+    openWorldHint: true
+  input:
+    type: object
+    additionalProperties: false
+    required:
+    - workout_id
+    properties:
+      workout_id:
+        type: string
+        format: uuid
+      scheduled_date:
+        type:
+        - string
+        - 'null'
+        format: date
+      scheduled_start_time:
+        type:
+        - string
+        - 'null'
+      target_device_id:
+        type:
+        - string
+        - 'null'
+        format: uuid
+      expected_account_ref:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        title: Expected Account Ref
+- name: delete_workout
+  title: Delete a swim workout everywhere
+  description: Remove a planned workout from Swim Coach, its local calendar, and Garmin. Completed or
+    activity-matched workouts are protected.
+  scopes:
+  - coach
+  annotations:
+    readOnlyHint: false
+    destructiveHint: true
+    idempotentHint: true
+    openWorldHint: true
+  input:
+    type: object
+    additionalProperties: false
+    required:
+    - workout_id
+    properties:
+      workout_id:
+        type: string
+        format: uuid
+      expected_account_ref:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        title: Expected Account Ref
+- name: materialize_plan_week
+  title: Materialize an approved plan week
+  description: Idempotently create local workouts from an already approved DETAILED plan week. This tool
+    never generates training content and never publishes to Garmin.
+  scopes:
+  - coach
+  annotations:
+    readOnlyHint: false
+    destructiveHint: false
+    openWorldHint: false
+  input:
+    type: object
+    additionalProperties: false
+    required:
+    - plan_id
+    - expected_revision
+    - week_number
+    properties:
+      plan_id:
+        type: string
+        format: uuid
+      expected_revision:
+        type: integer
+        minimum: 1
+      week_number:
+        type: integer
+        minimum: 1
+        maximum: 16
+      expected_account_ref:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        title: Expected Account Ref
+- name: sync_garmin
+  title: Sync Garmin activities
+  description: Queue an idempotent Garmin activity sync and return the job state.
+  scopes:
+  - coach
+  annotations:
+    readOnlyHint: false
+    destructiveHint: false
+    idempotentHint: true
+    openWorldHint: true
+  input:
+    type: object
+    additionalProperties: false
+    properties:
+      from_date:
+        type:
+        - string
+        - 'null'
+        format: date
+      force:
+        type: boolean
+        default: false
+      expected_account_ref:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        title: Expected Account Ref
+- name: save_feedback
+  title: Save post-swim feedback
+  description: Store optional effort, technique, pain, notes and a structured check_in. Ask only missing
+    relevant questions; never repeat imported RPE. A check_in-only save preserves existing assessment.
+    Watch errors do not imply completion and exclude measured performance from weekly adaptation, not
+    attendance.
+  scopes:
+  - coach
+  annotations:
+    readOnlyHint: false
+    destructiveHint: false
+    openWorldHint: false
+  input:
+    type: object
+    additionalProperties: false
+    required:
+    - activity_id
+    properties:
+      activity_id:
+        type: string
+        format: uuid
+      rpe:
+        type: integer
+        minimum: 1
+        maximum: 10
+      feeling_score:
+        type: integer
+        minimum: 0
+        maximum: 100
+      technique:
+        type:
+        - string
+        - 'null'
+      pain_present:
+        type: boolean
+        default: false
+      pain_location:
+        type:
+        - string
+        - 'null'
+        maxLength: 120
+      pain_intensity:
+        type:
+        - integer
+        - 'null'
+        minimum: 1
+        maximum: 10
+      notes:
+        type:
+        - string
+        - 'null'
+        maxLength: 2000
+      check_in:
+        type:
+        - object
+        - 'null'
+        additionalProperties: false
+        properties:
+          completed_as_planned:
+            type:
+            - boolean
+            - 'null'
+          watch_data_accurate:
+            type:
+            - boolean
+            - 'null'
+          all_freestyle:
+            type:
+            - boolean
+            - 'null'
+          main_difficulty:
+            type:
+            - string
+            - 'null'
+            maxLength: 500
+      expected_account_ref:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        title: Expected Account Ref
+- name: get_coach_operations
+  title: Get current goal, next workout and pending operations
+  description: Return account preflight, current goal, cycle lifecycle, agenda, provenance and pending
+    jobs.
+  scopes:
+  - coach
+  annotations:
+    readOnlyHint: true
+    destructiveHint: false
+    openWorldHint: false
+  input:
+    properties: {}
+    title: get_coach_operationsArguments
+    type: object
+    additionalProperties: false
+- name: preview_calendar
+  title: Preview absolute local swim dates
+  description: Resolve TODAY, TOMORROW, THIS_WEEK, NEXT_WEEK or NEXT_OCCURRENCE using an explicit weekday
+    and timezone. Read-only; returns conflicts and calendar hash.
+  scopes:
+  - coach
+  annotations:
+    readOnlyHint: true
+    destructiveHint: false
+    openWorldHint: false
+  input:
+    properties:
+      requests:
+        items:
+          $ref: ./calendar-request.schema.json
+        maxItems: 14
+        minItems: 1
+        title: Requests
+        type: array
+      reference:
+        anyOf:
+        - format: date-time
+          type: string
+        - type: 'null'
+        default: null
+        title: Reference
+      timezone:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        title: Timezone
+      start:
+        anyOf:
+        - format: time
+          type: string
+        - type: 'null'
+        default: null
+        title: Start
+      workout_id:
+        anyOf:
+        - format: uuid
+          type: string
+        - type: 'null'
+        default: null
+        title: Workout Id
+    required:
+    - requests
+    title: preview_calendarArguments
+    type: object
+    additionalProperties: false
+- name: get_publication_status
+  title: Check Garmin publication confirmation
+  description: Return local, job and remote confirmation separately for each workout. Queued never means
+    published.
+  scopes:
+  - coach
+  annotations:
+    readOnlyHint: true
+    destructiveHint: false
+    openWorldHint: false
+  input:
+    properties:
+      workout_ids:
+        items:
+          format: uuid
+          type: string
+        maxItems: 20
+        minItems: 1
+        title: Workout Ids
+        type: array
+    required:
+    - workout_ids
+    title: get_publication_statusArguments
+    type: object
+    additionalProperties: false
+- name: reschedule_workout
+  title: Move a workout and reconcile Garmin
+  description: Atomically revise a local ad-hoc workout and queue reconciliation of an existing Garmin
+    publication. Use preview_calendar first. A prescribed session needs a RESCHEDULE plan proposal.
+  scopes:
+  - coach
+  annotations:
+    readOnlyHint: false
+    destructiveHint: false
+    openWorldHint: true
+  input:
+    properties:
+      workout_id:
+        format: uuid
+        title: Workout Id
+        type: string
+      request:
+        $ref: ./calendar-request.schema.json
+      expected_version:
+        title: Expected Version
+        type: integer
+      expected_calendar_hash:
+        title: Expected Calendar Hash
+        type: string
+      expected_account_ref:
+        title: Expected Account Ref
+        type: string
+      start:
+        anyOf:
+        - format: time
+          type: string
+        - type: 'null'
+        default: null
+        title: Start
+    required:
+    - workout_id
+    - request
+    - expected_version
+    - expected_calendar_hash
+    - expected_account_ref
+    title: reschedule_workoutArguments
+    type: object
+    additionalProperties: false
+- name: set_current_goal
+  title: Set the current swimming goal
+  description: Create a new current goal while retaining the previous goal as a future objective. Does
+    not revise a cycle or publish Garmin workouts.
+  scopes:
+  - coach
+  annotations:
+    readOnlyHint: false
+    destructiveHint: false
+    openWorldHint: false
+  input:
+    properties:
+      title:
+        maxLength: 160
+        minLength: 1
+        title: Title
+        type: string
+      distance_m:
+        maximum: 50000
+        minimum: 1
+        title: Distance M
+        type: integer
+      duration_seconds:
+        maximum: 86400
+        minimum: 1
+        title: Duration Seconds
+        type: integer
+      expected_goal_version:
+        title: Expected Goal Version
+        type: integer
+      expected_account_ref:
+        title: Expected Account Ref
+        type: string
+    required:
+    - title
+    - distance_m
+    - duration_seconds
+    - expected_goal_version
+    - expected_account_ref
+    title: set_current_goalArguments
+    type: object
+    additionalProperties: false
+- name: associate_workout_to_plan
+  title: Associate an existing workout with an approved intention
+  description: Adopt an exact matching ad-hoc workout into an approved detailed session without changing
+    its identity or publishing again.
+  scopes:
+  - coach
+  annotations:
+    readOnlyHint: false
+    destructiveHint: false
+    openWorldHint: false
+  input:
+    properties:
+      workout_id:
+        format: uuid
+        title: Workout Id
+        type: string
+      plan_id:
+        format: uuid
+        title: Plan Id
+        type: string
+      session_intent_id:
+        format: uuid
+        title: Session Intent Id
+        type: string
+      expected_revision:
+        title: Expected Revision
+        type: integer
+      expected_account_ref:
+        title: Expected Account Ref
+        type: string
+    required:
+    - workout_id
+    - plan_id
+    - session_intent_id
+    - expected_revision
+    - expected_account_ref
+    title: associate_workout_to_planArguments
+    type: object
+    additionalProperties: false
+- name: publish_workouts
+  title: Publish a requested batch to Garmin
+  description: Publish only explicitly requested workouts. Returns partial progress per item; use get_publication_status
+    to confirm completion.
+  scopes:
+  - coach
+  annotations:
+    readOnlyHint: false
+    destructiveHint: false
+    openWorldHint: true
+  input:
+    properties:
+      workout_ids:
+        items:
+          format: uuid
+          type: string
+        maxItems: 14
+        minItems: 1
+        title: Workout Ids
+        type: array
+      expected_account_ref:
+        title: Expected Account Ref
+        type: string
+    required:
+    - workout_ids
+    - expected_account_ref
+    title: publish_workoutsArguments
+    type: object
+    additionalProperties: false
+- name: validate_training_plan
+  title: Validate a plan without staging or applying
+  description: Read-only validation of a complete canonical coach-authored plan. Returns precise issues
+    and no proposal or external effects.
+  scopes:
+  - coach
+  annotations:
+    readOnlyHint: true
+    destructiveHint: false
+    openWorldHint: false
+  input:
+    properties:
+      definition:
+        $ref: ./training-plan-definition.schema.json
+    required:
+    - definition
+    title: validate_training_planArguments
+    type: object
+    additionalProperties: false
+- name: diagnose_connection
+  title: Classify observed connection failures
+  description: Classify sanitized edge, OAuth, MCP, backend, schema or Garmin HTTP evidence. A 403 alone
+    never proves a Garmin error.
+  scopes:
+  - coach
+  annotations:
+    readOnlyHint: true
+    destructiveHint: false
+    openWorldHint: false
+  input:
+    properties:
+      http_status:
+        maximum: 599
+        minimum: 100
+        title: Http Status
+        type: integer
+      layer:
+        enum:
+        - MCP
+        - OAUTH
+        - BACKEND
+        - GARMIN
+        title: Layer
+        type: string
+      security_source:
+        anyOf:
+        - const: firewallCustom
+          type: string
+        - type: 'null'
+        default: null
+        title: Security Source
+      origin_status:
+        anyOf:
+        - type: integer
+        - type: 'null'
+        default: null
+        title: Origin Status
+      ray_id:
+        anyOf:
+        - maxLength: 80
+          pattern: ^[a-zA-Z0-9-]+$
+          type: string
+        - type: 'null'
+        default: null
+        title: Ray Id
+    required:
+    - http_status
+    - layer
+    title: diagnose_connectionArguments
+    type: object
+    additionalProperties: false

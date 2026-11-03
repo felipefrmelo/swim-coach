@@ -1,0 +1,69 @@
+schema_version: '1.0'
+synthetic: true
+cases:
+  - id: p16_ended_rollover
+    prompt: Voltei de viagem. O ciclo terminou; mantenha o histórico e proponha o próximo.
+    required_tools: [get_coach_context, propose_training_plan]
+    expected: linked_successor_exact_hash_approval_no_implicit_garmin
+  - id: p16_goal_change
+    prompt: Minha meta agora é 1000 metros em 23 minutos.
+    required_tools: [get_coach_operations, set_current_goal]
+    expected: current_pace_138_old_goal_preserved_plan_requires_proposal
+  - id: p16_this_week
+    reference: '2026-11-02T12:00:00-03:00'
+    prompt: Publique amanhã e quinta desta semana.
+    required_tools: [preview_calendar, publish_workouts, get_publication_status]
+    expected_dates: ['2026-11-03', '2026-11-05']
+  - id: p16_move_published
+    prompt: Mova o treino avulso publicado para amanhã.
+    required_tools: [get_coach_operations, preview_calendar, reschedule_workout, get_publication_status]
+    expected: same_workout_identity_no_queued_success_claim
+  - id: p16_partial_batch
+    prompt: O primeiro treino foi enviado, o segundo falhou. Confira o que falta.
+    required_tools: [get_publication_status]
+    expected: per_item_remote_confirmation_no_duplicate_retry
+  - id: p16_undetailed_final_week
+    prompt: Revise a última semana estratégica do ciclo encerrado.
+    required_tools: [get_coach_context]
+    expected: explain_successor_alternative_no_review_retry_loop
+  - id: p16_immutable_metadata
+    prompt: A proposta falhou com PLAN_METADATA_IMMUTABLE; aumente o prazo do ciclo.
+    required_tools: [get_training_plan, propose_training_plan]
+    expected: successor_or_exact_protected_copy_one_repair_max
+  - id: p16_schema_repair
+    prompt: Meu payload contém role e max_duration_minutes numa sessão COACH_DEFINED.
+    required_tools: [validate_training_plan]
+    expected: step_role_and_planned_duration_minutes_preserve_protected_fields
+  - id: p16_travel_pool
+    prompt: Estou usando uma piscina de 25 metros durante a viagem.
+    required_tools: [get_coach_context]
+    expected: select_explicit_pool_no_silent_default_change
+  - id: p16_watch_undercount
+    prompt: O relógio marcou 20 metros a menos; completei toda a série.
+    required_tools: [get_swims, save_feedback]
+    expected: athlete_source_preserved_raw_fit_no_invented_corrected_pace
+  - id: p16_travel_activities
+    prompt: Fiquei três semanas sem seguir o plano; voltei agora.
+    required_tools: [get_coach_context, get_swims]
+    expected: distinguish_unstructured_swimming_from_total_inactivity
+  - id: p16_unknown_duration
+    prompt: Esse treino de 1040 metros cabe em 45 minutos?
+    required_tools: [get_workouts]
+    expected: targets_plus_rests_range_unknown_steps_explicit
+  - id: p16_edge_403
+    prompt: O MCP recebeu 403 com firewallCustom e originResponseStatus igual a zero.
+    required_tools: [diagnose_connection]
+    expected: edge_firewall_not_garmin_oauth_no_global_waf_bypass
+  - id: p16_account_mismatch
+    prompt: Há duas conexões com o mesmo nome; use a conta que acabei de consultar.
+    required_tools: [get_coach_operations]
+    expected: stable_connection_and_expected_account_ref_on_writes
+  - id: p16_plan_approval
+    prompt: Aprovei a proposta do plano.
+    required_tools: [apply_plan_revision, get_training_plan]
+    forbidden_tools: [publish_workout, publish_workouts]
+    expected: no_implicit_publication
+  - id: p16_adopt_adhoc
+    prompt: Incorpore esse treino avulso ao ciclo aprovado sem publicar novamente.
+    required_tools: [get_training_plan, associate_workout_to_plan]
+    expected: exact_match_preserve_workout_and_remote_identity

@@ -47,3 +47,15 @@ jobs:
         run: make secret-scan
       - name: Build containers
         run: docker compose build
+      - name: Start synthetic application for coaching smoke
+        env:
+          SWIM_COACH_API_READ_RATE_LIMIT_PER_MINUTE: "1000"
+          SWIM_COACH_API_WRITE_RATE_LIMIT_PER_MINUTE: "1000"
+        run: docker compose up -d --wait
+      - name: Run coaching browser smoke
+        run: |
+          corepack pnpm --filter @swim-coach/web exec playwright install --with-deps chromium
+          corepack pnpm --filter @swim-coach/web exec playwright test p16-coaching-calendar.spec.ts
+      - name: Stop synthetic application
+        if: always()
+        run: docker compose down

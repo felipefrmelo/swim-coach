@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from swim_coach.domain.shared.errors import DomainError
+from swim_coach.domain.shared.repair import schema_recovery
 from swim_coach.domain.shared.types import JsonObject
 from swim_coach.domain.shared.value_objects import CorrelationId
 
@@ -170,5 +171,8 @@ def install_problem_handlers(app: FastAPI) -> None:
             code="VALIDATION_FAILED",
             detail="The request did not satisfy the API contract.",
             status_code=422,
-            details={"field_error_count": field_count},
+            details={
+                "field_error_count": field_count,
+                **schema_recovery(error.errors(), error.body),
+            },
         )

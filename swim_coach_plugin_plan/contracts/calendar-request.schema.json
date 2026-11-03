@@ -1,0 +1,56 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "period": {
+      "enum": [
+        "TODAY",
+        "TOMORROW",
+        "THIS_WEEK",
+        "NEXT_WEEK",
+        "NEXT_OCCURRENCE",
+        "ABSOLUTE"
+      ],
+      "title": "Period",
+      "type": "string"
+    },
+    "weekday": {
+      "anyOf": [
+        {
+          "enum": [
+            "MONDAY",
+            "TUESDAY",
+            "WEDNESDAY",
+            "THURSDAY",
+            "FRIDAY",
+            "SATURDAY",
+            "SUNDAY"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Weekday"
+    },
+    "local_date": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Local Date"
+    }
+  },
+  "required": [
+    "period"
+  ],
+  "title": "CalendarRequest",
+  "type": "object"
+}

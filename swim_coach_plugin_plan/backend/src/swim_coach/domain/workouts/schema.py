@@ -145,6 +145,11 @@ class WorkoutTotals(CanonicalModel):
     active_seconds: float
     rest_seconds: float
     estimated_total_seconds: float
+    duration_complete: bool = False
+    duration_min_seconds: float = 0
+    duration_max_seconds: float | None = None
+    unpaced_distance_m: int = 0
+    open_ended_steps: int = 0
 
 
 class ValidationIssue(CanonicalModel):
@@ -180,12 +185,15 @@ def validate_workout(
     warnings: list[ValidationIssue] = []
     distance_m = distance_steps = executable_steps = lengths = 0
     active_seconds = rest_seconds = 0.0
+    minimum_seconds = maximum_seconds = 0.0
+    unpaced_distance_m = open_ended_steps = 0
     seen_ids: set[str] = set()
     roles: set[str] = set()
 
     def walk(nodes: tuple[WorkoutNode, ...], path: str, multiplier: int, depth: int) -> None:
         nonlocal distance_m, distance_steps, executable_steps, lengths
-        nonlocal active_seconds, rest_seconds
+        nonlocal active_seconds, rest_seconds, minimum_seconds, maximum_seconds
+        nonlocal unpaced_distance_m, open_ended_steps
         if depth > max_depth:
             errors.append(
                 ValidationIssue(
@@ -232,6 +240,12 @@ def validate_workout(
                 else:
                     lengths += (end.meters // definition.pool_length_m) * multiplier
                 if isinstance(node.target, PaceTarget):
+                    minimum_seconds += (
+                        end.meters / 100 * node.target.min_seconds_per_100m * multiplier
+                    )
+                    maximum_seconds += (
+                        end.meters / 100 * node.target.max_seconds_per_100m * multiplier
+                    )
                     active_seconds += (
                         end.meters
                         / 100
@@ -241,11 +255,17 @@ def validate_workout(
                         )
                         * multiplier
                     )
+                else:
+                    unpaced_distance_m += end.meters * multiplier
             elif isinstance(end, TimeEnd):
+                minimum_seconds += end.seconds * multiplier
+                maximum_seconds += end.seconds * multiplier
                 if node.step_role == "REST":
                     rest_seconds += end.seconds * multiplier
                 else:
                     active_seconds += end.seconds * multiplier
+            else:
+                open_ended_steps += multiplier
 
     walk(definition.nodes, "/nodes", 1, 1)
     if executable_steps > max_expanded_steps:
@@ -283,7 +303,25 @@ def validate_workout(
         active_seconds=round(active_seconds, 3),
         rest_seconds=round(rest_seconds, 3),
         estimated_total_seconds=round(active_seconds + rest_seconds, 3),
+        duration_complete=not (unpaced_distance_m or open_ended_steps),
+        duration_min_seconds=round(minimum_seconds, 3),
+        duration_max_seconds=(
+            round(maximum_seconds, 3) if not (unpaced_distance_m or open_ended_steps) else None
+        ),
+        unpaced_distance_m=unpaced_distance_m,
+        open_ended_steps=open_ended_steps,
     )
+    if unpaced_distance_m or open_ended_steps:
+        warnings.append(
+            ValidationIssue(
+                code="DURATION_INCOMPLETE",
+                path="/nodes",
+                message=(
+                    "Duração parcial: há distância sem ritmo ou etapa aberta. O tempo conhecido "
+                    "inclui pausas; o limite da sessão ainda precisa ser verificado."
+                ),
+            )
+        )
     return WorkoutValidationResult(
         valid=not errors, errors=tuple(errors), warnings=tuple(warnings), totals=totals
     )

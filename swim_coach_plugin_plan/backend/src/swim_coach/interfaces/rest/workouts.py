@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, time
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Header, Response, status
@@ -34,6 +34,7 @@ class WorkoutCreateRequest(StrictModel):
 
 
 class WorkoutSaveRequest(StrictModel):
+    origin: Literal["AD_HOC", "CONTINGENCY"] = "AD_HOC"
     workout_id: UUID | None = None
     pool_id: UUID | None = None
     definition: CanonicalWorkout
@@ -234,6 +235,7 @@ async def save_workout_direct(
         scheduled_start_time=payload.scheduled_start_time,
         change_reason=payload.change_reason,
         correlation_id=correlation_id,
+        origin=payload.origin,
     )
     garmin = None
     if payload.publish_to_garmin:

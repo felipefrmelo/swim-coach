@@ -19,7 +19,7 @@ mas a conversa nunca armazena o estado canônico do atleta ou dos treinos.
 ChatGPT (interface principal)
   └── plugin Swim Coach
       ├── oito Skills
-      └── MCP remoto com dezessete comandos
+      └── MCP remoto com comandos de contexto e operação
           ├── domínio e serviços de aplicação
           ├── PostgreSQL + worker
           └── Garmin Connect
@@ -78,6 +78,9 @@ pelos kill switches do servidor.
 A [análise de frequência cardíaca](docs/heart-rate-analysis.md) expõe FC da sessão,
 dos blocos principais, zonas Garmin e comparações históricas exploratórias no
 ChatGPT e no painel auxiliar, com origem e cobertura explícitas.
+
+O [fluxo de ciclos e agenda](docs/reliable-coaching.md) resolve retorno de viagem,
+meta vigente, sucessores aprovados, prévia de datas e confirmação de publicação.
 
 O [checkpoint semanal do coach](docs/weekly-coach-checkpoint.md) conecta o check-in
 opcional à revisão existente, separando execução confirmada, resposta do atleta

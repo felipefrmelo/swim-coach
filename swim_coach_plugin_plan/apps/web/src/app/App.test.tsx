@@ -29,7 +29,7 @@ describe("App", () => {
 
     expect(await screen.findByRole("heading", { name: "Seu ponto de partida" })).toBeVisible();
     expect(screen.getByText("Piscina padrão de 20 m")).toBeVisible();
-    expect(screen.getByText(/o editor valida cada distância contra a piscina de 20 m/i)).toBeVisible();
+    expect(screen.getByText(/o editor valida cada distância contra a piscina selecionada/i)).toBeVisible();
     expect(screen.queryByText(/chat/i)).not.toBeInTheDocument();
   });
 

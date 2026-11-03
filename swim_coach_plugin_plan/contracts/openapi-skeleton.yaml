@@ -321,6 +321,51 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/MatchResponse"}
+  /v1/coaching/overview:
+    get:
+      operationId: getCoachingOverview
+      summary: Current goal, cycles, agenda and pending jobs
+      responses:
+        '200':
+          description: Current goal, cycles, agenda and pending jobs
+        '401':
+          $ref: '#/components/responses/Problem'
+  /v1/coaching/calendar/preview:
+    post:
+      operationId: previewCoachingCalendar
+      summary: Read-only absolute local schedule preview
+      responses:
+        '200':
+          description: Read-only absolute local schedule preview
+        '401':
+          $ref: '#/components/responses/Problem'
+  /v1/coaching/workouts/{workout_id}/reschedule:
+    post:
+      operationId: rescheduleCoachingWorkout
+      summary: Atomic local revision and Garmin reconciliation job
+      responses:
+        '200':
+          description: Atomic local revision and Garmin reconciliation job
+        '401':
+          $ref: '#/components/responses/Problem'
+      parameters:
+      - in: path
+        name: workout_id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/CsrfToken'
+  /v1/coaching/publication-status:
+    post:
+      operationId: getCoachingPublicationStatus
+      summary: Per-workout remote publication confirmation
+      responses:
+        '200':
+          description: Per-workout remote publication confirmation
+        '401':
+          $ref: '#/components/responses/Problem'
+
 components:
   securitySchemes:
     cookieSession: {type: apiKey, in: cookie, name: swim_coach_session}

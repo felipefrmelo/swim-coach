@@ -25,8 +25,9 @@
 
 ## Invariantes de domínio
 
-- Piscina inicial: 20 m.
-- Meta inicial: 2.000 m em 2.700 s; ritmo-alvo 135 s/100 m.
+- Defaults históricos de bootstrap, não restrições universais: piscina inicial de 20 m.
+- Piscina, meta, disponibilidade e timezone vigentes vêm do banco.
+- Meta inicial histórica: 2.000 m em 2.700 s; ritmo-alvo 135 s/100 m.
 - Etapa baseada em distância deve ser múltipla do tamanho da piscina ativa.
 - Revisões de treino publicadas são imutáveis; mudanças criam nova revisão.
 - FIT bruto é preservado e normalizado de forma idempotente.
