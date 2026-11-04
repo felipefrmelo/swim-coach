@@ -520,3 +520,21 @@ def test_materialization_cannot_hide_strategy_or_phase_changes() -> None:
         )
 
     assert "MATERIALIZATION_SCOPE_INVALID" in issue_codes(captured.value)
+
+
+def test_manual_edit_preserves_past_and_reviewed_weeks() -> None:
+    context = validation_context()
+    before = normalized(plan_definition(), context)
+    week = before.weeks[0]
+    session = week.sessions[0].model_copy(update={"coach_notes": "Explicit athlete edit"})
+    after = before.model_copy(
+        update={"weeks": (week.model_copy(update={"sessions": (session,)}), *before.weeks[1:])}
+    )
+    TrainingPlanValidator().validate(
+        after, context, previous=before, revision_kind="MANUAL_EDIT", local_today=date(2026, 9, 7)
+    )
+    for kwargs in ({"local_today": date(2026, 9, 9)}, {"reviewed_week": 1}):
+        with pytest.raises(DomainError):
+            TrainingPlanValidator().validate(
+                after, context, previous=before, revision_kind="MANUAL_EDIT", **kwargs
+            )

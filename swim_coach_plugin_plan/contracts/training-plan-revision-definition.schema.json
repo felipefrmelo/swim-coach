@@ -7,7 +7,7 @@
   "required": ["schema_version", "kind", "rationale", "definition"],
   "properties": {
     "schema_version": {"const": "1.0"},
-    "kind": {"type": "string", "enum": ["ADAPTATION", "MATERIALIZATION", "RESCHEDULE"]},
+    "kind": {"type": "string", "enum": ["ADAPTATION", "MATERIALIZATION", "RESCHEDULE", "MANUAL_EDIT"]},
     "review_id": {"type": ["string", "null"], "format": "uuid"},
     "decision": {"type": ["string", "null"], "enum": ["PROGRESS", "HOLD", "REGRESS", "RECOVERY", "RETEST", "RESCHEDULE", "PAUSE", null]},
     "rationale": {"type": "string", "minLength": 1, "maxLength": 2000},

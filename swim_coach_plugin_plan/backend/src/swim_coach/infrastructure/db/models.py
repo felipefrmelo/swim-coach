@@ -1550,7 +1550,8 @@ class TrainingPlanRevisionModel(Base):
         UniqueConstraint("plan_id", "revision_number", name="uq_training_plan_revision_number"),
         CheckConstraint("revision_number >= 1", name="ck_training_plan_revision_number"),
         CheckConstraint(
-            "revision_kind IN ('CREATION','ADAPTATION','MATERIALIZATION','LEGACY','RESCHEDULE')",
+            "revision_kind IN ('CREATION','ADAPTATION','MATERIALIZATION','LEGACY',"
+            "'RESCHEDULE','MANUAL_EDIT')",
             name="ck_training_plan_revision_kind",
         ),
         CheckConstraint(

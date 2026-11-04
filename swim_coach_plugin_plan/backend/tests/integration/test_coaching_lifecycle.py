@@ -373,4 +373,58 @@ async def test_schema_rollback_refuses_workout_metadata_unreadable_by_previous_i
     config.attributes["database_url"] = str(app_settings.database_url)
     with pytest.raises(RuntimeError, match="Lifecycle data exists"):
         await asyncio.to_thread(command.downgrade, config, "000017")
-    assert await database.revision() == "000018"
+    assert await database.revision() == "000019"
+
+
+async def test_manual_plan_edit_stages_then_preserves_history_on_exact_approval(
+    database, app_settings
+):
+    from datetime import timedelta
+
+    from swim_coach.domain.planning import TrainingPlanRevisionDefinition
+
+    services, uid, pool = await setup_coach(database, app_settings)
+    goal = (await services.context.list_goals(uid))[0]
+    today = date.today()
+    monday = today + timedelta(days=(7 - today.weekday()) % 7 + 7)
+    first = await services.coach_commands.propose_training_plan(
+        uid,
+        actor_id="synthetic",
+        correlation_id=CorrelationId.new(),
+        definition=TrainingPlanDocument.model_validate(
+            coach_plan_definition(goal_id=goal.id, start_date=monday, pool_id=pool.id)
+        ),
+    )
+    await apply(services, uid, first)
+    current = await services.coach_commands.get_training_plan(uid, first.plan.id)
+    original = current.revision.document.as_json()
+    definition = current.revision.document.as_json()
+    definition["weeks"][0]["sessions"][0]["coach_notes"] = "Explicit manual edit"
+    proposed = await services.coach_commands.propose_plan_revision(
+        uid,
+        actor_id="synthetic",
+        plan_id=first.plan.id,
+        expected_revision=current.plan.current_revision,
+        revision_definition=TrainingPlanRevisionDefinition(
+            kind="MANUAL_EDIT", rationale="Athlete edit", definition=definition
+        ),
+        correlation_id=CorrelationId.new(),
+    )
+    assert (
+        await services.coach_commands.get_training_plan(uid, first.plan.id)
+    ).revision.document.as_json() == original
+    await services.coach_commands.apply_plan_revision(
+        uid,
+        actor_id="synthetic",
+        plan_id=first.plan.id,
+        proposal_id=proposed.proposal.id,
+        expected_revision=current.plan.current_revision,
+        approval_hash=proposed.proposal.action_hash,
+        correlation_id=CorrelationId.new(),
+    )
+    edited = await services.coach_commands.get_training_plan(uid, first.plan.id)
+    assert edited.plan.current_revision == current.plan.current_revision + 1
+    assert edited.revision.revision_kind.value == "MANUAL_EDIT"
+    assert edited.revisions[0].document.as_json() == original
+    async with services.uow_factory() as uow:
+        assert all(j.job_type != "workout.upsert_garmin" for j in await uow.jobs.list_recent(uid))

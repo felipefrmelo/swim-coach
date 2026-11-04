@@ -661,6 +661,8 @@ class TrainingCycleService:
                     },
                 )
             reviewed_week = review.week_number
+        if revision_definition.kind == "MANUAL_EDIT":
+            reviewed_week = max((r.week_number for r in detail.reviews if r.eligible), default=0)
         candidate = self._normalize_definition(
             revision_definition.definition,
             timezone=user.timezone,

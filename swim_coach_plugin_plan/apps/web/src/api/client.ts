@@ -1,5 +1,8 @@
 import type {
   AuthConfig,
+  PlanDetail,
+  PlanDefinition,
+  PlanProposal,
   CoachingOverview,
   PublicationStatus,
   AvailabilityRule,
@@ -82,6 +85,9 @@ async function requestV2<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  plan: (id: string) => request<PlanDetail>(`/coaching/plans/${id}`),
+  proposePlanEdit: (id: string, payload: { definition: PlanDefinition; expected_revision: number; rationale: string }) => request<PlanProposal>(`/coaching/plans/${id}/proposals`, { method: "POST", body: JSON.stringify(payload) }),
+  applyPlanEdit: (id: string, proposal: PlanProposal) => request<{ current_revision: number }>(`/coaching/plans/${id}/apply`, { method: "POST", body: JSON.stringify({ proposal_id: proposal.proposal_id, expected_revision: proposal.expected_revision, approval_hash: proposal.action_hash }) }),
   coachingOverview: () => request<CoachingOverview>("/coaching/overview"),
   coachingPublication: (ids: string[]) => request<PublicationStatus>("/coaching/publication-status", { method: "POST", body: JSON.stringify(ids) }),
   coachingPreview: (payload: unknown) => request<{ calendar_hash: string; sessions: Array<{ scheduled_date: string; conflicts: string[]; available: boolean }> }>("/coaching/calendar/preview", { method: "POST", body: JSON.stringify(payload) }),
