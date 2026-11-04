@@ -28,6 +28,7 @@ interface NavigationItem {
 
 const navigation: NavigationItem[] = [
   { to: "/", label: "Início", icon: Home },
+  { to: "/plans", label: "Planos", icon: NotebookPen },
   { to: "/workouts", label: "Treinos", icon: NotebookPen },
   { to: "/calendar", label: "Calendário", icon: CalendarDays },
   { to: "/activities", label: "Atividades", icon: Activity },

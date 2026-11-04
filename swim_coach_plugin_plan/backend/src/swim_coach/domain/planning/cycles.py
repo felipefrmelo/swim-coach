@@ -57,6 +57,7 @@ class PlanRevisionKind(StrEnum):
     CREATION = "CREATION"
     ADAPTATION = "ADAPTATION"
     MATERIALIZATION = "MATERIALIZATION"
+    MANUAL_EDIT = "MANUAL_EDIT"
     RESCHEDULE = "RESCHEDULE"
     LEGACY = "LEGACY"
 
@@ -351,7 +352,7 @@ class TrainingPlanDocument(PlanDocumentModel):
 
 class TrainingPlanRevisionDefinition(PlanDocumentModel):
     schema_version: Literal["1.0"] = "1.0"
-    kind: Literal["ADAPTATION", "MATERIALIZATION", "RESCHEDULE"]
+    kind: Literal["ADAPTATION", "MATERIALIZATION", "RESCHEDULE", "MANUAL_EDIT"]
     review_id: str | None = None
     decision: PlanDecision | None = None
     rationale: str = Field(min_length=1, max_length=2_000)

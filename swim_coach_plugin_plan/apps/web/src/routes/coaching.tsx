@@ -22,6 +22,7 @@ export function CoachingPanel() {
     <h2 className="section-title">Ciclo e agenda</h2>
     {data.cycles.slice(0, 3).map((cycle) => <article key={cycle.plan_id} className="rounded-xl bg-slate-50 p-4">
       <p className="font-semibold">{states[cycle.lifecycle_state] ?? cycle.lifecycle_state}</p><p>{cycle.title}</p>
+      <a href="/plans" className="secondary-button mt-3">Visualizar e editar planos</a>
       {cycle.goal_relationship !== "CURRENT" && <p className="mt-1 text-sm text-amber-900">Ciclo baseado em meta anterior ou sem snapshot histórico verificado. A meta vigente aparece acima.</p>}
       {cycle.lifecycle_state === "ENDED_NEEDS_REVIEW" && <p className="mt-2 text-sm">Peça ao treinador uma proposta de próximo ciclo. Seu histórico será preservado.</p>}
     </article>)}

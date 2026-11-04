@@ -57,6 +57,7 @@ export interface Goal {
 }
 
 export interface ProblemDetail {
+  details?: Record<string, unknown>;
   code: string;
   detail: string;
   correlation_id: string;
@@ -451,4 +452,52 @@ export interface CoachingOverview {
 export interface PublicationStatus {
   items: Array<{ workout_id: string; state: string; remote_confirmed: boolean; local_date: string | null; remote_date: string | null; last_verified_at: string | null }>;
   all_published: boolean;
+}
+
+
+export interface PlanSession {
+  session_intent_id?: string | null;
+  session_number: number;
+  purpose: string;
+  objective?: string | null;
+  coach_notes?: string | null;
+  target_distance_m?: number | null;
+  planned_duration_minutes?: number | null;
+  scheduled_date?: string | null;
+  scheduled_start_time?: string | null;
+  pool_id?: string | null;
+  workout?: CanonicalWorkout | null;
+}
+export interface PlanWeek {
+  week_number: number;
+  focus: string;
+  detail_level: string;
+  sessions: PlanSession[];
+}
+export interface PlanDefinition {
+  title: string;
+  timezone: string;
+  start_date: string;
+  duration_weeks: number;
+  strategy_summary: string;
+  weeks: PlanWeek[];
+}
+export interface PlanDetail {
+  plan_id: string;
+  title: string;
+  status: string;
+  lifecycle_state: string;
+  current_revision: number;
+  definition: PlanDefinition | null;
+  local_date: string;
+  protected_weeks: number[];
+  sessions: Array<{ session_intent_id: string; locked: boolean; state: string; locked_reason: string | null }>;
+  history: Array<{ revision: number; reason: string; kind: string; created_at: string }>;
+}
+export interface PlanProposal {
+  proposal_id: string;
+  action_hash: string;
+  expected_revision: number;
+  expires_at: string;
+  diff: { changed_weeks?: number[]; [key: string]: unknown };
 }
